@@ -1,0 +1,86 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply antialiased;
+    overscroll-behavior: none;
+    user-select: none;
+  }
+}
+
+@layer components {
+  .tab-btn {
+    @apply flex-1 flex flex-col items-center justify-center gap-1 py-2.5 px-2 rounded-xl transition-all duration-200;
+  }
+  .tab-btn-active {
+    @apply bg-primary-500/20 text-primary-500 dark:text-primary-400 scale-105;
+  }
+  .tab-btn-idle {
+    @apply text-neutral-500 dark:text-neutral-400 hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50;
+  }
+
+  .card {
+    @apply rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm;
+  }
+
+  .btn {
+    @apply rounded-xl font-semibold transition-all duration-200 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100;
+  }
+  .btn-primary {
+    @apply btn bg-primary-500 hover:bg-primary-600 text-white shadow-md shadow-primary-500/20;
+  }
+  .btn-accent {
+    @apply btn bg-accent-500 hover:bg-accent-600 text-white shadow-md shadow-accent-500/20;
+  }
+  .btn-success {
+    @apply btn bg-success-500 hover:bg-success-600 text-white shadow-md shadow-success-500/20;
+  }
+  .btn-error {
+    @apply btn bg-error-500 hover:bg-error-600 text-white shadow-md shadow-error-500/20;
+  }
+  .btn-ghost {
+    @apply btn bg-neutral-200 hover:bg-neutral-300 dark:bg-neutral-800 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-200;
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 3px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+
+/* Floating text */
+.floating-text {
+  position: absolute;
+  pointer-events: none;
+  animation: floatUp 1.5s ease-out forwards;
+  white-space: nowrap;
+  font-weight: 700;
+  z-index: 100;
+}
+
+@keyframes floatUp {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-80px) scale(1.3);
+  }
+}
