@@ -11,6 +11,10 @@ import {
   getEnergyMaxValue,
   getEnergyRegenCost,
   getEnergyRegenValue,
+  getEnergyRegenAmountCost,
+  getEnergyRegenAmountValue,
+  isEnergyUpgradeDiamond,
+  getEnergyUpgradeDiamondCost,
   UPGRADE_CONFIG,
 } from '@/config/upgradesConfig';
 import { getCaseChanceValue } from '@/config/casesConfig';
@@ -24,8 +28,10 @@ import {
   ChevronUp,
   Lock,
   Coins,
+  Gem,
   Battery,
   Timer,
+  Sparkles,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -42,6 +48,7 @@ interface UpgradeCardProps {
   canAfford: boolean;
   onUpgrade: () => void;
   t: (k: any) => string;
+  useDiamonds?: boolean;
 }
 
 function UpgradeCard({
@@ -57,6 +64,7 @@ function UpgradeCard({
   canAfford,
   onUpgrade,
   t,
+  useDiamonds,
 }: UpgradeCardProps) {
   const isMaxed = maxLevel !== undefined && level >= maxLevel;
 
@@ -105,7 +113,15 @@ function UpgradeCard({
           className="btn-primary w-full py-2 text-sm flex items-center justify-center gap-1.5"
         >
           <ChevronUp className="w-4 h-4" />
-          {t('buyUpgrade')} · {formatMoney(cost)}
+          {t('buyUpgrade')} ·{' '}
+          {useDiamonds ? (
+            <span className="flex items-center gap-1">
+              <Gem className="w-3.5 h-3.5 text-accent-500" />
+              {cost}
+            </span>
+          ) : (
+            formatMoney(cost)
+          )}
         </button>
       )}
     </div>
@@ -133,10 +149,15 @@ export default function UpgradesTab() {
     upgradeCaseChance,
     upgradeEnergyMax,
     upgradeEnergyRegen,
+    upgradeEnergyRegenAmount,
     t,
   } = useGame();
 
   const u = state.upgrades;
+
+  const energyMaxDiamond = isEnergyUpgradeDiamond(u.energyMaxLvl);
+  const energyRegenDiamond = isEnergyUpgradeDiamond(u.energyRegenLvl);
+  const energyRegenAmountDiamond = isEnergyUpgradeDiamond(u.energyRegenAmountLvl ?? 0);
 
   return (
     <div className="space-y-4">
@@ -146,9 +167,15 @@ export default function UpgradesTab() {
           <Zap className="w-5 h-5 text-primary-500" />
           {t('upgradesTitle')}
         </h2>
-        <div className="flex items-center gap-1.5">
-          <Coins className="w-4 h-4 text-success-500" />
-          <span className="text-sm font-bold text-success-500">{formatMoney(state.balance)}</span>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <Coins className="w-4 h-4 text-success-500" />
+            <span className="text-sm font-bold text-success-500">{formatMoney(state.balance)}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Gem className="w-4 h-4 text-accent-500" />
+            <span className="text-sm font-bold text-accent-500">{state.gems}</span>
+          </div>
         </div>
       </div>
 
@@ -249,10 +276,11 @@ export default function UpgradesTab() {
           maxLevel={UPGRADE_CONFIG.energyMax.maxLevel}
           currentValue={`${getEnergyMaxValue(u.energyMaxLvl)}`}
           nextValue={`${getEnergyMaxValue(u.energyMaxLvl + 1)}`}
-          cost={getEnergyMaxCost(u.energyMaxLvl)}
-          canAfford={state.balance >= getEnergyMaxCost(u.energyMaxLvl)}
+          cost={energyMaxDiamond ? getEnergyUpgradeDiamondCost(u.energyMaxLvl) : getEnergyMaxCost(u.energyMaxLvl)}
+          canAfford={energyMaxDiamond ? state.gems >= getEnergyUpgradeDiamondCost(u.energyMaxLvl) : state.balance >= getEnergyMaxCost(u.energyMaxLvl)}
           onUpgrade={upgradeEnergyMax}
           t={t}
+          useDiamonds={energyMaxDiamond}
         />
         <UpgradeCard
           icon={Timer}
@@ -263,10 +291,26 @@ export default function UpgradesTab() {
           maxLevel={UPGRADE_CONFIG.energyRegen.maxLevel}
           currentValue={`${getEnergyRegenValue(u.energyRegenLvl)}s`}
           nextValue={`${getEnergyRegenValue(u.energyRegenLvl + 1)}s`}
-          cost={getEnergyRegenCost(u.energyRegenLvl)}
-          canAfford={state.balance >= getEnergyRegenCost(u.energyRegenLvl)}
+          cost={energyRegenDiamond ? getEnergyUpgradeDiamondCost(u.energyRegenLvl) : getEnergyRegenCost(u.energyRegenLvl)}
+          canAfford={energyRegenDiamond ? state.gems >= getEnergyUpgradeDiamondCost(u.energyRegenLvl) : state.balance >= getEnergyRegenCost(u.energyRegenLvl)}
           onUpgrade={upgradeEnergyRegen}
           t={t}
+          useDiamonds={energyRegenDiamond}
+        />
+        <UpgradeCard
+          icon={Sparkles}
+          iconColor="#10b981"
+          title={t('upEnergyRegenAmount')}
+          desc={t('upEnergyRegenAmountDesc')}
+          level={u.energyRegenAmountLvl ?? 0}
+          maxLevel={UPGRADE_CONFIG.energyRegenAmount.maxLevel}
+          currentValue={`+${getEnergyRegenAmountValue(u.energyRegenAmountLvl ?? 0)}`}
+          nextValue={`+${getEnergyRegenAmountValue((u.energyRegenAmountLvl ?? 0) + 1)}`}
+          cost={energyRegenAmountDiamond ? getEnergyUpgradeDiamondCost(u.energyRegenAmountLvl ?? 0) : getEnergyRegenAmountCost(u.energyRegenAmountLvl ?? 0)}
+          canAfford={energyRegenAmountDiamond ? state.gems >= getEnergyUpgradeDiamondCost(u.energyRegenAmountLvl ?? 0) : state.balance >= getEnergyRegenAmountCost(u.energyRegenAmountLvl ?? 0)}
+          onUpgrade={upgradeEnergyRegenAmount}
+          t={t}
+          useDiamonds={energyRegenAmountDiamond}
         />
       </div>
     </div>

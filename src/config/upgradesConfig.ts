@@ -7,18 +7,18 @@ import {
 
 export const UPGRADE_CONFIG = {
   activeLeaseMult: {
-    baseCost: 20,
+    baseCost: 24,
     maxLevel: 50,
-    stepPerLevel: 0.05,
+    stepPerLevel: 0.03,
   },
   autoLeaseMult: {
-    baseCost: 35,
+    baseCost: 42,
     maxLevel: 50,
-    stepPerLevel: 0.05,
+    stepPerLevel: 0.03,
   },
   autoCooldown: {
-    baseCost: 10,
-    costGrowth: 0.15,
+    baseCost: 11,
+    costGrowth: 0.25,
     reductionPerLevel: 0.2,
     minCooldown: 4.0,
     maxLevel: 30,
@@ -29,8 +29,8 @@ export const UPGRADE_CONFIG = {
     maxLevel: 30,
   },
   caseChance: {
-    baseCost: 20,
-    costGrowth: 0.50,
+    baseCost: 22,
+    costGrowth: 0.40,
     maxLevel: 30,
   },
   energyMax: {
@@ -43,8 +43,14 @@ export const UPGRADE_CONFIG = {
     baseCost: 25,
     costGrowth: 0.25,
     maxLevel: 20,
-    reductionPerLevel: 2,
+    reductionPerLevel: 1,
     minRegenSeconds: 10,
+  },
+  energyRegenAmount: {
+    baseCost: 20,
+    costGrowth: 0.20,
+    maxLevel: 20,
+    bonusPerLevel: 0.5,
   },
 } as const;
 
@@ -112,6 +118,25 @@ export function getEnergyRegenCost(currentLevel: number): number {
 export function getEnergyRegenValue(currentLevel: number): number {
   const cfg = UPGRADE_CONFIG.energyRegen;
   return Math.max(cfg.minRegenSeconds, ENERGY_REGEN_SECONDS - currentLevel * cfg.reductionPerLevel);
+}
+
+export function getEnergyRegenAmountCost(currentLevel: number): number {
+  const cfg = UPGRADE_CONFIG.energyRegenAmount;
+  return Math.round(cfg.baseCost * Math.pow(1 + cfg.costGrowth, currentLevel) * 100) / 100;
+}
+
+export function getEnergyRegenAmountValue(currentLevel: number): number {
+  return 1 + currentLevel * UPGRADE_CONFIG.energyRegenAmount.bonusPerLevel;
+}
+
+export const ENERGY_UPGRADE_DIAMOND_THRESHOLD = 5;
+
+export function getEnergyUpgradeDiamondCost(currentLevel: number): number {
+  return currentLevel + 1;
+}
+
+export function isEnergyUpgradeDiamond(level: number): boolean {
+  return level >= ENERGY_UPGRADE_DIAMOND_THRESHOLD;
 }
 
 export function xpForLevel(level: number): number {

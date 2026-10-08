@@ -4,7 +4,6 @@ import MiningTab from '@/components/MiningTab';
 import ShopTab from '@/components/ShopTab';
 import UpgradesTab from '@/components/UpgradesTab';
 import SettingsTab from '@/components/SettingsTab';
-import DailyCalendar from '@/components/DailyCalendar';
 import Notifications from '@/components/Notifications';
 import FloatTexts from '@/components/FloatTexts';
 import BackpackModal from '@/components/BackpackModal';
@@ -91,12 +90,7 @@ function GameApp() {
 
       {/* Main content */}
       <main className="max-w-2xl mx-auto px-3 sm:px-4 py-4 pb-28 space-y-4">
-        {activeTab === 'mining' && (
-          <>
-            <DailyCalendar />
-            <MiningTab />
-          </>
-        )}
+        {activeTab === 'mining' && <MiningTab />}
         {activeTab === 'shop' && <ShopTab />}
         {activeTab === 'upgrades' && <UpgradesTab />}
         {activeTab === 'settings' && <SettingsTab />}

@@ -84,6 +84,7 @@ export interface UpgradeState {
   caseChanceLvl: number;
   energyMaxLvl: number;
   energyRegenLvl: number;
+  energyRegenAmountLvl: number;
 }
 
 export interface GameState {
@@ -100,8 +101,10 @@ export interface GameState {
 
   activeLeaseEndsAt: number | null;
   activeLeaseTotal: number;
+  activeLeaseMineId: number;
   autoMiningEndsAt: number | null;
   autoMiningTotal: number;
+  autoLeaseMineId: number;
   lastAutoDigAt: number;
 
   buffs: ActiveBuff[];

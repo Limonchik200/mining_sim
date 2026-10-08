@@ -108,5 +108,15 @@ export const FOOD_ITEMS: FoodItem[] = [
 ];
 
 export const ACTIVE_LEASE_PRICE_PER_SEC = 0.25;
-export const AUTO_LEASE_PRICE_PER_SEC = 0.015;
+export const AUTO_LEASE_PRICE_PER_SEC = 0.01;
 export const STARTER_GIFT_SECONDS = 300;
+
+export function getActiveLeasePricePerSec(mineId: number): number {
+  const mineLevel = Math.max(1, mineId);
+  return ACTIVE_LEASE_PRICE_PER_SEC * (1 + 0.30 * (mineLevel - 1));
+}
+
+export function getAutoLeasePricePerSec(mineId: number): number {
+  const mineLevel = Math.max(1, mineId);
+  return AUTO_LEASE_PRICE_PER_SEC * (1 + 0.30 * (mineLevel - 1));
+}

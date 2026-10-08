@@ -2,14 +2,14 @@ import { useState, useMemo, useRef } from 'react';
 import { useGame } from '@/context/GameContext';
 import type { TimeUnit, ResourceType } from '@/types';
 import {
-  ACTIVE_LEASE_PRICE_PER_SEC,
-  AUTO_LEASE_PRICE_PER_SEC,
   STARTER_GIFT_SECONDS,
   FOOD_ITEMS,
   PICKAXE_TIERS,
   getPickaxeTier,
+  getActiveLeasePricePerSec,
+  getAutoLeasePricePerSec,
 } from '@/config/pickaxesConfig';
-import { RESOURCES, RESOURCE_LIST, MIN_LEASE_SECONDS } from '@/config/minesConfig';
+import { RESOURCES, RESOURCE_LIST, MIN_LEASE_SECONDS, getMineById } from '@/config/minesConfig';
 import { convertToSeconds, formatMoney, formatTime } from '@/config';
 import {
   Clock,
@@ -22,10 +22,11 @@ import {
   TrendingUp,
   Coins,
   Gift,
-  ChevronRight,
   ArrowLeftRight,
   Calendar,
   CheckCircle2,
+  AlertTriangle,
+  X,
 } from 'lucide-react';
 
 const foodIcons: Record<string, typeof Candy> = {
@@ -39,6 +40,9 @@ export default function ShopTab() {
     state,
     buyActiveLease,
     buyAutoLease,
+    confirmLeasePurchase,
+    cancelLeasePurchase,
+    pendingLeasePurchase,
     buyFood,
     buyPickaxe,
     equipPickaxe,
@@ -46,7 +50,7 @@ export default function ShopTab() {
     sellResource,
     sellAll,
     claimStarterGift,
-    claimDailyReward, // Переконайся, що ця функція є в твоєму GameContext
+    claimDailyReward,
     t,
     lang,
     activeLeaseMult,
@@ -55,19 +59,25 @@ export default function ShopTab() {
 
   const [leaseValue, setLeaseValue] = useState('100');
   const [leaseUnit, setLeaseUnit] = useState<TimeUnit>('seconds');
-  
+
   const calendarRef = useRef<HTMLDivElement>(null);
   const leasesRef = useRef<HTMLDivElement>(null);
   const pickaxesRef = useRef<HTMLDivElement>(null);
   const foodRef = useRef<HTMLDivElement>(null);
+
+  const currentMineId = state.currentMineId || 1;
+  const currentMine = getMineById(currentMineId);
+  const currentMineName = lang === 'uk' ? currentMine.nameUk : currentMine.nameEn;
 
   const seconds = useMemo(() => {
     const val = parseFloat(leaseValue) || 0;
     return convertToSeconds(val, leaseUnit);
   }, [leaseValue, leaseUnit]);
 
-  const activeCost = seconds * ACTIVE_LEASE_PRICE_PER_SEC;
-  const autoCost = seconds * AUTO_LEASE_PRICE_PER_SEC;
+  const activePricePerSec = getActiveLeasePricePerSec(currentMineId);
+  const autoPricePerSec = getAutoLeasePricePerSec(currentMineId);
+  const activeCost = seconds * activePricePerSec;
+  const autoCost = seconds * autoPricePerSec;
   const meetsMin = seconds >= MIN_LEASE_SECONDS;
   const hasResources = RESOURCE_LIST.some((r) => state.inventory[r.type].mass > 0);
 
@@ -79,18 +89,23 @@ export default function ShopTab() {
     ? Math.max(0, (state.autoMiningEndsAt - now) / 1000)
     : 0;
 
+  const activeLeaseMine = state.activeLeaseEndsAt && activeLeaseRemaining > 0
+    ? getMineById(state.activeLeaseMineId || 1)
+    : null;
+  const autoLeaseMine = state.autoMiningEndsAt && autoLeaseRemaining > 0
+    ? getMineById(state.autoLeaseMineId || 1)
+    : null;
+
   const scrollTo = (ref: React.RefObject<HTMLDivElement>) => {
     ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  // Daily calendar now lives in the Mining tab via DailyCalendar component
   const dailyStreakDays = state.dailyCalendar?.lastClaimDay || 0;
   const canClaimDaily = dailyStreakDays < 7 &&
     (!state.dailyCalendar?.lastClaimTimestamp || Date.now() - state.dailyCalendar.lastClaimTimestamp >= 20 * 3600 * 1000);
-  
-  // Формула комбінованого зростання: base * 1.1^(streakDay - 1)
+
   const calculateDailyReward = (day: number) => {
-    const baseReward = 500; // Базова сума нагороди
+    const baseReward = 500;
     return Math.round(baseReward * Math.pow(1.1, day - 1));
   };
 
@@ -117,7 +132,12 @@ export default function ShopTab() {
             <span className="text-[10px] font-semibold uppercase text-neutral-500">{t('activeLease')}</span>
           </div>
           {state.activeLeaseEndsAt && activeLeaseRemaining > 0 ? (
-            <span className="text-sm font-bold text-primary-500 tabular-nums">{formatTime(activeLeaseRemaining)}</span>
+            <>
+              <span className="text-sm font-bold text-primary-500 tabular-nums">{formatTime(activeLeaseRemaining)}</span>
+              <div className="text-[10px] text-neutral-400">
+                {t('leaseMine')} {lang === 'uk' ? activeLeaseMine?.nameUk : activeLeaseMine?.nameEn}
+              </div>
+            </>
           ) : (
             <span className="text-xs text-neutral-400">{t('inactive')}</span>
           )}
@@ -128,7 +148,12 @@ export default function ShopTab() {
             <span className="text-[10px] font-semibold uppercase text-neutral-500">{t('autoMining')}</span>
           </div>
           {state.autoMiningEndsAt && autoLeaseRemaining > 0 ? (
-            <span className="text-sm font-bold text-accent-500 tabular-nums">{formatTime(autoLeaseRemaining)}</span>
+            <>
+              <span className="text-sm font-bold text-accent-500 tabular-nums">{formatTime(autoLeaseRemaining)}</span>
+              <div className="text-[10px] text-neutral-400">
+                {t('leaseMine')} {lang === 'uk' ? autoLeaseMine?.nameUk : autoLeaseMine?.nameEn}
+              </div>
+            </>
           ) : (
             <span className="text-xs text-neutral-400">{t('inactive')}</span>
           )}
@@ -139,7 +164,7 @@ export default function ShopTab() {
       <div className="card p-2 flex gap-1 overflow-x-auto">
         <button onClick={() => scrollTo(calendarRef)} className="btn-ghost flex-1 py-2 text-xs whitespace-nowrap">
           <Calendar className="w-3.5 h-3.5 inline mr-1" />
-          Календар
+          {lang === 'uk' ? 'Календар' : 'Calendar'}
         </button>
         <button onClick={() => scrollTo(leasesRef)} className="btn-ghost flex-1 py-2 text-xs whitespace-nowrap">
           <Clock className="w-3.5 h-3.5 inline mr-1" />
@@ -163,8 +188,12 @@ export default function ShopTab() {
               <Calendar className="w-5 h-5 text-accent-500" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-neutral-800 dark:text-neutral-100">Щоденний календар</h2>
-              <div className="text-xs text-neutral-400">Стрік: <span className="text-accent-500 font-bold">{dailyStreakDays} день</span> (+10% до нагороди)</div>
+              <h2 className="text-base font-bold text-neutral-800 dark:text-neutral-100">
+                {lang === 'uk' ? 'Щоденний календар' : 'Daily Calendar'}
+              </h2>
+              <div className="text-xs text-neutral-400">
+                {lang === 'uk' ? 'Стрік:' : 'Streak:'} <span className="text-accent-500 font-bold">{dailyStreakDays} {lang === 'uk' ? 'день' : 'days'}</span>
+              </div>
             </div>
           </div>
           <button
@@ -172,11 +201,10 @@ export default function ShopTab() {
             disabled={!canClaimDaily}
             className={canClaimDaily ? "btn-accent px-4 py-2 text-xs" : "btn-ghost px-4 py-2 text-xs opacity-50 cursor-not-allowed"}
           >
-            {canClaimDaily ? "Забрати нагороду" : "Отримано сьогодні"}
+            {canClaimDaily ? (lang === 'uk' ? "Забрати нагороду" : "Claim Reward") : (lang === 'uk' ? "Отримано сьогодні" : "Claimed today")}
           </button>
         </div>
 
-        {/* 7 days grid preview */}
         <div className="grid grid-cols-7 gap-1.5 mt-3">
           {[1, 2, 3, 4, 5, 6, 7].map((day) => {
             const isPassed = day < dailyStreakDays || (day === dailyStreakDays && !canClaimDaily);
@@ -194,7 +222,9 @@ export default function ShopTab() {
                     : 'bg-neutral-100 dark:bg-neutral-800/50 border-neutral-200 dark:border-neutral-700 text-neutral-400'
                 }`}
               >
-                <span className="text-[10px] uppercase font-semibold">День {day}</span>
+                <span className="text-[10px] uppercase font-semibold">
+                  {lang === 'uk' ? `День ${day}` : `Day ${day}`}
+                </span>
                 <span className="text-xs font-bold mt-1">{formatMoney(rewardAmount)}</span>
                 {isPassed && <CheckCircle2 className="w-3 h-3 mt-1 text-success-500" />}
               </div>
@@ -233,6 +263,10 @@ export default function ShopTab() {
         </h2>
 
         <div className="space-y-3">
+          <div className="text-xs text-neutral-500 dark:text-neutral-400 bg-neutral-100 dark:bg-neutral-850/50 rounded-lg px-3 py-2">
+            {t('leaseMine')}: <span className="font-bold text-neutral-700 dark:text-neutral-300">{currentMineName}</span>
+          </div>
+
           <div>
             <label className="text-xs text-neutral-500 dark:text-neutral-400 block mb-1">{t('leaseTime')}</label>
             <input
@@ -276,7 +310,7 @@ export default function ShopTab() {
                 <Zap className="w-3.5 h-3.5 text-primary-500" />
                 <span className="text-[10px] font-semibold uppercase text-neutral-500">{t('activeLease')}</span>
               </div>
-              <div className="text-xs text-neutral-400 mb-0.5">{formatMoney(ACTIVE_LEASE_PRICE_PER_SEC)}/{t('secs')}</div>
+              <div className="text-xs text-neutral-400 mb-0.5">{formatMoney(activePricePerSec)}/{t('secs')}</div>
               <div className="text-sm font-bold text-primary-500">{formatMoney(activeCost)}</div>
               {activeLeaseMult > 1 && <div className="text-[10px] text-success-500">×{activeLeaseMult} = {Math.floor(seconds * activeLeaseMult)}s</div>}
             </div>
@@ -285,7 +319,7 @@ export default function ShopTab() {
                 <Clock className="w-3.5 h-3.5 text-accent-500" />
                 <span className="text-[10px] font-semibold uppercase text-neutral-500">{t('autoMining')}</span>
               </div>
-              <div className="text-xs text-neutral-400 mb-0.5">{formatMoney(AUTO_LEASE_PRICE_PER_SEC)}/{t('secs')}</div>
+              <div className="text-xs text-neutral-400 mb-0.5">{formatMoney(autoPricePerSec)}/{t('secs')}</div>
               <div className="text-sm font-bold text-accent-500">{formatMoney(autoCost)}</div>
               {autoLeaseMult > 1 && <div className="text-[10px] text-success-500">×{autoLeaseMult} = {Math.floor(seconds * autoLeaseMult)}s</div>}
             </div>
@@ -393,7 +427,6 @@ export default function ShopTab() {
           })}
         </div>
 
-        {/* Spare pickaxes - switch back */}
         {state.sparePickaxes.length > 0 && (
           <div className="mt-3">
             <div className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 mb-1.5 flex items-center gap-1.5">
@@ -542,6 +575,45 @@ export default function ShopTab() {
           {t('sellAll')}
         </button>
       </div>
+
+      {/* Lease replacement confirmation modal */}
+      {pendingLeasePurchase && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          onClick={cancelLeasePurchase}
+        >
+          <div
+            className="card w-full max-w-sm p-5 animate-drop-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-warning-500/20 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-warning-500" />
+              </div>
+              <h2 className="text-base font-bold text-neutral-800 dark:text-neutral-100">
+                {t('leaseReplaceTitle')}
+              </h2>
+            </div>
+            <p className="text-sm text-neutral-600 dark:text-neutral-300 mb-5">
+              {t('leaseReplaceMsg')}
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={cancelLeasePurchase}
+                className="btn-ghost flex-1 py-2.5 text-sm"
+              >
+                {t('cancel')}
+              </button>
+              <button
+                onClick={confirmLeasePurchase}
+                className="btn-primary flex-1 py-2.5 text-sm"
+              >
+                {t('confirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

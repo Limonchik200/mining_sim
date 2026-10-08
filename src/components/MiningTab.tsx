@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useGame } from '@/context/GameContext';
 import { formatTime } from '@/config';
 import { getPickaxeTier, getRepairCost } from '@/config/pickaxesConfig';
-import { getMineById, MINES, RESOURCES, ENERGY_REGEN_SECONDS } from '@/config/minesConfig';
+import { getMineById, MINES, RESOURCES } from '@/config/minesConfig';
 import type { ResourceType } from '@/types';
 import {
   Pickaxe,
@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 
 export default function MiningTab() {
-  const { state, dig, collectBasket, t, lang, currentAutoCooldownMs, currentBasketCap, currentMineId, setCurrentMineId, repairActivePickaxe } = useGame();
+  const { state, dig, collectBasket, t, lang, currentAutoCooldownMs, currentBasketCap, currentMineId, setCurrentMineId, repairActivePickaxe, currentEnergyRegenSeconds, currentEnergyRegenAmount } = useGame();
   const [, force] = useState(0);
   const digBtnRef = useRef<HTMLButtonElement>(null);
   const [digShake, setDigShake] = useState(false);
@@ -50,9 +50,10 @@ export default function MiningTab() {
   const activeBuffs = state.buffs.filter((b) => b.expiresAt > now);
   let totalRegenMult = 1;
   for (const buff of activeBuffs) totalRegenMult += buff.regenMultiplier;
-  const secondsPerEnergy = ENERGY_REGEN_SECONDS / totalRegenMult;
+  const secondsPerEnergy = currentEnergyRegenSeconds / totalRegenMult;
+  const regenPerTick = currentEnergyRegenAmount * totalRegenMult;
   const secondsUntilNextEnergy = Math.ceil(secondsPerEnergy - ((now / 1000) % secondsPerEnergy));
-  const secondsUntilFullRegen = Math.ceil(energyDeficit * secondsPerEnergy);
+  const secondsUntilFullRegen = Math.ceil(energyDeficit * secondsPerEnergy / regenPerTick);
 
   const repairCost = state.activePickaxe ? getRepairCost(state.activePickaxeTierId, state.activePickaxe.durability) : 0;
   const needsRepair = state.activePickaxe && state.activePickaxe.durability < state.activePickaxe.maxDurability;
@@ -148,7 +149,7 @@ export default function MiningTab() {
               ) : (
                 <>
                   <span className="text-neutral-400">
-                    {t('energyRegenIn')} {secondsUntilNextEnergy}{t('secs')}
+                    +{regenPerTick % 1 === 0 ? regenPerTick.toFixed(0) : regenPerTick.toFixed(1)} {t('energyRegenIn')} {secondsUntilNextEnergy}{t('secs')}
                   </span>
                   <span className="text-neutral-400">
                     {t('fullRegenIn')} {Math.floor(secondsUntilFullRegen / 60)}{t('min')} {secondsUntilFullRegen % 60}{t('secs')}

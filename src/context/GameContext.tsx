@@ -39,6 +39,8 @@ import {
   getPickaxeTier,
   FOOD_ITEMS,
   getRepairCost,
+  getActiveLeasePricePerSec,
+  getAutoLeasePricePerSec,
 } from '@/config/pickaxesConfig';
 import { ADMIN_CODE, ADMIN_CODE_REWARD } from '@/config/promocodesConfig';
 import {
@@ -61,6 +63,10 @@ import {
   getEnergyMaxValue,
   getEnergyRegenCost,
   getEnergyRegenValue,
+  getEnergyRegenAmountCost,
+  getEnergyRegenAmountValue,
+  isEnergyUpgradeDiamond,
+  getEnergyUpgradeDiamondCost,
 } from '@/config/upgradesConfig';
 import { DAILY_REWARDS, DAILY_CLAIM_COOLDOWN_MS } from '@/config/rewardsConfig';
 import { convertToSeconds } from '@/config';
@@ -95,8 +101,10 @@ function createInitialState(): GameState {
     autoBasketMax: BASE_AUTO_BASKET_MAX,
     activeLeaseEndsAt: null,
     activeLeaseTotal: 0,
+    activeLeaseMineId: 1,
     autoMiningEndsAt: null,
     autoMiningTotal: 0,
+    autoLeaseMineId: 1,
     lastAutoDigAt: Date.now(),
     buffs: [],
     lastEnergyRegenAt: Date.now(),
@@ -115,6 +123,7 @@ function createInitialState(): GameState {
       caseChanceLvl: 0,
       energyMaxLvl: 0,
       energyRegenLvl: 0,
+      energyRegenAmountLvl: 0,
     },
     starterGiftClaimed: false,
     redeemedPromoCodes: [],
@@ -142,8 +151,22 @@ function migrateState(saved: Partial<GameState>): GameState {
     upgrades: { ...base.upgrades, ...(saved.upgrades || {}) },
   };
 
+  merged.activeLeaseMineId = saved.activeLeaseMineId ?? base.activeLeaseMineId;
+  merged.autoLeaseMineId = saved.autoLeaseMineId ?? base.autoLeaseMineId;
+
+  merged.upgrades.activeLeaseMult = Math.min(merged.upgrades.activeLeaseMult, UPGRADE_CONFIG.activeLeaseMult.maxLevel);
+  merged.upgrades.autoLeaseMult = Math.min(merged.upgrades.autoLeaseMult, UPGRADE_CONFIG.autoLeaseMult.maxLevel);
+  merged.upgrades.autoCooldownLvl = Math.min(merged.upgrades.autoCooldownLvl, UPGRADE_CONFIG.autoCooldown.maxLevel);
+  merged.upgrades.basketCapLvl = Math.min(merged.upgrades.basketCapLvl, UPGRADE_CONFIG.basketCap.maxLevel);
+  merged.upgrades.caseChanceLvl = Math.min(merged.upgrades.caseChanceLvl, UPGRADE_CONFIG.caseChance.maxLevel);
+  merged.upgrades.energyMaxLvl = Math.min(merged.upgrades.energyMaxLvl, UPGRADE_CONFIG.energyMax.maxLevel);
+  merged.upgrades.energyRegenLvl = Math.min(merged.upgrades.energyRegenLvl, UPGRADE_CONFIG.energyRegen.maxLevel);
+  merged.upgrades.energyRegenAmountLvl = Math.min(merged.upgrades.energyRegenAmountLvl ?? 0, UPGRADE_CONFIG.energyRegenAmount.maxLevel);
+
   merged.maxEnergy = getEnergyMaxValue(merged.upgrades.energyMaxLvl);
   if (merged.energy > merged.maxEnergy) merged.energy = merged.maxEnergy;
+
+  merged.autoBasketMax = getBasketCapValue(merged.upgrades.basketCapLvl);
 
   const ownedSet = new Set(merged.ownedPickaxes || []);
   ownedSet.add('rusty');
@@ -201,6 +224,9 @@ interface GameContextValue {
   collectBasket: () => void;
   buyActiveLease: (value: number, unit: TimeUnit) => void;
   buyAutoLease: (value: number, unit: TimeUnit) => void;
+  confirmLeasePurchase: () => void;
+  cancelLeasePurchase: () => void;
+  pendingLeasePurchase: { type: 'active' | 'auto'; value: number; unit: TimeUnit } | null;
   buyFood: (foodId: string) => void;
   buyPickaxe: (tierId: string) => void;
   switchPickaxe: (pickaxeId: string) => void;
@@ -234,6 +260,8 @@ interface GameContextValue {
   repairActivePickaxe: () => void;
   upgradeEnergyMax: () => void;
   upgradeEnergyRegen: () => void;
+  upgradeEnergyRegenAmount: () => void;
+  currentEnergyRegenAmount: number;
   claimDailyReward: () => void;
   currentEnergyMax: number;
   currentEnergyRegenSeconds: number;
@@ -266,6 +294,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [floatTexts, setFloatTexts] = useState<FloatText[]>([]);
   const [activeTab, setActiveTab] = useState<Tab>('mining');
+  const [pendingLeasePurchase, setPendingLeasePurchase] = useState<{ type: 'active' | 'auto'; value: number; unit: TimeUnit } | null>(null);
   const stateRef = useRef(state);
   const lastTickRef = useRef(Date.now());
   const lastDigRef = useRef(0);
@@ -334,6 +363,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const autoLeaseMult = getLeaseMultValue('autoLeaseMult', state.upgrades.autoLeaseMult);
   const currentEnergyMax = getEnergyMaxValue(state.upgrades.energyMaxLvl);
   const currentEnergyRegenSeconds = getEnergyRegenValue(state.upgrades.energyRegenLvl);
+  const currentEnergyRegenAmount = getEnergyRegenAmountValue(state.upgrades.energyRegenAmountLvl ?? 0);
   const [currentMineIdState, setCurrentMineIdState] = useState<number>(state.currentMineId || 1);
 
   const setCurrentMineId = useCallback((id: number) => {
@@ -363,7 +393,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
             changed = true;
           }
           const regenSeconds = getEnergyRegenValue(next.upgrades.energyRegenLvl);
-          const regenAmount = (deltaSec / regenSeconds) * totalRegenMult;
+          const regenMult = getEnergyRegenAmountValue(next.upgrades.energyRegenAmountLvl ?? 0);
+          const regenAmount = (deltaSec / regenSeconds) * totalRegenMult * regenMult;
           const newEnergy = Math.min(next.maxEnergy, next.energy + regenAmount);
           if (newEnergy !== next.energy) {
             next.energy = newEnergy;
@@ -389,30 +420,33 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
         if (next.autoMiningEndsAt && now < next.autoMiningEndsAt) {
           const elapsedSinceDig = now - next.lastAutoDigAt;
-          if (elapsedSinceDig >= autoCooldown && next.autoBasket.length < basketCap) {
-            const resource = getRandomResourceForMine(next.currentMineId || 1);
-            const tier = getPickaxeTier(next.activePickaxeTierId);
+          const tier = getPickaxeTier(next.activePickaxeTierId);
+          if (
+            elapsedSinceDig >= autoCooldown &&
+            next.autoBasket.length < basketCap &&
+            next.activePickaxe &&
+            next.activePickaxe.durability >= tier.durabilityCost
+          ) {
+            const resource = getRandomResourceForMine(next.autoLeaseMineId || 1);
             const mass = Math.round(getRandomMass(resource) * tier.yieldMultiplier * 100) / 100;
             const xp = resource.xp;
             next.autoBasket = [...next.autoBasket, { resource: resource.type, mass, xp, timestamp: now }];
             next.lastAutoDigAt = now;
             next.totalDigs = next.totalDigs + 1;
 
-            if (next.activePickaxe) {
-              const newDur = next.activePickaxe.durability - tier.durabilityCost;
-              if (newDur <= 0) {
-                if (next.sparePickaxes.length > 0) {
-                  const spare = next.sparePickaxes[0];
-                  next.activePickaxe = { ...spare };
-                  next.sparePickaxes = next.sparePickaxes.slice(1);
-                  pushNotification({ message: tr('notifPickaxeSwapped'), type: 'info' });
-                } else {
-                  next.activePickaxe = null;
-                  pushNotification({ message: tr('notifNoSparePickaxe'), type: 'error' });
-                }
+            const newDur = next.activePickaxe.durability - tier.durabilityCost;
+            if (newDur <= 0) {
+              if (next.sparePickaxes.length > 0) {
+                const spare = next.sparePickaxes[0];
+                next.activePickaxe = { ...spare };
+                next.sparePickaxes = next.sparePickaxes.slice(1);
+                pushNotification({ message: tr('notifPickaxeSwapped'), type: 'info' });
               } else {
-                next.activePickaxe = { ...next.activePickaxe, durability: newDur };
+                next.activePickaxe = { ...next.activePickaxe, durability: 0 };
+                pushNotification({ message: tr('notifNoSparePickaxe'), type: 'error' });
               }
+            } else {
+              next.activePickaxe = { ...next.activePickaxe, durability: newDur };
             }
 
             if (rollCaseDrop(next.upgrades.caseChanceLvl)) {
@@ -453,7 +487,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
         let totalRegenMult = 1;
         for (const buff of activeBuffs) totalRegenMult += buff.regenMultiplier;
         next.buffs = activeBuffs;
-        const regenAmount = (offlineSec / ENERGY_REGEN_SECONDS) * totalRegenMult;
+        const regenSeconds = getEnergyRegenValue(next.upgrades.energyRegenLvl);
+        const regenMult = getEnergyRegenAmountValue(next.upgrades.energyRegenAmountLvl ?? 0);
+        const regenAmount = (offlineSec / regenSeconds) * totalRegenMult * regenMult;
         next.energy = Math.min(next.maxEnergy, next.energy + regenAmount);
         changed = true;
       }
@@ -481,27 +517,27 @@ export function GameProvider({ children }: { children: ReactNode }) {
         const tier = getPickaxeTier(next.activePickaxeTierId);
 
         for (let i = 0; i < maxDigs && basket.length < basketCap; i++) {
+          if (!next.activePickaxe || next.activePickaxe.durability < tier.durabilityCost) {
+            break;
+          }
+
           const resource = getRandomResourceForMine(next.currentMineId || 1);
           const mass = Math.round(getRandomMass(resource) * tier.yieldMultiplier * 100) / 100;
           basket.push({ resource: resource.type, mass, xp: resource.xp, timestamp: now });
           digsDone++;
 
-          if (next.activePickaxe) {
-            const newDur = next.activePickaxe.durability - tier.durabilityCost;
-            if (newDur <= 0) {
-              if (next.sparePickaxes.length > 0) {
-                const spare = next.sparePickaxes[0];
-                next.activePickaxe = { ...spare };
-                next.sparePickaxes = next.sparePickaxes.slice(1);
-              } else {
-                next.activePickaxe = null;
-                break;
-              }
+          const newDur = next.activePickaxe.durability - tier.durabilityCost;
+          if (newDur <= 0) {
+            if (next.sparePickaxes.length > 0) {
+              const spare = next.sparePickaxes[0];
+              next.activePickaxe = { ...spare };
+              next.sparePickaxes = next.sparePickaxes.slice(1);
             } else {
-              next.activePickaxe = { ...next.activePickaxe, durability: newDur };
+              next.activePickaxe = { ...next.activePickaxe, durability: 0 };
+              break;
             }
           } else {
-            break;
+            next.activePickaxe = { ...next.activePickaxe, durability: newDur };
           }
 
           if (rollCaseDrop(next.upgrades.caseChanceLvl)) {
@@ -589,7 +625,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
             next.sparePickaxes = prev.sparePickaxes.slice(1);
             pushNotification({ message: tr('notifPickaxeSwapped'), type: 'info' });
           } else {
-            next.activePickaxe = null;
+            next.activePickaxe = { ...prev.activePickaxe!, durability: 0 };
             pushNotification({ message: tr('notifNoSparePickaxe'), type: 'error' });
           }
         } else {
@@ -663,20 +699,31 @@ export function GameProvider({ children }: { children: ReactNode }) {
         pushNotification({ message: tr('notifMinLease'), type: 'error' });
         return;
       }
+      const now = Date.now();
+      const hasActiveLease = stateRef.current.activeLeaseEndsAt && stateRef.current.activeLeaseEndsAt > now;
+      const leaseMineId = stateRef.current.activeLeaseMineId || 1;
+      const currentMineId = stateRef.current.currentMineId || 1;
+
+      if (hasActiveLease && leaseMineId !== currentMineId) {
+        setPendingLeasePurchase({ type: 'active', value, unit });
+        return;
+      }
+
+      const pricePerSec = getActiveLeasePricePerSec(currentMineId);
       const mult = getLeaseMultValue('activeLeaseMult', stateRef.current.upgrades.activeLeaseMult);
       const seconds = Math.floor(rawSeconds * mult);
-      const cost = rawSeconds * ACTIVE_LEASE_PRICE_PER_SEC;
+      const cost = rawSeconds * pricePerSec;
       if (stateRef.current.balance < cost) {
         pushNotification({ message: tr('notifNoMoney'), type: 'error' });
         return;
       }
-      const now = Date.now();
-      const baseEnd = stateRef.current.activeLeaseEndsAt && stateRef.current.activeLeaseEndsAt > now ? stateRef.current.activeLeaseEndsAt : now;
+      const baseEnd = hasActiveLease ? stateRef.current.activeLeaseEndsAt! : now;
       setState((prev) => ({
         ...prev,
         balance: Math.round((prev.balance - cost) * 100) / 100,
         activeLeaseEndsAt: baseEnd + seconds * 1000,
         activeLeaseTotal: (prev.activeLeaseTotal || 0) + seconds,
+        activeLeaseMineId: prev.currentMineId || 1,
       }));
       pushNotification({ message: tr('leasePurchased'), type: 'success' });
     },
@@ -690,15 +737,25 @@ export function GameProvider({ children }: { children: ReactNode }) {
         pushNotification({ message: tr('notifMinLease'), type: 'error' });
         return;
       }
+      const now = Date.now();
+      const hasAutoLease = stateRef.current.autoMiningEndsAt && stateRef.current.autoMiningEndsAt > now;
+      const leaseMineId = stateRef.current.autoLeaseMineId || 1;
+      const currentMineId = stateRef.current.currentMineId || 1;
+
+      if (hasAutoLease && leaseMineId !== currentMineId) {
+        setPendingLeasePurchase({ type: 'auto', value, unit });
+        return;
+      }
+
+      const pricePerSec = getAutoLeasePricePerSec(currentMineId);
       const mult = getLeaseMultValue('autoLeaseMult', stateRef.current.upgrades.autoLeaseMult);
       const seconds = Math.floor(rawSeconds * mult);
-      const cost = rawSeconds * AUTO_LEASE_PRICE_PER_SEC;
+      const cost = rawSeconds * pricePerSec;
       if (stateRef.current.balance < cost) {
         pushNotification({ message: tr('notifNoMoney'), type: 'error' });
         return;
       }
-      const now = Date.now();
-      const baseEnd = stateRef.current.autoMiningEndsAt && stateRef.current.autoMiningEndsAt > now ? stateRef.current.autoMiningEndsAt : now;
+      const baseEnd = hasAutoLease ? stateRef.current.autoMiningEndsAt! : now;
       const prevLastDig = stateRef.current.lastAutoDigAt;
       const autoCooldown = getAutoCooldownMs(stateRef.current.upgrades.autoCooldownLvl);
       setState((prev) => ({
@@ -706,12 +763,65 @@ export function GameProvider({ children }: { children: ReactNode }) {
         balance: Math.round((prev.balance - cost) * 100) / 100,
         autoMiningEndsAt: baseEnd + seconds * 1000,
         autoMiningTotal: (prev.autoMiningTotal || 0) + seconds,
+        autoLeaseMineId: prev.currentMineId || 1,
         lastAutoDigAt: prevLastDig < now - autoCooldown ? now : prevLastDig,
       }));
       pushNotification({ message: tr('leasePurchased'), type: 'success' });
     },
     [pushNotification, tr]
   );
+
+  const confirmLeasePurchase = useCallback(() => {
+    const pending = pendingLeasePurchase;
+    setPendingLeasePurchase(null);
+    if (!pending) return;
+
+    const now = Date.now();
+    const currentMineId = stateRef.current.currentMineId || 1;
+    const rawSeconds = convertToSeconds(pending.value, pending.unit);
+
+    if (pending.type === 'active') {
+      const pricePerSec = getActiveLeasePricePerSec(currentMineId);
+      const mult = getLeaseMultValue('activeLeaseMult', stateRef.current.upgrades.activeLeaseMult);
+      const seconds = Math.floor(rawSeconds * mult);
+      const cost = rawSeconds * pricePerSec;
+      if (stateRef.current.balance < cost) {
+        pushNotification({ message: tr('notifNoMoney'), type: 'error' });
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        balance: Math.round((prev.balance - cost) * 100) / 100,
+        activeLeaseEndsAt: now + seconds * 1000,
+        activeLeaseTotal: (prev.activeLeaseTotal || 0) + seconds,
+        activeLeaseMineId: currentMineId,
+      }));
+      pushNotification({ message: tr('leasePurchased'), type: 'success' });
+    } else {
+      const pricePerSec = getAutoLeasePricePerSec(currentMineId);
+      const mult = getLeaseMultValue('autoLeaseMult', stateRef.current.upgrades.autoLeaseMult);
+      const seconds = Math.floor(rawSeconds * mult);
+      const cost = rawSeconds * pricePerSec;
+      if (stateRef.current.balance < cost) {
+        pushNotification({ message: tr('notifNoMoney'), type: 'error' });
+        return;
+      }
+      const autoCooldown = getAutoCooldownMs(stateRef.current.upgrades.autoCooldownLvl);
+      setState((prev) => ({
+        ...prev,
+        balance: Math.round((prev.balance - cost) * 100) / 100,
+        autoMiningEndsAt: now + seconds * 1000,
+        autoMiningTotal: (prev.autoMiningTotal || 0) + seconds,
+        autoLeaseMineId: currentMineId,
+        lastAutoDigAt: prev.lastAutoDigAt < now - autoCooldown ? now : prev.lastAutoDigAt,
+      }));
+      pushNotification({ message: tr('leasePurchased'), type: 'success' });
+    }
+  }, [pendingLeasePurchase, pushNotification, tr]);
+
+  const cancelLeasePurchase = useCallback(() => {
+    setPendingLeasePurchase(null);
+  }, []);
 
   const buyFood = useCallback(
     (foodId: string) => {
@@ -897,8 +1007,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const current = stateRef.current;
     if (!current.activePickaxe) {
       const fallbackTier = PICKAXE_TIERS[0];
+      const repairCost = getRepairCost(fallbackTier.id, 0);
+      if (current.balance < repairCost) {
+        pushNotification({ message: tr('notifNoMoney'), type: 'error' });
+        return;
+      }
       setState((prev) => ({
         ...prev,
+        balance: Math.round((prev.balance - repairCost) * 100) / 100,
         activePickaxe: {
           id: `pickaxe-fallback-${Date.now()}`,
           pickaxeTierId: fallbackTier.id,
@@ -934,17 +1050,31 @@ export function GameProvider({ children }: { children: ReactNode }) {
       pushNotification({ message: tr('notifUpgradeMaxed'), type: 'warning' });
       return;
     }
-    const cost = getEnergyMaxCost(lvl);
-    if (stateRef.current.balance < cost) {
-      pushNotification({ message: tr('notifNoMoney'), type: 'error' });
-      return;
+    if (isEnergyUpgradeDiamond(lvl)) {
+      const gemCost = getEnergyUpgradeDiamondCost(lvl);
+      if (stateRef.current.gems < gemCost) {
+        pushNotification({ message: tr('notifNoGems'), type: 'error' });
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        gems: prev.gems - gemCost,
+        maxEnergy: getEnergyMaxValue(prev.upgrades.energyMaxLvl + 1),
+        upgrades: { ...prev.upgrades, energyMaxLvl: prev.upgrades.energyMaxLvl + 1 },
+      }));
+    } else {
+      const cost = getEnergyMaxCost(lvl);
+      if (stateRef.current.balance < cost) {
+        pushNotification({ message: tr('notifNoMoney'), type: 'error' });
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        balance: Math.round((prev.balance - cost) * 100) / 100,
+        maxEnergy: getEnergyMaxValue(prev.upgrades.energyMaxLvl + 1),
+        upgrades: { ...prev.upgrades, energyMaxLvl: prev.upgrades.energyMaxLvl + 1 },
+      }));
     }
-    setState((prev) => ({
-      ...prev,
-      balance: Math.round((prev.balance - cost) * 100) / 100,
-      maxEnergy: getEnergyMaxValue(prev.upgrades.energyMaxLvl + 1),
-      upgrades: { ...prev.upgrades, energyMaxLvl: prev.upgrades.energyMaxLvl + 1 },
-    }));
   }, [pushNotification, tr]);
 
   const upgradeEnergyRegen = useCallback(() => {
@@ -953,16 +1083,60 @@ export function GameProvider({ children }: { children: ReactNode }) {
       pushNotification({ message: tr('notifUpgradeMaxed'), type: 'warning' });
       return;
     }
-    const cost = getEnergyRegenCost(lvl);
-    if (stateRef.current.balance < cost) {
-      pushNotification({ message: tr('notifNoMoney'), type: 'error' });
+    if (isEnergyUpgradeDiamond(lvl)) {
+      const gemCost = getEnergyUpgradeDiamondCost(lvl);
+      if (stateRef.current.gems < gemCost) {
+        pushNotification({ message: tr('notifNoGems'), type: 'error' });
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        gems: prev.gems - gemCost,
+        upgrades: { ...prev.upgrades, energyRegenLvl: prev.upgrades.energyRegenLvl + 1 },
+      }));
+    } else {
+      const cost = getEnergyRegenCost(lvl);
+      if (stateRef.current.balance < cost) {
+        pushNotification({ message: tr('notifNoMoney'), type: 'error' });
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        balance: Math.round((prev.balance - cost) * 100) / 100,
+        upgrades: { ...prev.upgrades, energyRegenLvl: prev.upgrades.energyRegenLvl + 1 },
+      }));
+    }
+  }, [pushNotification, tr]);
+
+  const upgradeEnergyRegenAmount = useCallback(() => {
+    const lvl = stateRef.current.upgrades.energyRegenAmountLvl ?? 0;
+    if (lvl >= UPGRADE_CONFIG.energyRegenAmount.maxLevel) {
+      pushNotification({ message: tr('notifUpgradeMaxed'), type: 'warning' });
       return;
     }
-    setState((prev) => ({
-      ...prev,
-      balance: Math.round((prev.balance - cost) * 100) / 100,
-      upgrades: { ...prev.upgrades, energyRegenLvl: prev.upgrades.energyRegenLvl + 1 },
-    }));
+    if (isEnergyUpgradeDiamond(lvl)) {
+      const gemCost = getEnergyUpgradeDiamondCost(lvl);
+      if (stateRef.current.gems < gemCost) {
+        pushNotification({ message: tr('notifNoGems'), type: 'error' });
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        gems: prev.gems - gemCost,
+        upgrades: { ...prev.upgrades, energyRegenAmountLvl: (prev.upgrades.energyRegenAmountLvl ?? 0) + 1 },
+      }));
+    } else {
+      const cost = getEnergyRegenAmountCost(lvl);
+      if (stateRef.current.balance < cost) {
+        pushNotification({ message: tr('notifNoMoney'), type: 'error' });
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        balance: Math.round((prev.balance - cost) * 100) / 100,
+        upgrades: { ...prev.upgrades, energyRegenAmountLvl: (prev.upgrades.energyRegenAmountLvl ?? 0) + 1 },
+      }));
+    }
   }, [pushNotification, tr]);
 
   const claimDailyReward = useCallback(() => {
@@ -1057,6 +1231,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       starterGiftClaimed: true,
       activeLeaseEndsAt: baseEnd + STARTER_GIFT_SECONDS * 1000,
       activeLeaseTotal: (prev.activeLeaseTotal || 0) + STARTER_GIFT_SECONDS,
+      activeLeaseMineId: prev.currentMineId || 1,
     }));
     pushNotification({ message: tr('giftClaimed'), type: 'success' });
   }, [pushNotification, tr]);
@@ -1348,6 +1523,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
     collectBasket,
     buyActiveLease,
     buyAutoLease,
+    confirmLeasePurchase,
+    cancelLeasePurchase,
+    pendingLeasePurchase,
     buyFood,
     buyPickaxe,
     switchPickaxe,
@@ -1381,9 +1559,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
     repairActivePickaxe,
     upgradeEnergyMax,
     upgradeEnergyRegen,
+    upgradeEnergyRegenAmount,
     claimDailyReward,
     currentEnergyMax,
     currentEnergyRegenSeconds,
+    currentEnergyRegenAmount,
   };
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

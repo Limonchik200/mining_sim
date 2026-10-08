@@ -38,7 +38,7 @@ export const translations = {
     timeRemaining: 'Залишилось часу',
     expired: 'Закінчилась',
     energyFull: 'Енергія повна',
-    energyRegenIn: '+1 енергії через',
+    energyRegenIn: 'енергії через',
     fullRegenIn: 'Повна регенерація через',
 
     stone: 'Камінь',
@@ -216,6 +216,18 @@ export const translations = {
     upEnergyMaxDesc: 'Збільшує максимальну енергію',
     upEnergyRegen: 'Швидкість регенерації',
     upEnergyRegenDesc: 'Зменшує час відновлення енергії',
+    upEnergyRegenAmount: 'Кількість регенерації',
+    upEnergyRegenAmountDesc: 'Збільшує кількість енергії за тік',
+    notifNoGems: 'Недостатньо алмазів!',
+
+    // Lease replacement
+    leaseReplaceTitle: 'Замінити оренду?',
+    leaseReplaceMsg: 'Ви дійсно бажаєте купити оренду на нову шахту? Залишок часу на старій шахті згорить.',
+    cancel: 'Скасувати',
+    confirm: 'Підтвердити',
+    leaseMine: 'Шахта',
+    activeLeaseOn: 'Активна оренда на',
+    autoLeaseOn: 'Авто-видобуток на',
 
     // Mine chances
     mineChances: 'Шанси випадіння руди',
@@ -259,7 +271,7 @@ export const translations = {
     timeRemaining: 'Time remaining',
     expired: 'Expired',
     energyFull: 'Energy Full',
-    energyRegenIn: '+1 energy in',
+    energyRegenIn: 'energy in',
     fullRegenIn: 'Full regen in',
 
     stone: 'Stone',
@@ -437,6 +449,18 @@ export const translations = {
     upEnergyMaxDesc: 'Increases maximum energy',
     upEnergyRegen: 'Regeneration Rate',
     upEnergyRegenDesc: 'Reduces energy regen time',
+    upEnergyRegenAmount: 'Regen Amount',
+    upEnergyRegenAmountDesc: 'Increases energy gained per regen tick',
+    notifNoGems: 'Not enough diamonds!',
+
+    // Lease replacement
+    leaseReplaceTitle: 'Replace Lease?',
+    leaseReplaceMsg: 'Are you sure you want to buy a lease for a new mine? The remaining time on the old mine will be lost.',
+    cancel: 'Cancel',
+    confirm: 'Confirm',
+    leaseMine: 'Mine',
+    activeLeaseOn: 'Active lease on',
+    autoLeaseOn: 'Auto-mining on',
 
     // Mine chances
     mineChances: 'Ore Drop Chances',
