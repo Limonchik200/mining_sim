@@ -180,6 +180,7 @@ function createInitialState(): GameState {
     expeditionRefreshAt: Date.now() + EXPEDITION_REFRESH_MS,
     ownedItems: [],
     equippedItems: [null, null, null, null, null, null],
+    slot6Unlocked: false,
     lastSavedAt: Date.now(),
   };
 }
@@ -238,6 +239,7 @@ function migrateState(saved: Partial<GameState>): GameState {
   merged.ownedItems = saved.ownedItems ?? [];
   merged.equippedItems = saved.equippedItems ?? [null, null, null, null, null, null];
   while (merged.equippedItems.length < 6) merged.equippedItems.push(null);
+  merged.slot6Unlocked = saved.slot6Unlocked ?? false;
 
   merged.sparePickaxes = merged.sparePickaxes.map((px) => {
     const tier = getPickaxeTier(px.pickaxeTierId);
@@ -311,7 +313,7 @@ interface GameContextValue {
   lang: Lang;
   theme: Theme;
   claimStarterGift: () => void;
-  redeemPromoCode: (code: string) => void;
+  redeemPromoCode: (code: string) => string | null;
   upgradeActiveLeaseMult: () => void;
   upgradeAutoLeaseMult: () => void;
   upgradeAutoCooldown: () => void;
@@ -345,6 +347,8 @@ interface GameContextValue {
   equipItem: (uid: string, slot: number) => void;
   unequipItem: (slot: number) => void;
   upgradeItem: (uid: string) => void;
+  unlockSlot6: () => void;
+  isSlotUnlocked: (slot: number) => boolean;
   totalItemEffects: ItemEffect;
 }
 
@@ -427,13 +431,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const handler = () => saveState(stateRef.current);
-    window.addEventListener('beforeunload', handler);
-    document.addEventListener('visibilitychange', () => {
+    const handler = () => {
+      if (!document.hidden) {
+        lastTickRef.current = Date.now() - 1000;
+      }
       if (document.hidden) saveState(stateRef.current);
-    });
+    };
+    document.addEventListener('visibilitychange', handler);
+    window.addEventListener('pagehide', () => saveState(stateRef.current));
     return () => {
-      window.removeEventListener('beforeunload', handler);
+      document.removeEventListener('visibilitychange', handler);
       saveState(stateRef.current);
     };
   }, []);
@@ -580,47 +587,70 @@ export function GameProvider({ children }: { children: ReactNode }) {
           changed = true;
         }
 
-        const autoCooldown = getAutoCooldownMs(next.upgrades.autoCooldownLvl);
-        const basketCap = getBasketCapValue(next.upgrades.basketCapLvl);
-
         if (next.autoMiningEndsAt && now < next.autoMiningEndsAt) {
-          const elapsedSinceDig = now - next.lastAutoDigAt;
+          const autoCooldown = getAutoCooldownMs(next.upgrades.autoCooldownLvl);
+          const basketCap = getBasketCapValue(next.upgrades.basketCapLvl);
           const tier = getPickaxeTier(next.activePickaxeTierId);
+          const elapsedSinceDig = now - next.lastAutoDigAt;
+
           if (
             elapsedSinceDig >= autoCooldown &&
             next.autoBasket.length < basketCap &&
             next.activePickaxe &&
             next.activePickaxe.durability >= tier.durabilityCost
           ) {
-            const resource = getRandomResourceForMine(next.autoLeaseMineId || 1);
-            const mass = Math.round(getRandomMass(resource) * tier.yieldMultiplier * 100) / 100;
-            const xp = resource.xp;
-            next.autoBasket = [...next.autoBasket, { resource: resource.type, mass, xp, timestamp: now }];
-            next.lastAutoDigAt = now;
-            next.totalDigs = next.totalDigs + 1;
+            const missedDigs = Math.min(
+              Math.floor(elapsedSinceDig / autoCooldown),
+              basketCap - next.autoBasket.length
+            );
+            let basket = [...next.autoBasket];
+            let activePickaxe = { ...next.activePickaxe };
+            let sparePickaxes = [...next.sparePickaxes];
+            let totalDigs = next.totalDigs;
+            let pickaxeBroken = false;
 
-            const newDur = next.activePickaxe.durability - tier.durabilityCost;
-            if (newDur <= 0) {
-              if (next.sparePickaxes.length > 0) {
-                const spare = next.sparePickaxes[0];
-                next.activePickaxe = { ...spare };
-                next.sparePickaxes = next.sparePickaxes.slice(1);
-                pushNotification({ message: tr('notifPickaxeSwapped'), type: 'info' });
-              } else {
-                next.activePickaxe = { ...next.activePickaxe, durability: 0 };
-                pushNotification({ message: tr('notifNoSparePickaxe'), type: 'error' });
+            for (let i = 0; i < missedDigs; i++) {
+              if (basket.length >= basketCap) break;
+              if (!activePickaxe || activePickaxe.durability < tier.durabilityCost) {
+                pickaxeBroken = true;
+                break;
               }
-            } else {
-              next.activePickaxe = { ...next.activePickaxe, durability: newDur };
+
+              const resource = getRandomResourceForMine(next.autoLeaseMineId || 1);
+              const mass = Math.round(getRandomMass(resource) * tier.yieldMultiplier * 100) / 100;
+              basket.push({ resource: resource.type, mass, xp: resource.xp, timestamp: now });
+              totalDigs++;
+
+              const newDur = activePickaxe.durability - tier.durabilityCost;
+              if (newDur <= 0) {
+                if (sparePickaxes.length > 0) {
+                  const spare = sparePickaxes[0];
+                  activePickaxe = { ...spare };
+                  sparePickaxes = sparePickaxes.slice(1);
+                } else {
+                  activePickaxe = { ...activePickaxe, durability: 0 };
+                  pickaxeBroken = true;
+                  break;
+                }
+              } else {
+                activePickaxe = { ...activePickaxe, durability: newDur };
+              }
+
+              if (rollCaseDrop(next.upgrades.caseChanceLvl)) {
+                const rarity = rollCaseRarity();
+                next.cases = [...next.cases, { id: `case-${now}-${i}-${Math.random()}`, rarity, opened: false }];
+              }
             }
 
-            if (rollCaseDrop(next.upgrades.caseChanceLvl)) {
-              const rarity = rollCaseRarity();
-              next.cases = [...next.cases, { id: `case-${now}-${Math.random()}`, rarity, opened: false }];
-              pushNotification({ message: tr('notifCaseDropped'), type: 'case', color: CASE_RARITIES[rarity].color });
-              changed = true;
-            }
+            next.autoBasket = basket;
+            next.activePickaxe = activePickaxe;
+            next.sparePickaxes = sparePickaxes;
+            next.totalDigs = totalDigs;
+            next.lastAutoDigAt = now;
 
+            if (pickaxeBroken && !sparePickaxes.length) {
+              pushNotification({ message: tr('notifNoSparePickaxe'), type: 'error' });
+            }
             if (next.autoBasket.length >= basketCap) {
               pushNotification({ message: tr('notifBasketFull'), type: 'warning' });
             }
@@ -1049,11 +1079,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
         next.balance = Math.round((prev.balance - price) * 100) / 100;
 
         if (food.energyBoost > 0) {
-          if (prev.energy >= prev.maxEnergy) {
+          const effectiveMax = prev.maxEnergy + totalItemEffects.energyMaxBonus;
+          if (prev.energy >= effectiveMax) {
             pushNotification({ message: tr('notifEnergyFull'), type: 'info' });
           }
           const boost = food.energyBoost * (1 + totalItemEffects.foodBonusPct);
-          next.energy = Math.min(prev.maxEnergy, prev.energy + boost);
+          next.energy = Math.min(effectiveMax, prev.energy + boost);
         }
 
         if (food.buffDuration > 0) {
@@ -1472,16 +1503,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, [pushNotification, tr]);
 
   const redeemPromoCode = useCallback(
-    (code: string) => {
+    (code: string): string | null => {
       const cleanCode = code.trim().toLowerCase();
-      if (!cleanCode) return;
+      if (!cleanCode) return null;
 
       const current = stateRef.current;
       const usedCodes = current.redeemedPromoCodes || [];
 
       if (usedCodes.includes(cleanCode)) {
         pushNotification({ message: tr('promoUsed'), type: 'error' });
-        return;
+        return tr('promoUsed');
       }
 
       if (cleanCode === ADM_XP_CODE) {
@@ -1501,13 +1532,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
         }));
         const xpMsg = lang === 'ru' ? `+${xpGained.toLocaleString('ru')} XP!` : (lang === 'uk' ? `${xpGained.toLocaleString('uk')} XP!` : `${xpGained.toLocaleString('en')} XP!`);
         pushNotification({ message: xpMsg, type: 'success' });
-        return;
+        return xpMsg;
       }
 
       const promo = findPromoCode(cleanCode);
       if (!promo) {
         pushNotification({ message: tr('promoInvalid'), type: 'error' });
-        return;
+        return tr('promoInvalid');
       }
 
       const newCases: Array<{ id: string; rarity: CaseRarity; opened: boolean }> = [];
@@ -1543,6 +1574,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
       const msg = lang === 'ru' ? (promo.messageRu || promo.messageEn) : (lang === 'uk' ? promo.messageUk : promo.messageEn);
       pushNotification({ message: msg, type: 'success' });
+      return msg;
     },
     [pushNotification, tr, lang]
   );
@@ -1896,8 +1928,44 @@ export function GameProvider({ children }: { children: ReactNode }) {
     pushNotification({ message: `${tr('itemReceived')}: ${name} (${levelName})`, type: 'drop', color: ITEM_TYPES[type].color });
   }, [pushNotification, tr, lang]);
 
+  const isSlotUnlocked = useCallback((slot: number): boolean => {
+    const level = stateRef.current.level;
+    if (slot === 0) return true;
+    if (slot === 1) return level >= 10;
+    if (slot === 2) return level >= 20;
+    if (slot === 3) return level >= 30;
+    if (slot === 4) return level >= 40;
+    if (slot === 5) return level >= 40 && stateRef.current.slot6Unlocked;
+    return false;
+  }, []);
+
+  const SLOT6_UNLOCK_COST = 100;
+
+  const unlockSlot6 = useCallback(() => {
+    const current = stateRef.current;
+    if (current.slot6Unlocked) return;
+    if (current.level < 40) {
+      pushNotification({ message: tr('notifNeedHigherLevel'), type: 'error' });
+      return;
+    }
+    if (current.gems < SLOT6_UNLOCK_COST) {
+      pushNotification({ message: tr('notifNoGems'), type: 'error' });
+      return;
+    }
+    setState((prev) => ({
+      ...prev,
+      gems: prev.gems - SLOT6_UNLOCK_COST,
+      slot6Unlocked: true,
+    }));
+    pushNotification({
+      message: lang === 'ru' ? 'Слот 6 разблокирован!' : (lang === 'uk' ? 'Слот 6 розблоковано!' : 'Slot 6 unlocked!'),
+      type: 'success',
+    });
+  }, [pushNotification, tr, lang]);
+
   const equipItem = useCallback((uid: string, slot: number) => {
     if (slot < 0 || slot > 5) return;
+    if (!isSlotUnlocked(slot)) return;
     setState((prev) => {
       const item = prev.ownedItems.find((o) => o.uid === uid);
       if (!item) return prev;
@@ -2052,6 +2120,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
     equipItem,
     unequipItem,
     upgradeItem,
+    unlockSlot6,
+    isSlotUnlocked,
     totalItemEffects,
   };
 

@@ -4,6 +4,7 @@ import { ITEM_TYPES, ITEM_LEVEL_NAMES, UPGRADE_COSTS, getItemEffect, getItemName
 import { MATERIALS_CONFIG } from '@/config/expeditions';
 import type { ItemType, OwnedItem, ItemLevel } from '@/types/items';
 import type { Lang } from '@/types';
+import ItemDetailsModal from '@/components/ItemDetailsModal';
 import {
   X,
   Timer,
@@ -17,8 +18,7 @@ import {
   Sparkles,
   Gem,
   Plus,
-  ArrowDownToLine,
-  Wrench,
+  Lock,
 } from 'lucide-react';
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
@@ -66,28 +66,25 @@ function ItemCard({
   lang,
   isEquipped,
   equipSlot,
-  onEquip,
-  onUpgrade,
+  onClick,
   t,
 }: {
   item: OwnedItem;
   lang: Lang;
   isEquipped: boolean;
   equipSlot: number | null;
-  onEquip: (uid: string) => void;
-  onUpgrade: (uid: string) => void;
+  onClick: () => void;
   t: (k: any) => string;
 }) {
   const info = ITEM_TYPES[item.type];
   const Icon = ICON_MAP[info.icon] || Package;
   const levelInfo = ITEM_LEVEL_NAMES[item.level];
   const isMaxLevel = item.level >= 7;
-  const cost = UPGRADE_COSTS[item.level];
-  const hasCost = cost && Object.keys(cost).length > 0;
 
   return (
-    <div
-      className={`rounded-2xl p-3 border-2 transition-all ${isEquipped ? 'ring-2 ring-success-500/30' : ''}`}
+    <button
+      onClick={onClick}
+      className={`w-full text-left rounded-2xl p-3 border-2 transition-all hover:scale-[1.02] active:scale-[0.98] ${isEquipped ? 'ring-2 ring-success-500/30' : ''}`}
       style={{
         borderColor: levelInfo.color + (isEquipped ? '' : '60'),
         backgroundColor: levelInfo.color + (isEquipped ? '12' : '08'),
@@ -122,61 +119,18 @@ function ItemCard({
         <EffectDescription type={item.type} level={item.level} lang={lang} />
       </div>
 
-      {/* Actions */}
-      <div className="flex gap-1.5">
-        {!isEquipped ? (
-          <button
-            onClick={() => onEquip(item.uid)}
-            className="flex-1 py-1.5 text-[11px] font-semibold rounded-lg bg-primary-500/20 text-primary-600 dark:text-primary-400 hover:bg-primary-500/30 transition-colors flex items-center justify-center gap-1"
-          >
-            <Plus className="w-3 h-3" />
-            {t('itemsEquip')}
-          </button>
-        ) : null}
-        {hasCost && !isMaxLevel && (
-          <button
-            onClick={() => onUpgrade(item.uid)}
-            className="flex-1 py-1.5 text-[11px] font-semibold rounded-lg bg-warning-500/20 text-warning-600 dark:text-warning-400 hover:bg-warning-500/30 transition-colors flex items-center justify-center gap-1"
-          >
-            <ChevronUp className="w-3 h-3" />
-            {t('itemsUpgrade')}
-          </button>
-        )}
-        {isMaxLevel && (
-          <div className="flex-1 py-1.5 text-[11px] font-bold rounded-lg bg-neutral-200 dark:bg-neutral-800 text-neutral-400 text-center">
-            MAX
-          </div>
-        )}
+      {/* Hint */}
+      <div className="text-[9px] text-neutral-400 text-center font-medium">
+        {isMaxLevel ? 'MAX' : (lang === 'ru' ? 'Нажмите для деталей' : (lang === 'uk' ? 'Натисніть для деталей' : 'Tap for details'))}
       </div>
-
-      {/* Upgrade cost preview */}
-      {hasCost && !isMaxLevel && (
-        <div className="flex flex-wrap gap-1 mt-1.5">
-          {cost.gems && (
-            <span className="text-[9px] flex items-center gap-0.5 text-accent-500">
-              <Gem className="w-2.5 h-2.5" /> {cost.gems}
-            </span>
-          )}
-          {Object.entries(cost).map(([matId, amount]) => {
-            if (matId === 'gems') return null;
-            const mat = MATERIALS_CONFIG[matId as keyof typeof MATERIALS_CONFIG];
-            if (!mat) return null;
-            return (
-              <span key={matId} className="text-[9px] flex items-center gap-0.5 text-neutral-500 dark:text-neutral-400">
-                {mat.icon} {amount}
-              </span>
-            );
-          })}
-        </div>
-      )}
-    </div>
+    </button>
   );
 }
 
 export default function ItemsModal() {
-  const { state, itemsOpen, setItemsOpen, openItemBag, equipItem, unequipItem, upgradeItem, t, lang, totalItemEffects } = useGame();
+  const { state, itemsOpen, setItemsOpen, openItemBag, equipItem, unequipItem, upgradeItem, unlockSlot6, isSlotUnlocked, t, lang, totalItemEffects } = useGame();
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
-  const [contextSlot, setContextSlot] = useState<number | null>(null);
+  const [selectedItem, setSelectedItem] = useState<OwnedItem | null>(null);
 
   if (!itemsOpen) return null;
 
@@ -206,9 +160,11 @@ export default function ItemsModal() {
     return aEq - bEq;
   });
 
-  const contextItem = contextSlot !== null
-    ? (state.equippedItems[contextSlot] ? state.ownedItems.find((o) => o.uid === state.equippedItems[contextSlot]) : null)
-    : null;
+  const SLOT_UNLOCK_LEVELS = [0, 10, 20, 30, 40, 40];
+
+  const availableSlots = state.equippedItems
+    .map((uid, idx) => (uid === null && isSlotUnlocked(idx) ? idx : null))
+    .filter((idx): idx is number => idx !== null);
 
   return (
     <div
@@ -272,18 +228,50 @@ export default function ItemsModal() {
               const info = item ? ITEM_TYPES[item.type] : null;
               const Icon = info ? ICON_MAP[info.icon] : null;
               const levelInfo = item ? ITEM_LEVEL_NAMES[item.level] : null;
+              const unlocked = isSlotUnlocked(slotIdx);
+              const unlockLevel = SLOT_UNLOCK_LEVELS[slotIdx];
+              const isSlot6Paid = slotIdx === 5;
+
+              if (!unlocked) {
+                const levelMet = state.level >= unlockLevel;
+                return (
+                  <div
+                    key={slotIdx}
+                    className="aspect-square rounded-xl border-2 border-dashed border-neutral-300 dark:border-neutral-700 flex flex-col items-center justify-center relative bg-neutral-50 dark:bg-neutral-850/30"
+                  >
+                    <Lock className="w-4 h-4 text-neutral-400" />
+                    <span className="text-[8px] text-neutral-400 mt-0.5 font-semibold">
+                      {isSlot6Paid
+                        ? (levelMet ? '100 💎' : `Lvl ${unlockLevel}`)
+                        : `Lvl ${unlockLevel}`}
+                    </span>
+                    {isSlot6Paid && levelMet && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          unlockSlot6();
+                        }}
+                        disabled={state.gems < 100}
+                        className="mt-1 px-2 py-0.5 text-[8px] font-bold rounded-md bg-accent-500 text-white disabled:opacity-50 hover:bg-accent-600 transition-colors"
+                      >
+                        <Gem className="w-2.5 h-2.5 inline mr-0.5" />100
+                      </button>
+                    )}
+                  </div>
+                );
+              }
+
               return (
                 <button
                   key={slotIdx}
                   onClick={() => {
                     if (item) {
-                      setContextSlot(contextSlot === slotIdx ? null : slotIdx);
+                      setSelectedItem(item);
                       setSelectedSlot(null);
                     } else if (selectedSlot === slotIdx) {
                       setSelectedSlot(null);
                     } else {
                       setSelectedSlot(slotIdx);
-                      setContextSlot(null);
                     }
                   }}
                   className={`aspect-square rounded-xl border-2 flex flex-col items-center justify-center transition-all relative ${
@@ -319,64 +307,7 @@ export default function ItemsModal() {
             })}
           </div>
 
-          {/* Context menu for equipped slot */}
-          {contextSlot !== null && contextItem && (() => {
-            const info = ITEM_TYPES[contextItem.type];
-            const Icon = ICON_MAP[info.icon] || Package;
-            const levelInfo = ITEM_LEVEL_NAMES[contextItem.level];
-            const isMaxLevel = contextItem.level >= 7;
-            const cost = UPGRADE_COSTS[contextItem.level];
-            const hasCost = cost && Object.keys(cost).length > 0;
-            return (
-              <div className="mt-2 rounded-xl p-3 border-2" style={{ borderColor: levelInfo.color + '60', backgroundColor: levelInfo.color + '08' }}>
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: info.color + '20' }}>
-                    <Icon className="w-4 h-4" style={{ color: info.color }} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-bold truncate" style={{ color: info.color }}>
-                      {getItemName(contextItem.type, lang)}
-                    </div>
-                    <div className="text-[10px]" style={{ color: levelInfo.color }}>
-                      {getItemLevelName(contextItem.level, lang)}
-                    </div>
-                  </div>
-                </div>
-                <div className="text-[10px] text-neutral-500 dark:text-neutral-400 mb-2">
-                  <EffectDescription type={contextItem.type} level={contextItem.level} lang={lang} />
-                </div>
-                <div className="flex gap-1.5">
-                  <button
-                    onClick={() => {
-                      unequipItem(contextSlot);
-                      setContextSlot(null);
-                    }}
-                    className="flex-1 py-1.5 text-[11px] font-semibold rounded-lg bg-neutral-200 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-300 dark:hover:bg-neutral-600 transition-colors flex items-center justify-center gap-1"
-                  >
-                    <ArrowDownToLine className="w-3 h-3" />
-                    {lang === 'ru' ? 'Снять' : (lang === 'uk' ? 'Зняти' : 'Unequip')}
-                  </button>
-                  {hasCost && !isMaxLevel && (
-                    <button
-                      onClick={() => {
-                        upgradeItem(contextItem.uid);
-                      }}
-                      className="flex-1 py-1.5 text-[11px] font-semibold rounded-lg bg-warning-500/20 text-warning-600 dark:text-warning-400 hover:bg-warning-500/30 transition-colors flex items-center justify-center gap-1"
-                    >
-                      <Wrench className="w-3 h-3" />
-                      {t('itemsUpgrade')}
-                    </button>
-                  )}
-                  <button
-                    onClick={() => setContextSlot(null)}
-                    className="px-2 py-1.5 text-[11px] font-semibold rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </div>
-              </div>
-            );
-          })()}
+          {/* Context menu for equipped slot removed — now opens ItemDetailsModal */}
 
           {selectedSlot !== null && (
             <p className="text-[10px] text-primary-500 mt-1.5 text-center font-medium">
@@ -404,14 +335,7 @@ export default function ItemsModal() {
                   lang={lang}
                   isEquipped={equippedUids.has(item.uid)}
                   equipSlot={state.equippedItems.indexOf(item.uid)}
-                  onEquip={(uid) => {
-                    const slot = selectedSlot !== null ? selectedSlot : state.equippedItems.findIndex((u) => u === null);
-                    if (slot >= 0) {
-                      equipItem(uid, slot);
-                      setSelectedSlot(null);
-                    }
-                  }}
-                  onUpgrade={upgradeItem}
+                  onClick={() => setSelectedItem(item)}
                   t={t}
                 />
               ))}
@@ -419,6 +343,34 @@ export default function ItemsModal() {
           )}
         </div>
       </div>
+
+      {/* Item Details Modal — rendered outside scrolling container for proper centering */}
+      {selectedItem && (
+        <ItemDetailsModal
+          item={selectedItem}
+          lang={lang}
+          isEquipped={equippedUids.has(selectedItem.uid)}
+          equipSlot={state.equippedItems.indexOf(selectedItem.uid)}
+          availableSlots={availableSlots}
+          materials={state.materials}
+          gems={state.gems}
+          onEquip={(uid, slot) => {
+            equipItem(uid, slot);
+            setSelectedSlot(null);
+            setSelectedItem(null);
+          }}
+          onUnequip={(slot) => {
+            unequipItem(slot);
+            setSelectedItem(null);
+          }}
+          onUpgrade={(uid) => {
+            upgradeItem(uid);
+            setSelectedItem(null);
+          }}
+          onClose={() => setSelectedItem(null)}
+          t={t}
+        />
+      )}
     </div>
   );
 }

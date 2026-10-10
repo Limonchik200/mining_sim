@@ -64,7 +64,7 @@ function GameApp() {
   return (
     <div className="min-h-screen bg-neutral-100 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 transition-colors duration-300">
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-md border-b border-neutral-200 dark:border-neutral-800">
+      <header className="sticky top-0 z-30 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-md border-b border-neutral-200 dark:border-neutral-800" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div className="max-w-2xl mx-auto px-4 py-2.5 flex items-center justify-between">
           <LevelXPBar />
           <h1 className="text-sm font-bold tracking-tight text-neutral-900 dark:text-neutral-50 absolute left-1/2 -translate-x-1/2 hidden md:block">
@@ -78,7 +78,7 @@ function GameApp() {
       {activeTab === 'mining' && (
         <button
           onClick={() => setBackpackOpen(!backpackOpen)}
-          className="fixed left-3 top-1/2 -translate-y-1/2 z-40 w-14 h-14 rounded-2xl bg-primary-500 hover:bg-primary-600 text-white shadow-xl shadow-primary-500/30 flex items-center justify-center transition-all hover:scale-110 active:scale-95"
+          className="fixed left-2 sm:left-3 top-1/2 -translate-y-1/2 z-40 w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-primary-500 hover:bg-primary-600 text-white shadow-xl shadow-primary-500/30 flex items-center justify-center transition-all hover:scale-110 active:scale-95"
           title={t('backpack')}
         >
           <Backpack className="w-6 h-6" />
@@ -91,7 +91,7 @@ function GameApp() {
       )}
 
       {/* Main content */}
-      <main className="max-w-2xl mx-auto px-3 sm:px-4 py-4 pb-28 space-y-4">
+      <main className="max-w-2xl mx-auto px-3 sm:px-4 py-4 pb-28 space-y-4" style={{ paddingBottom: 'calc(7rem + env(safe-area-inset-bottom, 0px))' }}>
         {activeTab === 'mining' && <MiningTab />}
         {activeTab === 'shop' && <ShopTab />}
         {activeTab === 'upgrades' && <UpgradesTab />}
@@ -100,7 +100,7 @@ function GameApp() {
       </main>
 
       {/* Bottom tab nav */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-md border-t border-neutral-200 dark:border-neutral-800">
+      <div className="fixed bottom-0 left-0 right-0 z-30 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-md border-t border-neutral-200 dark:border-neutral-800" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
         <div className="max-w-2xl mx-auto px-3 py-2">
           <TabNav />
         </div>
@@ -115,7 +115,7 @@ function GameApp() {
       {/* Version badge */}
       <div className="fixed bottom-16 right-3 z-50 pointer-events-none select-none">
         <span className="text-[10px] font-mono font-semibold text-neutral-400 dark:text-neutral-600 bg-neutral-100/70 dark:bg-neutral-900/70 px-2 py-0.5 rounded-md backdrop-blur-sm">
-          V4.0.0
+          V5.0.0
         </span>
       </div>
     </div>

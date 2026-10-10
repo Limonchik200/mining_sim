@@ -46,8 +46,12 @@ export default function SettingsTab() {
       setPromoInput('');
       return;
     }
-    redeemPromoCode(code);
-    showBanner(t('promoSuccess'), 'success');
+    const result = redeemPromoCode(code);
+    if (result && result !== t('promoInvalid') && result !== t('promoUsed')) {
+      showBanner(`${t('promoSuccess')} ${result}`, 'success');
+    } else {
+      showBanner(result || t('promoInvalid'), 'error');
+    }
     setPromoInput('');
   };
 

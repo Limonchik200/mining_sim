@@ -57,6 +57,7 @@ export default function ShopTab() {
     lang,
     activeLeaseMult,
     autoLeaseMult,
+    totalItemEffects,
   } = useGame();
 
   const [leaseValue, setLeaseValue] = useState('100');
@@ -535,6 +536,11 @@ export default function ShopTab() {
         <h2 className="text-lg font-bold text-neutral-800 dark:text-neutral-100 mb-3 flex items-center gap-2">
           <TrendingUp className="w-5 h-5 text-success-500" />
           {t('shopMarket')}
+          {totalItemEffects.sellMultBonus > 0 && (
+            <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-success-500/20 text-success-500">
+              {lang === 'ru' ? `Множитель продажи: x${(1 + totalItemEffects.sellMultBonus).toFixed(2)}` : (lang === 'uk' ? `Множник продажу: x${(1 + totalItemEffects.sellMultBonus).toFixed(2)}` : `Sell multiplier: x${(1 + totalItemEffects.sellMultBonus).toFixed(2)}`)}
+            </span>
+          )}
         </h2>
 
         <div className="space-y-2 mb-3">

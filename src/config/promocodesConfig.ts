@@ -90,6 +90,19 @@ export const PROMO_CODES: PromoCode[] = [
     messageEn: 'Received a full set of upgrade materials!',
     messageRu: 'Получен полный набор материалов для прокачки!',
   },
+  {
+    code: 'items5',
+    type: 'items',
+    gems: 15,
+    itemBags: 1,
+    materials: {
+      scroll: 10,
+      rainbow_stone: 1,
+    },
+    messageUk: '+15 алмазів, 1 сумка, 10 сувоїв, 1 райдужний камінь!',
+    messageEn: '+15 gems, 1 item bag, 10 scrolls, 1 rainbow stone!',
+    messageRu: '+15 алмазов, 1 сумка, 10 свитков, 1 радужный камень!',
+  },
 ];
 
 export function findPromoCode(code: string): PromoCode | null {

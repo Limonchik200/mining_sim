@@ -72,6 +72,7 @@ export interface GameState {
 
   ownedItems: OwnedItem[];
   equippedItems: EquippedItems;
+  slot6Unlocked: boolean;
 
   lastSavedAt: number;
 }

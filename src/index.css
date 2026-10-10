@@ -11,6 +11,9 @@
     @apply antialiased;
     overscroll-behavior: none;
     user-select: none;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    touch-action: manipulation;
   }
 }
 

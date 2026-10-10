@@ -161,10 +161,10 @@ const ENERGIZER_EFFECTS: LevelEffectMap = {
 };
 
 const SCALES_EFFECTS: LevelEffectMap = {
-  1: { sellMultBonus: 0.01 },
-  2: { sellMultBonus: 0.02 },
-  3: { sellMultBonus: 0.03 },
-  4: { sellMultBonus: 0.05 },
+  1: { sellMultBonus: 0.1 },
+  2: { sellMultBonus: 0.2 },
+  3: { sellMultBonus: 0.3 },
+  4: { sellMultBonus: 0.5 },
   5: { sellMultBonus: 0.85 },
   6: { sellMultBonus: 1.50 },
   7: { sellMultBonus: 2.50 },

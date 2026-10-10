@@ -120,7 +120,7 @@ export const translations = {
     promoCode: 'Промо код',
     promoCodePlaceholder: 'Введіть код...',
     redeemCode: 'Активувати код',
-    promoSuccess: 'Код активовано! +$100,000',
+    promoSuccess: 'Код активовано!',
     promoInvalid: 'Невірний код!',
     promoUsed: 'Код вже використано!',
 
@@ -408,7 +408,7 @@ export const translations = {
     promoCode: 'Promo Code',
     promoCodePlaceholder: 'Enter code...',
     redeemCode: 'Redeem Code',
-    promoSuccess: 'Code redeemed! +$100,000',
+    promoSuccess: 'Code redeemed!',
     promoInvalid: 'Invalid code!',
     promoUsed: 'Code already used!',
 
@@ -696,7 +696,7 @@ export const translations = {
     promoCode: 'Промо код',
     promoCodePlaceholder: 'Введите код...',
     redeemCode: 'Активировать код',
-    promoSuccess: 'Код активирован! +$100,000',
+    promoSuccess: 'Код активирован!',
     promoInvalid: 'Неверный код!',
     promoUsed: 'Код уже использован!',
 
