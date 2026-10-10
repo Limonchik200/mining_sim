@@ -11,6 +11,7 @@ export interface Mine {
   id: number;
   nameUk: string;
   nameEn: string;
+  nameRu: string;
   reqLevel: number;
   drops: MineDropTable;
 }

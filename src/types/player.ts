@@ -1,7 +1,9 @@
-export type Lang = 'uk' | 'en';
+export type Lang = 'uk' | 'en' | 'ru';
 export type Theme = 'dark' | 'light';
 export type Tab = 'mining' | 'shop' | 'upgrades' | 'expeditions' | 'settings';
 export type TimeUnit = 'seconds' | 'minutes' | 'hours';
+
+import type { OwnedItem, EquippedItems, ItemEffect } from './items';
 
 export interface UpgradeState {
   activeLeaseMult: number;
@@ -11,6 +13,7 @@ export interface UpgradeState {
   caseChanceLvl: number;
   energyMaxLvl: number;
   energyRegenLvl: number;
+  energyRegenAmountLvl?: number;
 }
 
 export interface GameState {
@@ -66,6 +69,9 @@ export interface GameState {
   availableExpeditions: import('../config/expeditions').GeneratedExpedition[];
   activeExpeditions: import('../config/expeditions').GeneratedExpedition[];
   expeditionRefreshAt: number;
+
+  ownedItems: OwnedItem[];
+  equippedItems: EquippedItems;
 
   lastSavedAt: number;
 }

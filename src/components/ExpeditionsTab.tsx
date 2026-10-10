@@ -4,6 +4,7 @@ import { formatMoney, formatTime } from '@/config';
 import { EXPEDITION_TIERS, MATERIALS_CONFIG } from '@/config/expeditions';
 import type { GeneratedExpedition } from '@/config/expeditions';
 import { CASE_RARITIES } from '@/config/casesConfig';
+import type { Lang } from '@/types';
 import {
   Compass,
   Clock,
@@ -27,11 +28,13 @@ const TIER_COLORS: Record<number, string> = {
   5: '#ef4444',
 };
 
-function formatDuration(seconds: number): string {
+function formatDuration(seconds: number, lang: Lang): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
-  if (h > 0) return `${h}г ${m}хв`;
-  return `${m}хв`;
+  const hLabel = lang === 'ru' ? 'ч' : (lang === 'uk' ? 'г' : 'h');
+  const mLabel = lang === 'ru' ? 'м' : (lang === 'uk' ? 'хв' : 'm');
+  if (h > 0) return `${h}${hLabel} ${m}${mLabel}`;
+  return `${m}${mLabel}`;
 }
 
 function useNow() {
@@ -58,11 +61,11 @@ function ExpeditionCard({
   onStart: () => void;
   onClaim: () => void;
   t: (k: any) => string;
-  lang: 'uk' | 'en';
+  lang: Lang;
 }) {
   const tierConfig = EXPEDITION_TIERS[expedition.tier];
   const tierColor = TIER_COLORS[expedition.tier] || '#22c55e';
-  const tierName = lang === 'uk' ? `Тір ${expedition.tier}` : `Tier ${expedition.tier}`;
+  const tierName = lang === 'ru' ? `Тир ${expedition.tier}` : (lang === 'uk' ? `Тір ${expedition.tier}` : `Tier ${expedition.tier}`);
 
   const remainingMs = expedition.completedAt ? expedition.completedAt - now : 0;
   const isCompleted = status === 'completed';
@@ -104,7 +107,7 @@ function ExpeditionCard({
             {t('expeditionsDuration')}
           </div>
           <div className="text-sm font-bold text-neutral-700 dark:text-neutral-300">
-            {formatDuration(expedition.durationSeconds)}
+            {formatDuration(expedition.durationSeconds, lang)}
           </div>
         </div>
       </div>
@@ -154,7 +157,7 @@ function ExpeditionCard({
             >
               <span className="text-sm">{MATERIALS_CONFIG[mat.materialId]?.icon}</span>
               <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-                {mat.amount}x {mat.name}
+                {mat.amount}x {lang === 'ru' ? mat.nameRu : (lang === 'uk' ? mat.name : mat.nameEn)}
               </span>
             </div>
           ))}
@@ -170,7 +173,7 @@ function ExpeditionCard({
             <div className="flex flex-wrap gap-1.5">
               {expedition.caseChances.map((cc, i) => {
                 const rarity = CASE_RARITIES[cc.caseType];
-                const name = lang === 'uk' ? rarity.nameUk : rarity.nameEn;
+                const name = lang === 'ru' ? rarity.nameRu : (lang === 'uk' ? rarity.nameUk : rarity.nameEn);
                 return (
                   <div
                     key={i}
@@ -227,7 +230,7 @@ function ExpeditionCard({
 }
 
 export default function ExpeditionsTab() {
-  const { state, t, lang, startExpedition, claimExpedition } = useGame();
+  const { state, t, lang, startExpedition, claimExpedition, totalItemEffects } = useGame();
   const now = useNow();
 
   if (state.level < 3) {
@@ -276,6 +279,27 @@ export default function ExpeditionsTab() {
           <div className="text-sm font-bold text-primary-500">{formatTime(refreshSec)}</div>
         </div>
       </div>
+
+      {/* Item buff indicators */}
+      {(totalItemEffects.expeditionTimeReductionPct > 0 || totalItemEffects.expeditionRefreshReductionPct > 0 || totalItemEffects.expeditionLootChance > 0) && (
+        <div className="flex flex-wrap gap-2">
+          {totalItemEffects.expeditionTimeReductionPct > 0 && (
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-success-500/10 text-success-600 dark:text-success-400 flex items-center gap-1">
+              {lang === 'ru' ? `Время эксп. -${totalItemEffects.expeditionTimeReductionPct}%` : (lang === 'uk' ? `Час експ. -${totalItemEffects.expeditionTimeReductionPct}%` : `Exped. time -${totalItemEffects.expeditionTimeReductionPct}%`)}
+            </span>
+          )}
+          {totalItemEffects.expeditionRefreshReductionPct > 0 && (
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-success-500/10 text-success-600 dark:text-success-400 flex items-center gap-1">
+              {lang === 'ru' ? `Обновление -${totalItemEffects.expeditionRefreshReductionPct}%` : (lang === 'uk' ? `Оновлення -${totalItemEffects.expeditionRefreshReductionPct}%` : `Refresh -${totalItemEffects.expeditionRefreshReductionPct}%`)}
+            </span>
+          )}
+          {totalItemEffects.expeditionLootChance > 0 && (
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-success-500/10 text-success-600 dark:text-success-400 flex items-center gap-1">
+              {lang === 'ru' ? `Шанс лута ${Math.round(totalItemEffects.expeditionLootChance * 100)}% x${totalItemEffects.expeditionLootMult}` : (lang === 'uk' ? `Шанс луту ${Math.round(totalItemEffects.expeditionLootChance * 100)}% x${totalItemEffects.expeditionLootMult}` : `Loot chance ${Math.round(totalItemEffects.expeditionLootChance * 100)}% x${totalItemEffects.expeditionLootMult}`)}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Active expeditions */}
       {activeExpeditions.length > 0 && (

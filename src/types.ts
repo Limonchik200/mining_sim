@@ -1,15 +1,16 @@
-export type Lang = 'uk' | 'en';
+export type Lang = 'uk' | 'en' | 'ru';
 export type Theme = 'dark' | 'light';
 export type Tab = 'mining' | 'shop' | 'upgrades' | 'expeditions' | 'settings';
 export type TimeUnit = 'seconds' | 'minutes' | 'hours';
 
 export type ResourceType = 'stone' | 'coal' | 'copper' | 'iron';
-export type CaseRarity = 'common' | 'rare' | 'epic' | 'legendary';
+export type CaseRarity = 'common' | 'rare' | 'epic' | 'legendary' | 'energy';
 
 export interface Resource {
   type: ResourceType;
   nameUk: string;
   nameEn: string;
+  nameRu: string;
   color: string;
   bgColor: string;
   dropChance: number;
@@ -143,6 +144,9 @@ export interface GameState {
   activeExpeditions: import('./config/expeditions').GeneratedExpedition[];
   expeditionRefreshAt: number;
 
+  ownedItems: import('./types/items').OwnedItem[];
+  equippedItems: import('./types/items').EquippedItems;
+
   lastSavedAt: number;
 }
 
@@ -162,7 +166,25 @@ export interface FloatText {
   color: string;
 }
 
+export type CaseLootType = 'cash' | 'gems' | 'itembag' | 'solar_essence';
+
+export interface CaseLootResult {
+  type: CaseLootType;
+  amount: number;
+  label: string;
+  labelEn: string;
+  labelRu: string;
+}
+
+export interface CaseLootTableEntry {
+  chance: number;
+  type: CaseLootType;
+  label: string;
+  labelEn: string;
+  labelRu: string;
+}
+
 export interface CaseOpenResult {
   rarity: CaseRarity;
-  loot: { type: 'cash' | 'gems' | 'itembag'; amount: number; label: string };
+  loot: { type: CaseLootType; amount: number; label: string };
 }

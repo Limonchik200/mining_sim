@@ -13,7 +13,11 @@ export type MaterialId =
 export interface MaterialInfo {
   id: MaterialId;
   name: string;
+  nameEn: string;
+  nameRu: string;
   description: string;
+  descriptionEn: string;
+  descriptionRu: string;
   icon: string;
 }
 
@@ -57,7 +61,7 @@ export interface GeneratedExpedition {
   durationSeconds: number;
   cashReward: number;
   diamondReward: number;
-  materialsReward: { materialId: MaterialId; amount: number; name: string }[];
+  materialsReward: { materialId: MaterialId; amount: number; name: string; nameEn: string; nameRu: string }[];
   caseChances: CaseRewardOption[];
   startTime?: number;
   completedAt?: number;
@@ -71,37 +75,61 @@ export const MATERIALS_CONFIG: Record<MaterialId, MaterialInfo> = {
   rainbow_stone: {
     id: 'rainbow_stone',
     name: 'Райдужний камінь',
+    nameEn: 'Rainbow Stone',
+    nameRu: 'Радужный камень',
     description: 'Потрібен для прокачки предметів на вищі рівні',
+    descriptionEn: 'Needed to upgrade items to higher levels',
+    descriptionRu: 'Нужен для прокачки предметов на более высокие уровни',
     icon: '🌈'
   },
   ruby_powder: {
     id: 'ruby_powder',
     name: 'Рубіновий порох',
+    nameEn: 'Ruby Powder',
+    nameRu: 'Рубиновый порошок',
     description: 'Необхідний для прокачки предметів',
+    descriptionEn: 'Needed to upgrade items',
+    descriptionRu: 'Необходим для прокачки предметов',
     icon: '✨'
   },
   essence: {
     id: 'essence',
     name: 'Есенція',
+    nameEn: 'Essence',
+    nameRu: 'Эссенция',
     description: 'Необхідна для прокачки предметів',
+    descriptionEn: 'Needed to upgrade items',
+    descriptionRu: 'Необходима для прокачки предметов',
     icon: '🧪'
   },
   magma_stone: {
     id: 'magma_stone',
     name: 'Магмовий камінь',
+    nameEn: 'Magma Stone',
+    nameRu: 'Магмовый камень',
     description: 'Необхідний для прокачки предметів',
+    descriptionEn: 'Needed to upgrade items',
+    descriptionRu: 'Необходим для прокачки предметов',
     icon: '🔥'
   },
   solar_essence: {
     id: 'solar_essence',
     name: 'Сонячна есенція',
+    nameEn: 'Solar Essence',
+    nameRu: 'Солнечная эссенция',
     description: 'Необхідна для прокачки сонячної сили та предметів',
+    descriptionEn: 'Needed to upgrade solar power and items',
+    descriptionRu: 'Необходима для прокачки солнечной силы и предметов',
     icon: '☀️'
   },
   scroll: {
     id: 'scroll',
     name: 'Сувої',
+    nameEn: 'Scrolls',
+    nameRu: 'Свитки',
     description: 'Базовий матеріал для покращень',
+    descriptionEn: 'Base material for upgrades',
+    descriptionRu: 'Базовый материал для улучшений',
     icon: '📜'
   }
 };
@@ -266,7 +294,7 @@ export function generateExpedition(tierNumber: number): GeneratedExpedition {
   }
 
   // 4. Generate Materials for each slot
-  const materialsReward: { materialId: MaterialId; amount: number; name: string }[] = [];
+  const materialsReward: { materialId: MaterialId; amount: number; name: string; nameEn: string; nameRu: string }[] = [];
 
   config.materialSlots.forEach((slot) => {
     const roll = Math.random() * 100;
@@ -279,7 +307,9 @@ export function generateExpedition(tierNumber: number): GeneratedExpedition {
         materialsReward.push({
           materialId: option.materialId,
           amount,
-          name: MATERIALS_CONFIG[option.materialId].name
+          name: MATERIALS_CONFIG[option.materialId].name,
+          nameEn: MATERIALS_CONFIG[option.materialId].nameEn,
+          nameRu: MATERIALS_CONFIG[option.materialId].nameRu
         });
         break;
       }

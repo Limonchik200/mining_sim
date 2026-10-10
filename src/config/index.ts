@@ -1,6 +1,32 @@
-export function formatMoney(amount: any): string {
+import type { Lang } from '@/types';
+
+export function langName(lang: Lang, uk: string, en: string, ru: string): string {
+  if (lang === 'uk') return uk;
+  if (lang === 'ru') return ru;
+  return en;
+}
+
+export function formatNumber(amount: any): string {
   const safeAmount = Number(amount) || 0;
-  return '$' + safeAmount.toFixed(2);
+  if (Math.abs(safeAmount) >= 1e15) {
+    return safeAmount.toExponential(2).replace('e+', 'e');
+  }
+  if (Math.abs(safeAmount) >= 1e9) {
+    const billions = safeAmount / 1e9;
+    return billions.toFixed(2) + 'B';
+  }
+  if (Math.abs(safeAmount) >= 1e6) {
+    const millions = safeAmount / 1e6;
+    return millions.toFixed(2) + 'M';
+  }
+  if (Math.abs(safeAmount) >= 1e4) {
+    return Math.round(safeAmount).toLocaleString('en-US');
+  }
+  return safeAmount.toFixed(2);
+}
+
+export function formatMoney(amount: any): string {
+  return '$' + formatNumber(amount);
 }
 
 export function formatMass(mass: number): string {

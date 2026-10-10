@@ -1,10 +1,11 @@
 export type ResourceType = 'stone' | 'coal' | 'copper' | 'iron';
-export type CaseRarity = 'common' | 'rare' | 'epic' | 'legendary';
+export type CaseRarity = 'common' | 'rare' | 'epic' | 'legendary' | 'energy';
 
 export interface Resource {
   type: ResourceType;
   nameUk: string;
   nameEn: string;
+  nameRu: string;
   color: string;
   bgColor: string;
   dropChance: number;
@@ -19,6 +20,7 @@ export interface PickaxeTier {
   id: string;
   nameUk: string;
   nameEn: string;
+  nameRu: string;
   price: number;
   requiredLevel: number;
   yieldMultiplier: number;
@@ -57,6 +59,7 @@ export interface FoodItem {
   name: string;
   nameUk: string;
   nameEn: string;
+  nameRu: string;
   price: number;
   energyBoost: number;
   regenMultiplier: number;
@@ -71,21 +74,25 @@ export interface CaseItem {
   opened: boolean;
 }
 
+export type CaseLootType = 'cash' | 'gems' | 'itembag' | 'solar_essence';
+
 export interface CaseLootResult {
-  type: 'cash' | 'gems' | 'itembag';
+  type: CaseLootType;
   amount: number;
   label: string;
   labelEn: string;
+  labelRu: string;
 }
 
 export interface CaseLootTableEntry {
   chance: number;
-  type: 'cash' | 'gems' | 'itembag';
+  type: CaseLootType;
   label: string;
   labelEn: string;
+  labelRu: string;
 }
 
 export interface CaseOpenResult {
   rarity: CaseRarity;
-  loot: { type: 'cash' | 'gems' | 'itembag'; amount: number; label: string };
+  loot: { type: CaseLootType; amount: number; label: string };
 }

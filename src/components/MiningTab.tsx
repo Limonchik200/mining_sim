@@ -16,10 +16,11 @@ import {
   Info,
   Lock,
   Wrench,
+  ShoppingBag,
 } from 'lucide-react';
 
 export default function MiningTab() {
-  const { state, dig, collectBasket, t, lang, currentAutoCooldownMs, currentBasketCap, currentMineId, setCurrentMineId, repairActivePickaxe, currentEnergyRegenSeconds, currentEnergyRegenAmount } = useGame();
+  const { state, dig, collectBasket, t, lang, currentAutoCooldownMs, currentBasketCap, currentMineId, setCurrentMineId, repairActivePickaxe, currentEnergyRegenSeconds, currentEnergyRegenAmount, itemsOpen, setItemsOpen, totalItemEffects, currentEnergyMax } = useGame();
   const [, force] = useState(0);
   const digBtnRef = useRef<HTMLButtonElement>(null);
   const [digShake, setDigShake] = useState(false);
@@ -49,7 +50,7 @@ export default function MiningTab() {
   const autoMiningActive = !!state.autoMiningEndsAt && autoMiningRemaining > 0 && state.autoBasket.length < currentBasketCap;
   const basketFull = state.autoBasket.length >= currentBasketCap;
 
-  const energyDeficit = state.maxEnergy - state.energy;
+  const energyDeficit = currentEnergyMax - state.energy;
   const activeBuffs = state.buffs.filter((b) => b.expiresAt > now);
   let totalRegenMult = 1;
   for (const buff of activeBuffs) totalRegenMult += buff.regenMultiplier;
@@ -83,14 +84,14 @@ export default function MiningTab() {
     {} as Record<string, { mass: number; count: number }>
   );
 
-  const energyPct = (state.energy / state.maxEnergy) * 100;
+  const energyPct = (state.energy / currentEnergyMax) * 100;
   const durabilityPct = state.activePickaxe && !isShovel
     ? (state.activePickaxe.durability / state.activePickaxe.maxDurability) * 100
     : 100;
   const basketPct = (state.autoBasket.length / currentBasketCap) * 100;
 
   const currentMine = getMineById(currentMineId);
-  const mineName = lang === 'uk' ? currentMine.nameUk : currentMine.nameEn;
+  const mineName = lang === 'ru' ? currentMine.nameRu : (lang === 'uk' ? currentMine.nameUk : currentMine.nameEn);
 
   const dropEntries: Array<[ResourceType, number]> = [
     ['stone', currentMine.drops.stone],
@@ -101,8 +102,20 @@ export default function MiningTab() {
 
   return (
     <div className="space-y-4 relative">
-      {/* Mine selector button */}
-      <div className="flex justify-end mb-2">
+      {/* Items button + Mine selector button */}
+      <div className="flex justify-between items-center mb-2">
+        <button
+          onClick={() => setItemsOpen(true)}
+          className="bg-violet-600 hover:bg-violet-500 text-white px-4 py-2 rounded-xl shadow-lg flex items-center gap-2 font-bold text-sm border border-violet-400/30 transition-all"
+        >
+          <ShoppingBag className="w-4 h-4" />
+          {t('itemsTitle')}
+          {state.itemBags > 0 && (
+            <span className="ml-1 bg-warning-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse">
+              {state.itemBags}
+            </span>
+          )}
+        </button>
         <button
           onClick={() => setShowMineSelector(true)}
           className="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-xl shadow-lg flex items-center gap-2 font-bold text-sm border border-amber-400/30 transition-all"
@@ -136,9 +149,16 @@ export default function MiningTab() {
                 <Battery className="w-4 h-4 text-accent-500" />
                 <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">{t('energy')}</span>
               </div>
-              <span className="text-sm font-bold text-neutral-700 dark:text-neutral-300">
-                {Math.floor(state.energy)} / {state.maxEnergy}
-              </span>
+              <div className="flex items-center gap-1.5">
+                {totalItemEffects.energyMaxBonus > 0 && (
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-success-500/20 text-success-500">
+                    +{totalItemEffects.energyMaxBonus}
+                  </span>
+                )}
+                <span className="text-sm font-bold text-neutral-700 dark:text-neutral-300">
+                  {Math.floor(state.energy)} / {currentEnergyMax}
+                </span>
+              </div>
             </div>
             <div className="h-3 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden mb-2">
               <div
@@ -147,7 +167,7 @@ export default function MiningTab() {
               />
             </div>
             <div className="flex items-center justify-between text-xs">
-              {state.energy >= state.maxEnergy ? (
+              {state.energy >= currentEnergyMax ? (
                 <span className="text-success-500 font-semibold">{t('energyFull')}</span>
               ) : (
                 <>
@@ -183,7 +203,7 @@ export default function MiningTab() {
                 <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">{t('pickaxe')}</span>
               </div>
               <span className="text-xs text-neutral-400">
-                {lang === 'uk' ? tier.nameUk : tier.nameEn}
+                {lang === 'ru' ? tier.nameRu : (lang === 'uk' ? tier.nameUk : tier.nameEn)}
                 {state.sparePickaxes.length > 0 && <span className="ml-1.5 text-neutral-400">(+{state.sparePickaxes.length})</span>}
               </span>
             </div>
@@ -237,6 +257,11 @@ export default function MiningTab() {
                 <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
                   {t('activeLease')}
                 </span>
+                {totalItemEffects.activeLeaseMultBonus > 0 && (
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-success-500/20 text-success-500 ml-auto">
+                    {lang === 'ru' ? `Оренда +${totalItemEffects.activeLeaseMultBonus}х` : (lang === 'uk' ? `Оренда +${totalItemEffects.activeLeaseMultBonus}х` : `Lease +${totalItemEffects.activeLeaseMultBonus}x`)}
+                  </span>
+                )}
               </div>
               {hasActiveLease ? (
                 <span className="text-lg font-bold text-primary-500 tabular-nums">
@@ -325,6 +350,11 @@ export default function MiningTab() {
           >
             {autoMiningActive ? t('active') : t('inactive')}
           </span>
+          {totalItemEffects.sellMultBonus > 0 && (
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-success-500/20 text-success-500 ml-1">
+              {lang === 'ru' ? `Продажа x${(1 + totalItemEffects.sellMultBonus).toFixed(1)}` : (lang === 'uk' ? `Продаж x${(1 + totalItemEffects.sellMultBonus).toFixed(1)}` : `Sell x${(1 + totalItemEffects.sellMultBonus).toFixed(1)}`)}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center justify-between mb-1">
@@ -377,7 +407,7 @@ export default function MiningTab() {
           <div className="card p-6 max-w-sm w-full space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-neutral-800 dark:text-neutral-100">
-                {lang === 'uk' ? 'Вибір шахти' : 'Select Mine'}
+                {lang === 'ru' ? 'Выбор шахты' : (lang === 'uk' ? 'Вибір шахти' : 'Select Mine')}
               </h3>
               <button onClick={() => setShowMineSelector(false)} className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200">
                 <X className="w-5 h-5" />
@@ -387,7 +417,7 @@ export default function MiningTab() {
               {MINES.map((mine) => {
                 const isUnlocked = state.level >= mine.reqLevel;
                 const isSelected = currentMineId === mine.id;
-                const mName = lang === 'uk' ? mine.nameUk : mine.nameEn;
+                const mName = lang === 'ru' ? mine.nameRu : (lang === 'uk' ? mine.nameUk : mine.nameEn);
                 return (
                   <button
                     key={mine.id}
@@ -406,7 +436,7 @@ export default function MiningTab() {
                   >
                     <span>{mName}</span>
                     {isUnlocked ? (
-                      <span className="text-xs">{isSelected ? (lang === 'uk' ? 'Вибрано' : 'Selected') : (lang === 'uk' ? 'Обрати' : 'Select')}</span>
+                      <span className="text-xs">{isSelected ? (lang === 'ru' ? 'Выбрано' : (lang === 'uk' ? 'Вибрано' : 'Selected')) : (lang === 'ru' ? 'Выбрать' : (lang === 'uk' ? 'Обрати' : 'Select'))}</span>
                     ) : (
                       <span className="text-xs flex items-center gap-1"><Lock className="w-3.5 h-3.5" /> {t('requiresLevel')} {mine.reqLevel}</span>
                     )}
@@ -433,7 +463,7 @@ export default function MiningTab() {
             <div className="space-y-2">
               {dropEntries.map(([type, chance]) => {
                 const res = RESOURCES[type];
-                const name = lang === 'uk' ? res.nameUk : res.nameEn;
+                const name = lang === 'ru' ? res.nameRu : (lang === 'uk' ? res.nameUk : res.nameEn);
                 return (
                   <div key={type} className="flex items-center justify-between rounded-xl p-2.5 bg-neutral-50 dark:bg-neutral-850/50 border border-neutral-200 dark:border-neutral-800">
                     <div className="flex items-center gap-2.5">
@@ -448,7 +478,7 @@ export default function MiningTab() {
               })}
             </div>
             <div className="text-xs text-neutral-400 text-center pt-1">
-              {lang === 'uk' ? 'Шанс діаманта: 0.001% за копання' : 'Diamond chance: 0.001% per dig'}
+              {lang === 'ru' ? 'Шанс алмаза: 0.001% за копание' : (lang === 'uk' ? 'Шанс діаманта: 0.001% за копання' : 'Diamond chance: 0.001% per dig')}
             </div>
             <button onClick={() => setShowMineInfo(false)} className="btn-primary w-full py-2 text-sm">
               {t('close')}

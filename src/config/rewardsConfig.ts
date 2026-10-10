@@ -1,3 +1,5 @@
+import { formatNumber } from '@/config';
+
 export type DailyRewardType = 'cash' | 'gems' | 'case';
 
 export interface DailyReward {
@@ -21,7 +23,8 @@ export const DAILY_RESET_HOUR_UTC = 0;
 export const DAILY_CLAIM_COOLDOWN_MS = 20 * 3600 * 1000;
 
 export function getDailyRewardScaled(reward: DailyReward, playerLevel: number): { type: DailyRewardType; amount: number; caseRarity?: string } {
-  const levelMultiplier = Math.pow(1.10, playerLevel - 1);
+  const L = playerLevel;
+  const levelMultiplier = 1 + (0.8 * L) + (0.02 * Math.pow(L, 1.4));
   if (reward.type === 'cash') {
     return { type: 'cash', amount: Math.round((reward.baseAmount || 0) * levelMultiplier * 100) / 100 };
   }
@@ -31,19 +34,18 @@ export function getDailyRewardScaled(reward: DailyReward, playerLevel: number): 
   return { type: 'case', amount: 1, caseRarity: reward.caseRarity };
 }
 
-export function getDailyRewardLabel(reward: DailyReward, playerLevel: number, lang: 'uk' | 'en'): string {
+export function getDailyRewardLabel(reward: DailyReward, playerLevel: number, lang: 'uk' | 'en' | 'ru'): string {
   const scaled = getDailyRewardScaled(reward, playerLevel);
   if (scaled.type === 'cash') {
-    const amount = scaled.amount.toFixed(2);
-    return lang === 'uk' ? `$${amount}` : `$${amount}`;
+    return '$' + formatNumber(scaled.amount);
   }
   if (scaled.type === 'gems') {
     return `${scaled.amount} 💎`;
   }
   if (scaled.type === 'case') {
     const rarityName = scaled.caseRarity === 'epic'
-      ? (lang === 'uk' ? 'Епічний кейс' : 'Epic Case')
-      : (lang === 'uk' ? 'Звичайний кейс' : 'Common Case');
+      ? (lang === 'uk' ? 'Епічний кейс' : (lang === 'ru' ? 'Эпический кейс' : 'Epic Case'))
+      : (lang === 'uk' ? 'Звичайний кейс' : (lang === 'ru' ? 'Обычный кейс' : 'Common Case'));
     return rarityName;
   }
   return '';

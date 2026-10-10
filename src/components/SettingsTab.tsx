@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useGame } from '@/context/GameContext';
 import type { Lang, Theme } from '@/types';
 import { formatMoney } from '@/config';
+import { xpForLevel } from '@/config/upgradesConfig';
 import {
   Globe,
   Moon,
@@ -65,8 +66,8 @@ export default function SettingsTab() {
             <Globe className="w-4 h-4 text-accent-500" />
             {t('language')}
           </label>
-          <div className="grid grid-cols-2 gap-2">
-            {(['uk', 'en'] as Lang[]).map((l) => (
+          <div className="grid grid-cols-3 gap-2">
+            {(['uk', 'en', 'ru'] as Lang[]).map((l) => (
               <button
                 key={l}
                 onClick={() => setLang(l)}
@@ -77,7 +78,7 @@ export default function SettingsTab() {
                 }`}
               >
                 <Languages className="w-4 h-4" />
-                {l === 'uk' ? t('ukrainian') : t('english')}
+                {l === 'uk' ? t('ukrainian') : l === 'en' ? t('english') : t('russian')}
               </button>
             ))}
           </div>
@@ -155,7 +156,7 @@ export default function SettingsTab() {
         <div className="space-y-2">
           {[
             { label: t('level'), value: state.level },
-            { label: t('xp'), value: `${state.xp} / ${Math.floor(100 * Math.pow(1.30, state.level - 1))}` },
+            { label: t('xp'), value: `${state.xp} / ${xpForLevel(state.level)}` },
             { label: t('totalDigs'), value: state.totalDigs },
             { label: t('totalEarned'), value: formatMoney(state.totalEarned) },
             { label: t('totalCasesOpened'), value: state.totalCasesOpened },

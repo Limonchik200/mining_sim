@@ -30,7 +30,7 @@ export default function BackpackModal() {
   const stackedCases = useMemo(() => {
     const unopened = state.cases.filter((c) => !c.opened);
     const groups: Record<CaseRarity, typeof unopened> = {
-      common: [], rare: [], epic: [], legendary: [],
+      common: [], rare: [], epic: [], legendary: [], energy: [],
     };
     for (const c of unopened) {
       groups[c.rarity as CaseRarity].push(c);
@@ -118,7 +118,7 @@ export default function BackpackModal() {
                 <div className="space-y-2">
                   {rarityKeys.map((rarityKey) => {
                     const rarity = CASE_RARITIES[rarityKey];
-                    const name = lang === 'uk' ? rarity.nameUk : rarity.nameEn;
+                    const name = lang === 'ru' ? rarity.nameRu : (lang === 'uk' ? rarity.nameUk : rarity.nameEn);
                     const lootTable = CASE_LOOT_TABLES[rarityKey] || [];
                     const group = stackedCases[rarityKey];
                     const isExpanded = expandedRarity === rarityKey;
@@ -179,7 +179,7 @@ export default function BackpackModal() {
                                 {lootTable.map((entry, idx) => (
                                   <div key={idx} className="flex items-center justify-between text-[11px] gap-2">
                                     <span className="text-neutral-600 dark:text-neutral-300">
-                                      {lang === 'uk' ? entry.label : entry.labelEn}
+                                      {lang === 'ru' ? entry.labelRu : (lang === 'uk' ? entry.label : entry.labelEn)}
                                     </span>
                                     <span className="font-bold text-neutral-700 dark:text-neutral-200">
                                       {entry.chance}%
@@ -207,7 +207,7 @@ export default function BackpackModal() {
                                   {lootTable.map((entry, idx) => (
                                     <div key={idx} className="flex items-center justify-between text-[11px] gap-2">
                                       <span className="text-neutral-600 dark:text-neutral-300">
-                                        {lang === 'uk' ? entry.label : entry.labelEn}
+                                        {lang === 'ru' ? entry.labelRu : (lang === 'uk' ? entry.label : entry.labelEn)}
                                       </span>
                                       <span className="font-bold text-neutral-700 dark:text-neutral-200">
                                         {entry.chance}%
@@ -270,12 +270,12 @@ export default function BackpackModal() {
                     </div>
                     <div>
                       <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                        {lang === 'uk' ? 'Сумка з предметом' : 'Item Bag'}
+                        {lang === 'ru' ? 'Сумка с предметом' : (lang === 'uk' ? 'Сумка з предметом' : 'Item Bag')}
                       </span>
                       <span className="text-[10px] text-neutral-400 ml-1.5 block">
                         {(state.itemBags || 0) > 0
                           ? `x${state.itemBags}`
-                          : (lang === 'uk' ? 'Отримайте з кейсів' : 'Obtain from cases')}
+                          : (lang === 'ru' ? 'Получите из кейсов' : (lang === 'uk' ? 'Отримайте з кейсів' : 'Obtain from cases'))}
                       </span>
                     </div>
                   </div>
@@ -288,7 +288,7 @@ export default function BackpackModal() {
 
                 {RESOURCE_LIST.map((res) => {
                   const entry = state.inventory[res.type];
-                  const name = lang === 'uk' ? res.nameUk : res.nameEn;
+                  const name = lang === 'ru' ? res.nameRu : (lang === 'uk' ? res.nameUk : res.nameEn);
                   const value = entry.mass * res.pricePerKg;
                   return (
                     <div
@@ -334,9 +334,9 @@ export default function BackpackModal() {
                         </div>
                         <div>
                           <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
-                            {mat.name}
+                            {lang === 'ru' ? mat.nameRu : (lang === 'uk' ? mat.name : mat.nameEn)}
                           </span>
-                          <span className="text-[10px] text-neutral-400 block">{mat.description}</span>
+                          <span className="text-[10px] text-neutral-400 block">{lang === 'ru' ? mat.descriptionRu : (lang === 'uk' ? mat.description : mat.descriptionEn)}</span>
                         </div>
                       </div>
                       <span className={`text-sm font-bold ${count > 0 ? 'text-primary-500' : 'text-neutral-400'}`}>
@@ -396,7 +396,7 @@ export default function BackpackModal() {
               {results.map((result, i) => {
                 const rarityKey = result.rarity as CaseRarity;
                 const rarity = CASE_RARITIES[rarityKey];
-                const rarityName = lang === 'uk' ? rarity.nameUk : rarity.nameEn;
+                const rarityName = lang === 'ru' ? rarity.nameRu : (lang === 'uk' ? rarity.nameUk : rarity.nameEn);
                 const lootIcon = result.loot.type === 'cash'
                   ? <Coins className="w-5 h-5 text-success-500" />
                   : result.loot.type === 'gems'

@@ -140,5 +140,5 @@ export function isEnergyUpgradeDiamond(level: number): boolean {
 }
 
 export function xpForLevel(level: number): number {
-  return Math.floor(100 * Math.pow(1.30, level - 1));
+  return 50 * (level * level) + 50 * level - 50;
 }

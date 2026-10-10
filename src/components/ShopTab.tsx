@@ -69,7 +69,7 @@ export default function ShopTab() {
 
   const currentMineId = state.currentMineId || 1;
   const currentMine = getMineById(currentMineId);
-  const currentMineName = lang === 'uk' ? currentMine.nameUk : currentMine.nameEn;
+  const currentMineName = lang === 'ru' ? currentMine.nameRu : (lang === 'uk' ? currentMine.nameUk : currentMine.nameEn);
 
   const seconds = useMemo(() => {
     const val = parseFloat(leaseValue) || 0;
@@ -137,7 +137,7 @@ export default function ShopTab() {
             <>
               <span className="text-sm font-bold text-primary-500 tabular-nums">{formatTime(activeLeaseRemaining)}</span>
               <div className="text-[10px] text-neutral-400">
-                {t('leaseMine')} {lang === 'uk' ? activeLeaseMine?.nameUk : activeLeaseMine?.nameEn}
+                {t('leaseMine')} {lang === 'ru' ? activeLeaseMine?.nameRu : (lang === 'uk' ? activeLeaseMine?.nameUk : activeLeaseMine?.nameEn)}
               </div>
             </>
           ) : (
@@ -153,7 +153,7 @@ export default function ShopTab() {
             <>
               <span className="text-sm font-bold text-accent-500 tabular-nums">{formatTime(autoLeaseRemaining)}</span>
               <div className="text-[10px] text-neutral-400">
-                {t('leaseMine')} {lang === 'uk' ? autoLeaseMine?.nameUk : autoLeaseMine?.nameEn}
+                {t('leaseMine')} {lang === 'ru' ? autoLeaseMine?.nameRu : (lang === 'uk' ? autoLeaseMine?.nameUk : autoLeaseMine?.nameEn)}
               </div>
             </>
           ) : (
@@ -166,7 +166,7 @@ export default function ShopTab() {
       <div className="card p-2 flex gap-1 overflow-x-auto">
         <button onClick={() => scrollTo(calendarRef)} className="btn-ghost flex-1 py-2 text-xs whitespace-nowrap">
           <Calendar className="w-3.5 h-3.5 inline mr-1" />
-          {lang === 'uk' ? 'Календар' : 'Calendar'}
+          {lang === 'ru' ? 'Календарь' : (lang === 'uk' ? 'Календар' : 'Calendar')}
         </button>
         <button onClick={() => scrollTo(leasesRef)} className="btn-ghost flex-1 py-2 text-xs whitespace-nowrap">
           <Clock className="w-3.5 h-3.5 inline mr-1" />
@@ -191,10 +191,10 @@ export default function ShopTab() {
             </div>
             <div>
               <h2 className="text-base font-bold text-neutral-800 dark:text-neutral-100">
-                {lang === 'uk' ? 'Щоденний календар' : 'Daily Calendar'}
+                {lang === 'ru' ? 'Ежедневный календарь' : (lang === 'uk' ? 'Щоденний календар' : 'Daily Calendar')}
               </h2>
               <div className="text-xs text-neutral-400">
-                {lang === 'uk' ? 'Стрік:' : 'Streak:'} <span className="text-accent-500 font-bold">{dailyStreakDays} {lang === 'uk' ? 'день' : 'days'}</span>
+                {lang === 'ru' ? 'Серия:' : (lang === 'uk' ? 'Стрік:' : 'Streak:')} <span className="text-accent-500 font-bold">{dailyStreakDays} {lang === 'ru' ? 'дней' : (lang === 'uk' ? 'день' : 'days')}</span>
               </div>
             </div>
           </div>
@@ -203,7 +203,7 @@ export default function ShopTab() {
             disabled={!canClaimDaily}
             className={canClaimDaily ? "btn-accent px-4 py-2 text-xs" : "btn-ghost px-4 py-2 text-xs opacity-50 cursor-not-allowed"}
           >
-            {canClaimDaily ? (lang === 'uk' ? "Забрати нагороду" : "Claim Reward") : (lang === 'uk' ? "Отримано сьогодні" : "Claimed today")}
+            {canClaimDaily ? (lang === 'ru' ? 'Забрать награду' : (lang === 'uk' ? 'Забрати нагороду' : 'Claim Reward')) : (lang === 'ru' ? 'Получено сегодня' : (lang === 'uk' ? 'Отримано сьогодні' : 'Claimed today'))}
           </button>
         </div>
 
@@ -217,8 +217,8 @@ export default function ShopTab() {
               : reward.type === 'gems'
               ? `${reward.amount} 💎`
               : reward.caseRarity === 'epic'
-              ? (lang === 'uk' ? 'Епічний' : 'Epic')
-              : (lang === 'uk' ? 'Звичайний' : 'Common');
+              ? (lang === 'ru' ? 'Эпический' : (lang === 'uk' ? 'Епічний' : 'Epic'))
+              : (lang === 'ru' ? 'Обычный' : (lang === 'uk' ? 'Звичайний' : 'Common'));
 
             return (
               <div
@@ -232,7 +232,7 @@ export default function ShopTab() {
                 }`}
               >
                 <span className="text-[10px] uppercase font-semibold">
-                  {lang === 'uk' ? `День ${day}` : `Day ${day}`}
+                  {lang === 'ru' ? `День ${day}` : (lang === 'uk' ? `День ${day}` : `Day ${day}`)}
                 </span>
                 {reward.type === 'case' ? (
                   <Gift className="w-4 h-4 mt-1" />
@@ -371,7 +371,7 @@ export default function ShopTab() {
         </h2>
         <div className="space-y-2">
           {PICKAXE_TIERS.map((tier) => {
-            const name = lang === 'uk' ? tier.nameUk : tier.nameEn;
+            const name = lang === 'ru' ? tier.nameRu : (lang === 'uk' ? tier.nameUk : tier.nameEn);
             const isEquipped = state.activePickaxeTierId === tier.id;
             const meetsLevel = state.level >= tier.requiredLevel;
             const canAfford = state.balance >= tier.price;
@@ -448,7 +448,7 @@ export default function ShopTab() {
             <div className="space-y-1.5">
               {state.sparePickaxes.map((px) => {
                 const pxTier = getPickaxeTier(px.pickaxeTierId);
-                const pxName = lang === 'uk' ? pxTier.nameUk : pxTier.nameEn;
+                const pxName = lang === 'ru' ? pxTier.nameRu : (lang === 'uk' ? pxTier.nameUk : pxTier.nameEn);
                 return (
                   <div
                     key={px.id}
@@ -485,7 +485,7 @@ export default function ShopTab() {
         <div className="space-y-2">
           {FOOD_ITEMS.map((food) => {
             const Icon = foodIcons[food.id] || Candy;
-            const name = lang === 'uk' ? food.nameUk : food.nameEn;
+            const name = lang === 'ru' ? food.nameRu : (lang === 'uk' ? food.nameUk : food.nameEn);
             const activeBuff = state.buffs.find((b) => b.id === food.id && b.expiresAt > Date.now());
             const buffRemaining = activeBuff ? Math.ceil((activeBuff.expiresAt - Date.now()) / 1000) : 0;
             const foodPrice = getFoodPrice(food, currentMineId);
@@ -540,7 +540,7 @@ export default function ShopTab() {
         <div className="space-y-2 mb-3">
           {RESOURCE_LIST.map((res) => {
             const entry = state.inventory[res.type];
-            const name = lang === 'uk' ? res.nameUk : res.nameEn;
+            const name = lang === 'ru' ? res.nameRu : (lang === 'uk' ? res.nameUk : res.nameEn);
             const value = entry.mass * res.pricePerKg;
             const canSell = entry.mass > 0;
 

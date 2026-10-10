@@ -8,6 +8,7 @@ import SettingsTab from '@/components/SettingsTab';
 import Notifications from '@/components/Notifications';
 import FloatTexts from '@/components/FloatTexts';
 import BackpackModal from '@/components/BackpackModal';
+import ItemsModal from '@/components/ItemsModal';
 import { Pickaxe, Backpack, Coins, Gem } from 'lucide-react';
 import { formatMoney } from '@/config';
 import { xpForLevel } from '@/config/upgradesConfig';
@@ -109,6 +110,7 @@ function GameApp() {
       <Notifications />
       <FloatTexts />
       <BackpackModal />
+      <ItemsModal />
 
       {/* Version badge */}
       <div className="fixed bottom-16 right-3 z-50 pointer-events-none select-none">

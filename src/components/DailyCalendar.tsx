@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useGame } from '@/context/GameContext';
-import { DAILY_REWARDS } from '@/config/rewardsConfig';
+import { DAILY_REWARDS, getDailyRewardLabel } from '@/config/rewardsConfig';
 import { formatTime } from '@/config';
 import { Calendar, Check, Lock, Gift, Clock } from 'lucide-react';
 
@@ -60,7 +60,7 @@ export default function DailyCalendar() {
               }`}
             >
               <div className={`text-[10px] font-bold mb-0.5 ${isClaimed ? 'text-neutral-400' : isNext ? 'text-accent-500' : 'text-neutral-400'}`}>
-                {lang === 'uk' ? `День ${dayNum}` : `Day ${dayNum}`}
+                {lang === 'ru' ? `День ${dayNum}` : (lang === 'uk' ? `День ${dayNum}` : `Day ${dayNum}`)}
               </div>
               <div className="flex items-center justify-center">
                 {isClaimed ? (
@@ -72,7 +72,7 @@ export default function DailyCalendar() {
                 )}
               </div>
               <div className={`text-[10px] font-bold mt-0.5 ${isClaimed ? 'text-neutral-400' : isNext ? 'text-accent-500' : 'text-neutral-400'}`}>
-                ${reward}
+                {getDailyRewardLabel(reward, state.level, lang)}
               </div>
             </div>
           );
@@ -81,7 +81,7 @@ export default function DailyCalendar() {
 
       {cycleComplete ? (
         <div className="text-center text-xs text-neutral-400 py-2">
-          {lang === 'uk' ? 'Усі нагороди отримано! Оновлення завтра.' : 'All rewards claimed! Resets tomorrow.'}
+          {lang === 'ru' ? 'Все награды получены! Обновление завтра.' : (lang === 'uk' ? 'Усі нагороди отримано! Оновлення завтра.' : 'All rewards claimed! Resets tomorrow.')}
         </div>
       ) : (
         <button
