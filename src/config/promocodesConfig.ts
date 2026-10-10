@@ -1,5 +1,7 @@
 export const ADMIN_CODE = 'admin2011';
 export const ADMIN_CODE_REWARD = 10000000;
+export const ADM_XP_CODE = 'adm_xp';
+export const ADM_XP_REWARD = 10000000000;
 
 export interface PromoCode {
   code: string;

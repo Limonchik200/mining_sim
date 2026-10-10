@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useGame } from '@/context/GameContext';
 import { formatTime } from '@/config';
-import { getPickaxeTier, getRepairCost } from '@/config/pickaxesConfig';
-import { getMineById, MINES, RESOURCES } from '@/config/minesConfig';
+import { getPickaxeTier, getRepairCost, isUnlimitedDurability } from '@/config/pickaxesConfig';
+import { getMineById, MINES, RESOURCES, isDumpMine } from '@/config/minesConfig';
 import type { ResourceType } from '@/types';
 import {
   Pickaxe,
@@ -41,8 +41,11 @@ export default function MiningTab() {
     : 0;
 
   const tier = getPickaxeTier(state.activePickaxeTierId);
+  const isShovel = isUnlimitedDurability(state.activePickaxeTierId);
+  const dumpMine = isDumpMine(currentMineId);
   const hasActiveLease = state.activeLeaseEndsAt && activeLeaseRemaining > 0;
-  const canDig = state.energy >= tier.energyCost && state.activePickaxe && state.activePickaxe.durability >= tier.durabilityCost && hasActiveLease;
+  const hasLeaseOrDump = dumpMine || hasActiveLease;
+  const canDig = state.energy >= tier.energyCost && state.activePickaxe && (isShovel || state.activePickaxe.durability >= tier.durabilityCost) && hasLeaseOrDump;
   const autoMiningActive = !!state.autoMiningEndsAt && autoMiningRemaining > 0 && state.autoBasket.length < currentBasketCap;
   const basketFull = state.autoBasket.length >= currentBasketCap;
 
@@ -55,8 +58,8 @@ export default function MiningTab() {
   const secondsUntilNextEnergy = Math.ceil(secondsPerEnergy - ((now / 1000) % secondsPerEnergy));
   const secondsUntilFullRegen = Math.ceil(energyDeficit * secondsPerEnergy / regenPerTick);
 
-  const repairCost = state.activePickaxe ? getRepairCost(state.activePickaxeTierId, state.activePickaxe.durability) : 0;
-  const needsRepair = state.activePickaxe && state.activePickaxe.durability < state.activePickaxe.maxDurability;
+  const repairCost = state.activePickaxe && !isShovel ? getRepairCost(state.activePickaxeTierId, state.activePickaxe.durability) : 0;
+  const needsRepair = !isShovel && state.activePickaxe && state.activePickaxe.durability < state.activePickaxe.maxDurability;
   const canAffordRepair = state.balance >= repairCost;
 
   const handleDig = (e: React.MouseEvent<HTMLButtonElement>) => {
@@ -81,9 +84,9 @@ export default function MiningTab() {
   );
 
   const energyPct = (state.energy / state.maxEnergy) * 100;
-  const durabilityPct = state.activePickaxe
+  const durabilityPct = state.activePickaxe && !isShovel
     ? (state.activePickaxe.durability / state.activePickaxe.maxDurability) * 100
-    : 0;
+    : 100;
   const basketPct = (state.autoBasket.length / currentBasketCap) * 100;
 
   const currentMine = getMineById(currentMineId);
@@ -188,36 +191,42 @@ export default function MiningTab() {
               <span className="text-xs text-neutral-500 dark:text-neutral-400">{t('durability')}</span>
               <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
                 {state.activePickaxe
-                  ? `${state.activePickaxe.durability} / ${state.activePickaxe.maxDurability}`
+                  ? isShovel
+                    ? '∞'
+                    : `${state.activePickaxe.durability} / ${state.activePickaxe.maxDurability}`
                   : t('noDurability')}
               </span>
             </div>
-            <div className="h-3 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden mb-2">
-              <div
-                className={`h-full rounded-full transition-all duration-300 ${
-                  durabilityPct > 50
-                    ? 'bg-gradient-to-r from-success-400 to-success-500'
-                    : durabilityPct > 20
-                    ? 'bg-gradient-to-r from-warning-400 to-warning-500'
-                    : 'bg-gradient-to-r from-error-400 to-error-500'
-                }`}
-                style={{ width: `${durabilityPct}%` }}
-              />
-            </div>
-            <button
-              onClick={repairActivePickaxe}
-              disabled={!needsRepair || !canAffordRepair}
-              className={`btn w-full py-1.5 text-xs flex items-center justify-center gap-1.5 rounded-lg transition-all ${
-                !needsRepair
-                  ? 'bg-neutral-200 dark:bg-neutral-800 text-neutral-400 cursor-not-allowed'
-                  : canAffordRepair
-                  ? 'bg-primary-500 text-white hover:bg-primary-600'
-                  : 'bg-neutral-300 dark:bg-neutral-800 text-neutral-500 cursor-not-allowed'
-              }`}
-            >
-              <Wrench className="w-3.5 h-3.5" />
-              {needsRepair ? `${t('repairBtn')} · ${repairCost.toFixed(2)}` : t('repairBtn')}
-            </button>
+            {!isShovel && (
+              <>
+                <div className="h-3 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden mb-2">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${
+                      durabilityPct > 50
+                        ? 'bg-gradient-to-r from-success-400 to-success-500'
+                        : durabilityPct > 20
+                        ? 'bg-gradient-to-r from-warning-400 to-warning-500'
+                        : 'bg-gradient-to-r from-error-400 to-error-500'
+                    }`}
+                    style={{ width: `${durabilityPct}%` }}
+                  />
+                </div>
+                <button
+                  onClick={repairActivePickaxe}
+                  disabled={!needsRepair || !canAffordRepair}
+                  className={`btn w-full py-1.5 text-xs flex items-center justify-center gap-1.5 rounded-lg transition-all ${
+                    !needsRepair
+                      ? 'bg-neutral-200 dark:bg-neutral-800 text-neutral-400 cursor-not-allowed'
+                      : canAffordRepair
+                      ? 'bg-primary-500 text-white hover:bg-primary-600'
+                      : 'bg-neutral-300 dark:bg-neutral-800 text-neutral-500 cursor-not-allowed'
+                  }`}
+                >
+                  <Wrench className="w-3.5 h-3.5" />
+                  {needsRepair ? `${t('repairBtn')} · ${repairCost.toFixed(2)}` : t('repairBtn')}
+                </button>
+              </>
+            )}
           </div>
 
           {/* Lease timers */}
@@ -278,7 +287,7 @@ export default function MiningTab() {
           </button>
 
           <div className="flex flex-wrap gap-2 justify-center">
-            {!hasActiveLease && (
+            {!hasLeaseOrDump && (
               <span className="inline-flex items-center gap-1 text-xs text-error-500 bg-error-500/10 px-2 py-1 rounded-lg">
                 <AlertCircle className="w-3.5 h-3.5" />
                 {t('noLease')}
@@ -290,7 +299,7 @@ export default function MiningTab() {
                 {t('noEnergy')}
               </span>
             )}
-            {(!state.activePickaxe || state.activePickaxe.durability < tier.durabilityCost) && (
+            {(!state.activePickaxe || (!isShovel && state.activePickaxe.durability < tier.durabilityCost)) && (
               <span className="inline-flex items-center gap-1 text-xs text-error-500 bg-error-500/10 px-2 py-1 rounded-lg">
                 <AlertCircle className="w-3.5 h-3.5" />
                 {t('noDurability')}
@@ -437,6 +446,9 @@ export default function MiningTab() {
                   </div>
                 );
               })}
+            </div>
+            <div className="text-xs text-neutral-400 text-center pt-1">
+              {lang === 'uk' ? 'Шанс діаманта: 0.001% за копання' : 'Diamond chance: 0.001% per dig'}
             </div>
             <button onClick={() => setShowMineInfo(false)} className="btn-primary w-full py-2 text-sm">
               {t('close')}

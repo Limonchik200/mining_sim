@@ -30,6 +30,7 @@ import {
   RESOURCE_LIST,
   getRandomResourceForMine,
   getRandomMass,
+  rollDiamondDrop,
 } from '@/config/minesConfig';
 import {
   ACTIVE_LEASE_PRICE_PER_SEC,
@@ -41,8 +42,10 @@ import {
   getRepairCost,
   getActiveLeasePricePerSec,
   getAutoLeasePricePerSec,
+  getFoodPrice,
 } from '@/config/pickaxesConfig';
-import { ADMIN_CODE, ADMIN_CODE_REWARD } from '@/config/promocodesConfig';
+import { ADMIN_CODE, ADMIN_CODE_REWARD, ADM_XP_CODE, ADM_XP_REWARD } from '@/config/promocodesConfig';
+import { isDumpMine } from '@/config/minesConfig';
 import {
   CASE_RARITIES,
   rollCaseDrop,
@@ -68,13 +71,36 @@ import {
   isEnergyUpgradeDiamond,
   getEnergyUpgradeDiamondCost,
 } from '@/config/upgradesConfig';
-import { DAILY_REWARDS, DAILY_CLAIM_COOLDOWN_MS } from '@/config/rewardsConfig';
+import { DAILY_REWARDS, DAILY_CLAIM_COOLDOWN_MS, getDailyRewardScaled, type DailyReward } from '@/config/rewardsConfig';
 import { convertToSeconds } from '@/config';
 import { translations, type TranslationKey } from '@/i18n';
+import {
+  EXPEDITION_TIERS,
+  generateExpedition,
+  MATERIALS_CONFIG,
+  type GeneratedExpedition,
+  type MaterialId,
+} from '@/config/expeditions';
 
 export type { CaseOpenResult };
 
 const STORAGE_KEY = 'mining-sim-v3-save';
+const EXPEDITION_REFRESH_MS = 3 * 60 * 60 * 1000;
+const EXPEDITION_SLOTS = 4;
+const MAX_ACTIVE_EXPEDITIONS = 1;
+
+function generateExpeditionSlots(playerLevel: number): GeneratedExpedition[] {
+  const availableTiers = Object.values(EXPEDITION_TIERS)
+    .filter((t) => playerLevel >= t.requiredPlayerLevel)
+    .map((t) => t.tier);
+  if (availableTiers.length === 0) availableTiers.push(1);
+  const slots: GeneratedExpedition[] = [];
+  for (let i = 0; i < EXPEDITION_SLOTS; i++) {
+    const tier = availableTiers[Math.floor(Math.random() * availableTiers.length)];
+    slots.push(generateExpedition(tier));
+  }
+  return slots;
+}
 
 function createInitialState(): GameState {
   return {
@@ -83,13 +109,13 @@ function createInitialState(): GameState {
     energy: ENERGY_MAX,
     maxEnergy: ENERGY_MAX,
     activePickaxe: {
-      id: 'starter-pickaxe',
-      pickaxeTierId: 'rusty',
-      name: 'Rusty Pickaxe',
-      durability: 600,
-      maxDurability: 600,
+      id: 'starter-shovel',
+      pickaxeTierId: 'shovel',
+      name: 'Shovel',
+      durability: 999999,
+      maxDurability: 999999,
     },
-    activePickaxeTierId: 'rusty',
+    activePickaxeTierId: 'shovel',
     sparePickaxes: [],
     inventory: {
       stone: { mass: 0, count: 0 },
@@ -115,6 +141,7 @@ function createInitialState(): GameState {
     level: 1,
     xp: 0,
     cases: [],
+    itemBags: 0,
     upgrades: {
       activeLeaseMult: 0,
       autoLeaseMult: 0,
@@ -127,8 +154,8 @@ function createInitialState(): GameState {
     },
     starterGiftClaimed: false,
     redeemedPromoCodes: [],
-    ownedPickaxes: ['rusty'],
-    currentMineId: 1,
+    ownedPickaxes: ['shovel', 'rusty'],
+    currentMineId: 0,
     dailyCalendar: {
       lastClaimDay: 0,
       lastClaimTimestamp: null,
@@ -137,6 +164,10 @@ function createInitialState(): GameState {
       lang: 'uk',
       theme: 'dark',
     },
+    materials: {},
+    availableExpeditions: [],
+    activeExpeditions: [],
+    expeditionRefreshAt: Date.now() + EXPEDITION_REFRESH_MS,
     lastSavedAt: Date.now(),
   };
 }
@@ -170,7 +201,18 @@ function migrateState(saved: Partial<GameState>): GameState {
 
   const ownedSet = new Set(merged.ownedPickaxes || []);
   ownedSet.add('rusty');
+  ownedSet.add('shovel');
   merged.ownedPickaxes = Array.from(ownedSet);
+  merged.itemBags = saved.itemBags ?? 0;
+
+  merged.materials = saved.materials ?? {};
+  merged.activeExpeditions = saved.activeExpeditions ?? [];
+  merged.expeditionRefreshAt = saved.expeditionRefreshAt ?? (Date.now() + EXPEDITION_REFRESH_MS);
+  if (!saved.availableExpeditions || saved.availableExpeditions.length === 0) {
+    merged.availableExpeditions = generateExpeditionSlots(merged.level);
+  } else {
+    merged.availableExpeditions = saved.availableExpeditions;
+  }
 
   if (merged.activePickaxe) {
     const tier = getPickaxeTier(merged.activePickaxeTierId);
@@ -265,6 +307,9 @@ interface GameContextValue {
   claimDailyReward: () => void;
   currentEnergyMax: number;
   currentEnergyRegenSeconds: number;
+  startExpedition: (expeditionId: string) => void;
+  claimExpedition: (expeditionId: string) => void;
+  refreshExpeditions: () => void;
 }
 
 const GameContext = createContext<GameContextValue | null>(null);
@@ -367,9 +412,23 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [currentMineIdState, setCurrentMineIdState] = useState<number>(state.currentMineId || 1);
 
   const setCurrentMineId = useCallback((id: number) => {
+    const current = stateRef.current;
+    const now = Date.now();
+    if (
+      current.activeLeaseEndsAt && current.activeLeaseEndsAt > now &&
+      (current.activeLeaseMineId || 1) !== id
+    ) {
+      pushNotification({ message: lang === 'uk' ? 'Активна аренда на іншій шахті — копати не вийде. Купіть аренду тут.' : 'Active lease is on another mine — you cannot dig here. Buy a lease for this mine.', type: 'warning' });
+    }
+    if (
+      current.autoMiningEndsAt && current.autoMiningEndsAt > now &&
+      (current.autoLeaseMineId || 1) !== id
+    ) {
+      pushNotification({ message: lang === 'uk' ? 'Авто-оренда працює на іншій шахті.' : 'Auto-lease is running on another mine.', type: 'warning' });
+    }
     setCurrentMineIdState(id);
     setState((prev) => ({ ...prev, currentMineId: id }));
-  }, []);
+  }, [pushNotification, lang]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -413,6 +472,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
           next.autoMiningTotal = 0;
           changed = true;
           pushNotification({ message: tr('notifAutoLeaseExpired'), type: 'warning' });
+        }
+
+        if (next.expeditionRefreshAt && now > next.expeditionRefreshAt) {
+          next.availableExpeditions = generateExpeditionSlots(next.level);
+          next.expeditionRefreshAt = now + EXPEDITION_REFRESH_MS;
+          changed = true;
+          pushNotification({ message: tr('expeditionsRefreshed'), type: 'info' });
         }
 
         const autoCooldown = getAutoCooldownMs(next.upgrades.autoCooldownLvl);
@@ -521,7 +587,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
             break;
           }
 
-          const resource = getRandomResourceForMine(next.currentMineId || 1);
+          const resource = getRandomResourceForMine(next.autoLeaseMineId || 1);
           const mass = Math.round(getRandomMass(resource) * tier.yieldMultiplier * 100) / 100;
           basket.push({ resource: resource.type, mass, xp: resource.xp, timestamp: now });
           digsDone++;
@@ -587,10 +653,23 @@ export function GameProvider({ children }: { children: ReactNode }) {
       }
 
       const tier = getPickaxeTier(current.activePickaxeTierId);
+      const mineId = current.currentMineId ?? 0;
+      const dumpMine = isDumpMine(mineId);
 
-      if (!current.activeLeaseEndsAt || current.activeLeaseEndsAt <= now) {
-        pushNotification({ message: tr('notifNoLease'), type: 'error' });
+      if (current.activePickaxeTierId === 'shovel' && !dumpMine) {
+        pushNotification({ message: lang === 'uk' ? 'Лопату можна використовувати лише на Звалищі!' : 'Shovel can only be used at The Dump!', type: 'error' });
         return;
+      }
+
+      if (!dumpMine) {
+        if (!current.activeLeaseEndsAt || current.activeLeaseEndsAt <= now) {
+          pushNotification({ message: tr('notifNoLease'), type: 'error' });
+          return;
+        }
+        if ((current.activeLeaseMineId || 1) !== (current.currentMineId || 1)) {
+          pushNotification({ message: lang === 'uk' ? 'Аренда на іншій шахті. Купіть нову аренду тут.' : 'Lease is for a different mine. Buy a new lease here.', type: 'error' });
+          return;
+        }
       }
       if (current.energy < tier.energyCost) {
         pushNotification({ message: tr('noEnergy'), type: 'error' });
@@ -602,7 +681,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
       }
 
       const rolls: { resource: Resource; mass: number }[] = [];
-      const mineId = stateRef.current.currentMineId || 1;
       for (let i = 0; i < tier.yieldMultiplier; i++) {
         const r = getRandomResourceForMine(mineId);
         const m = Math.round(getRandomMass(r) * 100) / 100;
@@ -610,6 +688,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       }
       const totalMass = rolls.reduce((sum, r) => sum + r.mass, 0);
       const totalXp = rolls.reduce((sum, r) => sum + r.resource.xp, 0);
+      const diamondDrop = rollDiamondDrop(0);
 
       setState((prev) => {
         let next = { ...prev };
@@ -653,6 +732,17 @@ export function GameProvider({ children }: { children: ReactNode }) {
           pushNotification({ message: tr('notifCaseDropped'), type: 'case', color: CASE_RARITIES[rarity].color });
         }
 
+        const diamondResult = diamondDrop;
+        if (diamondResult.dropped) {
+          next.gems = prev.gems + diamondResult.amount;
+          next.totalGemsEarned = (prev.totalGemsEarned || 0) + diamondResult.amount;
+          pushNotification({
+            message: `${lang === 'uk' ? 'Знайдено алмаз!' : 'Diamond found!'} +${diamondResult.amount} 💎`,
+            type: 'drop',
+            color: '#06b6d4',
+          });
+        }
+
         return next;
       });
 
@@ -661,6 +751,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
       for (const roll of rolls) {
         const resName = lang === 'uk' ? roll.resource.nameUk : roll.resource.nameEn;
         pushFloatText(`+${roll.mass.toFixed(2)} kg ${resName}`, fx, fy, roll.resource.color);
+      }
+      if (diamondDrop.dropped) {
+        pushFloatText(`+${diamondDrop.amount} 💎`, fx, fy - 30, '#06b6d4');
       }
     },
     [pushNotification, pushFloatText, tr, lang]
@@ -827,13 +920,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
     (foodId: string) => {
       const food = FOOD_ITEMS.find((f) => f.id === foodId);
       if (!food) return;
-      if (stateRef.current.balance < food.price) {
+      const mineId = stateRef.current.currentMineId || 1;
+      const price = getFoodPrice(food, mineId);
+      if (stateRef.current.balance < price) {
         pushNotification({ message: tr('notifNoMoney'), type: 'error' });
         return;
       }
       setState((prev) => {
         let next = { ...prev };
-        next.balance = Math.round((prev.balance - food.price) * 100) / 100;
+        next.balance = Math.round((prev.balance - price) * 100) / 100;
 
         if (food.energyBoost > 0) {
           if (prev.energy >= prev.maxEnergy) {
@@ -1147,19 +1242,40 @@ export function GameProvider({ children }: { children: ReactNode }) {
       pushNotification({ message: tr('claimed'), type: 'info' });
       return;
     }
-    const reward = DAILY_REWARDS[nextDay - 1];
+    const reward: DailyReward = DAILY_REWARDS[nextDay - 1];
     const now = Date.now();
     if (dc.lastClaimTimestamp && now - dc.lastClaimTimestamp < DAILY_CLAIM_COOLDOWN_MS) {
       pushNotification({ message: tr('locked'), type: 'warning' });
       return;
     }
-    setState((prev) => ({
-      ...prev,
-      balance: Math.round((prev.balance + reward) * 100) / 100,
-      dailyCalendar: { lastClaimDay: nextDay, lastClaimTimestamp: now },
-    }));
-    pushNotification({ message: `${tr('dailyReward')}: +${reward}`, type: 'success' });
-  }, [pushNotification, tr]);
+    const scaled = getDailyRewardScaled(reward, current.level);
+    let rewardLabel = '';
+    if (scaled.type === 'cash') {
+      rewardLabel = `+${scaled.amount.toFixed(2)}`;
+    } else if (scaled.type === 'gems') {
+      rewardLabel = `+${scaled.amount} 💎`;
+    } else if (scaled.type === 'case') {
+      const rarityName = scaled.caseRarity === 'epic'
+        ? (lang === 'uk' ? 'Епічний кейс' : 'Epic Case')
+        : (lang === 'uk' ? 'Звичайний кейс' : 'Common Case');
+      rewardLabel = rarityName;
+    }
+    setState((prev) => {
+      const next: GameState = { ...prev, dailyCalendar: { lastClaimDay: nextDay, lastClaimTimestamp: now } };
+      if (scaled.type === 'cash') {
+        next.balance = Math.round((prev.balance + scaled.amount) * 100) / 100;
+        next.totalEarned = Math.round((prev.totalEarned + scaled.amount) * 100) / 100;
+      } else if (scaled.type === 'gems') {
+        next.gems = prev.gems + scaled.amount;
+        next.totalGemsEarned = prev.totalGemsEarned + scaled.amount;
+      } else if (scaled.type === 'case') {
+        const caseRarity = (scaled.caseRarity as CaseRarity) || 'common';
+        next.cases = [...(prev.cases || []), { id: `daily_${nextDay}_${Date.now()}`, rarity: caseRarity, opened: false }];
+      }
+      return next;
+    });
+    pushNotification({ message: `${tr('dailyReward')}: ${rewardLabel}`, type: 'success' });
+  }, [pushNotification, tr, lang]);
 
   const sellResource = useCallback(
     (type: ResourceType) => {
@@ -1267,6 +1383,19 @@ export function GameProvider({ children }: { children: ReactNode }) {
         });
         message = lang === 'uk' ? 'Отримано по 10 кейсів кожного виду!' : 'Received 10 cases of each rarity!';
         success = true;
+      } else if (cleanCode === ADM_XP_CODE) {
+        let xpGained = ADM_XP_REWARD;
+        setState((prev) => {
+          let next = { ...prev };
+          const xpRes = applyXp(next, xpGained);
+          next = xpRes.state;
+          if (xpRes.leveledUp) {
+            pushNotification({ message: `${tr('notifLevelUp')} ${xpRes.newLevel}!`, type: 'success' });
+          }
+          return next;
+        });
+        message = lang === 'uk' ? `+${xpGained.toLocaleString('uk')} XP!` : `+${xpGained.toLocaleString('en')} XP!`;
+        success = true;
       } else if (cleanCode === 'start') {
         bonusBalance = 100;
         newCases.push({ id: `start_${Date.now()}`, rarity: 'common', opened: false });
@@ -1286,12 +1415,19 @@ export function GameProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      setState((prev) => ({
-        ...prev,
-        balance: Math.round(((Number(prev.balance) || 0) + bonusBalance) * 100) / 100,
-        cases: [...(prev.cases || []), ...newCases],
-        redeemedPromoCodes: [...(prev.redeemedPromoCodes || []), cleanCode],
-      }));
+      if (cleanCode !== ADM_XP_CODE) {
+        setState((prev) => ({
+          ...prev,
+          balance: Math.round(((Number(prev.balance) || 0) + bonusBalance) * 100) / 100,
+          cases: [...(prev.cases || []), ...newCases],
+          redeemedPromoCodes: [...(prev.redeemedPromoCodes || []), cleanCode],
+        }));
+      } else {
+        setState((prev) => ({
+          ...prev,
+          redeemedPromoCodes: [...(prev.redeemedPromoCodes || []), cleanCode],
+        }));
+      }
 
       pushNotification({ message, type: 'success' });
     },
@@ -1411,6 +1547,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
         } else if (loot.type === 'gems') {
           next.gems = prev.gems + loot.amount;
           next.totalGemsEarned = prev.totalGemsEarned + loot.amount;
+        } else if (loot.type === 'itembag') {
+          next.itemBags = (prev.itemBags || 0) + loot.amount;
         }
 
         return next;
@@ -1435,6 +1573,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const results: CaseOpenResult[] = [];
     let totalCash = 0;
     let totalGems = 0;
+    let totalItemBags = 0;
 
     for (const caseItem of unopened) {
       const loot = openCaseLoot(caseItem.rarity, current.level);
@@ -1444,6 +1583,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       });
       if (loot.type === 'cash') totalCash += loot.amount;
       else if (loot.type === 'gems') totalGems += loot.amount;
+      else if (loot.type === 'itembag') totalItemBags += loot.amount;
     }
 
     setState((prev) => {
@@ -1457,6 +1597,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
       if (totalGems > 0) {
         next.gems = prev.gems + totalGems;
         next.totalGemsEarned = prev.totalGemsEarned + totalGems;
+      }
+      if (totalItemBags > 0) {
+        next.itemBags = (prev.itemBags || 0) + totalItemBags;
       }
       return next;
     });
@@ -1477,6 +1620,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const results: CaseOpenResult[] = [];
     let totalCash = 0;
     let totalGems = 0;
+    let totalItemBags = 0;
 
     for (const caseItem of matching) {
       const loot = openCaseLoot(caseItem.rarity, current.level);
@@ -1486,6 +1630,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       });
       if (loot.type === 'cash') totalCash += loot.amount;
       else if (loot.type === 'gems') totalGems += loot.amount;
+      else if (loot.type === 'itembag') totalItemBags += loot.amount;
     }
 
     setState((prev) => {
@@ -1500,6 +1645,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
         next.gems = prev.gems + totalGems;
         next.totalGemsEarned = prev.totalGemsEarned + totalGems;
       }
+      if (totalItemBags > 0) {
+        next.itemBags = (prev.itemBags || 0) + totalItemBags;
+      }
       return next;
     });
 
@@ -1510,6 +1658,89 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
     return results;
   }, [pushNotification, tr, lang]);
+
+  const startExpedition = useCallback(
+    (expeditionId: string) => {
+      const current = stateRef.current;
+      if (current.activeExpeditions.length >= MAX_ACTIVE_EXPEDITIONS) {
+        pushNotification({ message: tr('expeditionsMaxActive'), type: 'warning' });
+        return;
+      }
+      const expedition = current.availableExpeditions.find((e) => e.id === expeditionId);
+      if (!expedition) return;
+
+      const now = Date.now();
+      const active: GeneratedExpedition = {
+        ...expedition,
+        startTime: now,
+        completedAt: now + expedition.durationSeconds * 1000,
+      };
+
+      setState((prev) => ({
+        ...prev,
+        availableExpeditions: prev.availableExpeditions.filter((e) => e.id !== expeditionId),
+        activeExpeditions: [...prev.activeExpeditions, active],
+      }));
+      pushNotification({ message: tr('expeditionsStarted'), type: 'success' });
+    },
+    [pushNotification, tr]
+  );
+
+  const claimExpedition = useCallback(
+    (expeditionId: string) => {
+      const current = stateRef.current;
+      const expedition = current.activeExpeditions.find((e) => e.id === expeditionId);
+      if (!expedition || !expedition.completedAt) return;
+
+      const now = Date.now();
+      if (now < expedition.completedAt) return;
+
+      const newCases: Array<{ id: string; rarity: CaseRarity; opened: boolean }> = [];
+      for (const caseChance of expedition.caseChances) {
+        if (Math.random() * 100 <= caseChance.chance) {
+          const amount = caseChance.minAmount + Math.floor(Math.random() * (caseChance.maxAmount - caseChance.minAmount + 1));
+          for (let i = 0; i < amount; i++) {
+            newCases.push({
+              id: `exp_${expedition.id}_${caseChance.caseType}_${i}_${Date.now()}`,
+              rarity: caseChance.caseType,
+              opened: false,
+            });
+          }
+        }
+      }
+
+      const newMaterials = { ...current.materials };
+      for (const mat of expedition.materialsReward) {
+        newMaterials[mat.materialId] = (newMaterials[mat.materialId] || 0) + mat.amount;
+      }
+
+      setState((prev) => {
+        let next: GameState = {
+          ...prev,
+          balance: Math.round((prev.balance + expedition.cashReward) * 100) / 100,
+          gems: prev.gems + expedition.diamondReward,
+          totalEarned: Math.round((prev.totalEarned + expedition.cashReward) * 100) / 100,
+          totalGemsEarned: prev.totalGemsEarned + expedition.diamondReward,
+          materials: newMaterials,
+          activeExpeditions: prev.activeExpeditions.filter((e) => e.id !== expeditionId),
+          cases: [...prev.cases, ...newCases],
+        };
+        return next;
+      });
+
+      pushNotification({ message: tr('expeditionsClaimed'), type: 'success' });
+    },
+    [pushNotification, tr]
+  );
+
+  const refreshExpeditions = useCallback(() => {
+    setState((prev) => ({
+      ...prev,
+      availableExpeditions: generateExpeditionSlots(prev.level),
+      expeditionRefreshAt: Date.now() + EXPEDITION_REFRESH_MS,
+    }));
+    pushNotification({ message: tr('expeditionsRefreshed'), type: 'info' });
+  }, [pushNotification, tr]);
 
   const [backpackOpen, setBackpackOpen] = useState(false);
 
@@ -1564,6 +1795,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
     currentEnergyMax,
     currentEnergyRegenSeconds,
     currentEnergyRegenAmount,
+    startExpedition,
+    claimExpedition,
+    refreshExpeditions,
   };
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

@@ -1,0 +1,17 @@
+{
+  "name": "Mining Simulator Clicker Game",
+  "short_name": "Mining Simulator",
+  "description": "Mining Simulator Clicker Game",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#171442",
+  "theme_color": "#171442",
+  "icons": [
+    {
+      "src": "/magic-crystal-game-icon_(1).png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

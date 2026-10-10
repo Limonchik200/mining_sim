@@ -3,7 +3,9 @@ import { useGame, type CaseOpenResult } from '@/context/GameContext';
 import { CASE_RARITIES, CASE_LOOT_TABLES } from '@/config/casesConfig';
 import { RESOURCE_LIST } from '@/config/minesConfig';
 import { formatMoney, formatMass } from '@/config';
+import { MATERIALS_CONFIG } from '@/config/expeditions';
 import type { CaseRarity } from '@/types';
+import type { MaterialId } from '@/config/expeditions';
 import {
   X,
   Package,
@@ -14,6 +16,8 @@ import {
   Gem,
   ShoppingBag,
   ChevronDown,
+  FlaskConical,
+  Mountain,
 } from 'lucide-react';
 
 export default function BackpackModal() {
@@ -21,6 +25,7 @@ export default function BackpackModal() {
   const [results, setResults] = useState<CaseOpenResult[] | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [expandedRarity, setExpandedRarity] = useState<CaseRarity | null>(null);
+  const [invSubTab, setInvSubTab] = useState<'resources' | 'materials'>('resources');
 
   const stackedCases = useMemo(() => {
     const unopened = state.cases.filter((c) => !c.opened);
@@ -226,7 +231,61 @@ export default function BackpackModal() {
                 <ShoppingBag className="w-4 h-4 text-primary-500" />
                 {t('inventory')}
               </h3>
+
+ {/* Sub-tabs: Resources / Materials */}
+              <div className="flex gap-1 mb-3 p-1 rounded-xl bg-neutral-100 dark:bg-neutral-850/50">
+                <button
+                  onClick={() => setInvSubTab('resources')}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
+                    invSubTab === 'resources'
+                      ? 'bg-primary-500 text-white shadow-sm'
+                      : 'text-neutral-500 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-800'
+                  }`}>
+                  <Mountain className="w-3.5 h-3.5" />
+                  {t('inventory')}
+                </button>
+                <button
+                  onClick={() => setInvSubTab('materials')}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
+                    invSubTab === 'materials'
+                      ? 'bg-primary-500 text-white shadow-sm'
+                      : 'text-neutral-500 dark:text-neutral-400 hover:bg-neutral-200 dark:hover:bg-neutral-800'
+                  }`}>
+                  <FlaskConical className="w-3.5 h-3.5" />
+                  {t('backpackMaterials')}
+                </button>
+              </div>
+
+              {invSubTab === 'resources' ? (
               <div className="space-y-2">
+                {/* Item Bag */}
+                <div className={`flex items-center justify-between rounded-xl p-2.5 border ${
+                  (state.itemBags || 0) > 0
+                    ? 'bg-warning-500/10 border-warning-500/30'
+                    : 'bg-neutral-50 dark:bg-neutral-850/50 border-dashed border-neutral-300 dark:border-neutral-700 opacity-60'
+                }`}>
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-warning-500/20">
+                      <ShoppingBag className="w-4 h-4 text-warning-500" />
+                    </div>
+                    <div>
+                      <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                        {lang === 'uk' ? 'Сумка з предметом' : 'Item Bag'}
+                      </span>
+                      <span className="text-[10px] text-neutral-400 ml-1.5 block">
+                        {(state.itemBags || 0) > 0
+                          ? `x${state.itemBags}`
+                          : (lang === 'uk' ? 'Отримайте з кейсів' : 'Obtain from cases')}
+                      </span>
+                    </div>
+                  </div>
+                  {(state.itemBags || 0) > 0 ? (
+                    <span className="text-sm font-bold text-warning-500">{state.itemBags}</span>
+                  ) : (
+                    <Lock className="w-4 h-4 text-neutral-400" />
+                  )}
+                </div>
+
                 {RESOURCE_LIST.map((res) => {
                   const entry = state.inventory[res.type];
                   const name = lang === 'uk' ? res.nameUk : res.nameEn;
@@ -255,6 +314,39 @@ export default function BackpackModal() {
                   );
                 })}
               </div>
+              ) : (
+              <div className="space-y-2">
+                {(Object.keys(MATERIALS_CONFIG) as MaterialId[]).map((matId) => {
+                  const mat = MATERIALS_CONFIG[matId];
+                  const count = state.materials?.[matId] || 0;
+                  return (
+                    <div
+                      key={matId}
+                      className={`flex items-center justify-between rounded-xl p-2.5 border ${
+                        count > 0
+                          ? 'bg-neutral-50 dark:bg-neutral-850/50 border-neutral-200 dark:border-neutral-800'
+                          : 'bg-neutral-50 dark:bg-neutral-850/30 border-dashed border-neutral-200 dark:border-neutral-700 opacity-50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-neutral-200 dark:bg-neutral-800 text-base">
+                          {mat.icon}
+                        </div>
+                        <div>
+                          <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">
+                            {mat.name}
+                          </span>
+                          <span className="text-[10px] text-neutral-400 block">{mat.description}</span>
+                        </div>
+                      </div>
+                      <span className={`text-sm font-bold ${count > 0 ? 'text-primary-500' : 'text-neutral-400'}`}>
+                        {count > 0 ? `x${count}` : '0'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              )}
             </div>
 
             <div className="mt-4">
@@ -309,7 +401,7 @@ export default function BackpackModal() {
                   ? <Coins className="w-5 h-5 text-success-500" />
                   : result.loot.type === 'gems'
                   ? <Gem className="w-5 h-5 text-accent-500" />
-                  : <Lock className="w-5 h-5 text-warning-500" />;
+                  : <ShoppingBag className="w-5 h-5 text-warning-500" />;
 
                 return (
                   <div

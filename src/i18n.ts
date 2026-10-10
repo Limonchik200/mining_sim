@@ -2,7 +2,7 @@ import type { Lang } from './types';
 
 export const translations = {
   uk: {
-    appTitle: 'Майнінг Симулятор v3',
+    appTitle: 'Майнінг Симулятор',
     level: 'Рівень',
     xp: 'Досвід',
     gems: 'Алмази',
@@ -10,6 +10,7 @@ export const translations = {
     tabMining: 'Копання',
     tabShop: 'Магазин',
     tabUpgrades: 'Прокачка',
+    tabExpeditions: 'Експедиції',
     tabSettings: 'Налаштування',
 
     balance: 'Баланс',
@@ -232,10 +233,38 @@ export const translations = {
     // Mine chances
     mineChances: 'Шанси випадіння руди',
     dropChance: 'Шанс',
+
+    // Expeditions
+    expeditionsTitle: 'Експедиції',
+    expeditionsRefreshIn: 'Оновлення через',
+    expeditionsStart: 'Старт',
+    expeditionsClaim: 'Забрати',
+    expeditionsActive: 'В процесі',
+    expeditionsCompleted: 'Завершено',
+    expeditionsLocked: 'Доступно з 3 рівня',
+    expeditionsTier: 'Тір',
+    expeditionsDuration: 'Тривалість',
+    expeditionsRewards: 'Нагороди',
+    expeditionsMaterials: 'Матеріали',
+    expeditionsNoSlots: 'Немає доступних експедицій',
+    expeditionsNoActive: 'Немає активних експедицій',
+    expeditionsClaimed: 'Експедицію завершено!',
+    expeditionsStarted: 'Експедицію розпочато!',
+    expeditionsRefreshed: 'Експедиції оновлено!',
+    expeditionsMaxActive: 'Можна виконувати лише 1 експедицію одночасно!',
+    expeditionsTimeLeft: 'Залишилось',
+    expeditionsCaseChances: 'Шанси кейсів',
+    expeditionsCashReward: 'Гроші',
+    expeditionsDiamondReward: 'Алмази',
+    expeditionsLevel: 'Рівень',
+    backpackMaterials: 'Матеріали',
+    materialsDescription: 'Опис',
+    materialsCount: 'Кількість',
+    materialsEmpty: 'Матеріалів поки немає',
   },
 
   en: {
-    appTitle: 'Mining Simulator v3',
+    appTitle: 'Mining Simulator',
     level: 'Level',
     xp: 'XP',
     gems: 'Diamonds',
@@ -243,6 +272,7 @@ export const translations = {
     tabMining: 'Mining',
     tabShop: 'Shop',
     tabUpgrades: 'Upgrades',
+    tabExpeditions: 'Expeditions',
     tabSettings: 'Settings',
 
     balance: 'Balance',
@@ -465,6 +495,34 @@ export const translations = {
     // Mine chances
     mineChances: 'Ore Drop Chances',
     dropChance: 'Chance',
+
+    // Expeditions
+    expeditionsTitle: 'Expeditions',
+    expeditionsRefreshIn: 'Refresh in',
+    expeditionsStart: 'Start',
+    expeditionsClaim: 'Claim',
+    expeditionsActive: 'In Progress',
+    expeditionsCompleted: 'Completed',
+    expeditionsLocked: 'Unlocks at Level 3',
+    expeditionsTier: 'Tier',
+    expeditionsDuration: 'Duration',
+    expeditionsRewards: 'Rewards',
+    expeditionsMaterials: 'Materials',
+    expeditionsNoSlots: 'No expeditions available',
+    expeditionsNoActive: 'No active expeditions',
+    expeditionsClaimed: 'Expedition completed!',
+    expeditionsStarted: 'Expedition started!',
+    expeditionsRefreshed: 'Expeditions refreshed!',
+    expeditionsMaxActive: 'Only 1 expedition can be active at a time!',
+    expeditionsTimeLeft: 'Time left',
+    expeditionsCaseChances: 'Case Chances',
+    expeditionsCashReward: 'Cash',
+    expeditionsDiamondReward: 'Diamonds',
+    expeditionsLevel: 'Level',
+    backpackMaterials: 'Materials',
+    materialsDescription: 'Description',
+    materialsCount: 'Count',
+    materialsEmpty: 'No materials yet',
   },
 } as const;
 

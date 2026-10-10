@@ -1,6 +1,6 @@
 export type Lang = 'uk' | 'en';
 export type Theme = 'dark' | 'light';
-export type Tab = 'mining' | 'shop' | 'upgrades' | 'settings';
+export type Tab = 'mining' | 'shop' | 'upgrades' | 'expeditions' | 'settings';
 export type TimeUnit = 'seconds' | 'minutes' | 'hours';
 
 export type ResourceType = 'stone' | 'coal' | 'copper' | 'iron';
@@ -119,6 +119,7 @@ export interface GameState {
   xp: number;
 
   cases: CaseItem[];
+  itemBags: number;
 
   upgrades: UpgradeState;
 
@@ -136,6 +137,11 @@ export interface GameState {
     lang: Lang;
     theme: Theme;
   };
+
+  materials: Record<string, number>;
+  availableExpeditions: import('./config/expeditions').GeneratedExpedition[];
+  activeExpeditions: import('./config/expeditions').GeneratedExpedition[];
+  expeditionRefreshAt: number;
 
   lastSavedAt: number;
 }

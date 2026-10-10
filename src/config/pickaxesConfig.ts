@@ -2,6 +2,19 @@ import type { PickaxeTier, FoodItem } from '@/types/inventory';
 
 export const PICKAXE_TIERS: PickaxeTier[] = [
   {
+    id: 'shovel',
+    nameUk: 'Лопата',
+    nameEn: 'Shovel',
+    price: 0,
+    requiredLevel: 1,
+    yieldMultiplier: 1,
+    energyCost: 1,
+    durabilityCost: 0,
+    maxDurability: 999999,
+    color: '#a3a3a3',
+    icon: 'Shovel',
+  },
+  {
     id: 'rusty',
     nameUk: 'Ржава кирка',
     nameEn: 'Rusty Pickaxe',
@@ -51,6 +64,32 @@ export const PICKAXE_TIERS: PickaxeTier[] = [
     durabilityCost: 5,
     maxDurability: 3000,
     color: '#60a5fa',
+    icon: 'Pickaxe',
+  },
+  {
+    id: 'reinforced_iron',
+    nameUk: 'Укріплена залізна кирка',
+    nameEn: 'Reinforced Iron Pickaxe',
+    price: 620,
+    requiredLevel: 8,
+    yieldMultiplier: 7,
+    energyCost: 6,
+    durabilityCost: 6,
+    maxDurability: 5000,
+    color: '#3b82f6',
+    icon: 'Pickaxe',
+  },
+  {
+    id: 'platinum',
+    nameUk: 'Платинова кирка',
+    nameEn: 'Platinum Pickaxe',
+    price: 1000,
+    requiredLevel: 11,
+    yieldMultiplier: 9,
+    energyCost: 8,
+    durabilityCost: 8,
+    maxDurability: 7000,
+    color: '#e5e4e2',
     icon: 'Pickaxe',
   },
 ];
@@ -108,15 +147,37 @@ export const FOOD_ITEMS: FoodItem[] = [
 ];
 
 export const ACTIVE_LEASE_PRICE_PER_SEC = 0.25;
-export const AUTO_LEASE_PRICE_PER_SEC = 0.01;
+export const AUTO_LEASE_PRICE_PER_SEC = 0.05;
 export const STARTER_GIFT_SECONDS = 300;
 
 export function getActiveLeasePricePerSec(mineId: number): number {
+  if (mineId === 0) return 0;
   const mineLevel = Math.max(1, mineId);
-  return ACTIVE_LEASE_PRICE_PER_SEC * (1 + 0.30 * (mineLevel - 1));
+  return ACTIVE_LEASE_PRICE_PER_SEC * (1 + 0.45 * (mineLevel - 1));
 }
 
 export function getAutoLeasePricePerSec(mineId: number): number {
+  if (mineId === 0) return 0;
   const mineLevel = Math.max(1, mineId);
-  return AUTO_LEASE_PRICE_PER_SEC * (1 + 0.30 * (mineLevel - 1));
+  return AUTO_LEASE_PRICE_PER_SEC * (1 + 0.45 * (mineLevel - 1));
+}
+
+export function getFoodPrice(food: FoodItem, mineId: number): number {
+  const mineLevel = Math.max(1, mineId);
+  return Math.round(food.price * (1 + 0.30 * (mineLevel - 1)) * 100) / 100;
+}
+
+export function isUnlimitedDurability(pickaxeTierId: string): boolean {
+  const tier = getPickaxeTier(pickaxeTierId);
+  return tier.id === 'shovel';
+}
+
+export function isMineRestricted(pickaxeTierId: string): boolean {
+  const tier = getPickaxeTier(pickaxeTierId);
+  return tier.id === 'shovel';
+}
+
+export function canUseInMine(pickaxeTierId: string, mineId: number): boolean {
+  if (pickaxeTierId === 'shovel') return mineId === 0;
+  return true;
 }

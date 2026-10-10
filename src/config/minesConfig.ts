@@ -11,7 +11,7 @@ export const RESOURCES: Record<ResourceType, Resource> = {
     dropChance: 0.80,
     minMass: 0.30,
     maxMass: 0.70,
-    pricePerKg: 0.23,
+    pricePerKg: 0.20,
     xp: 1,
     icon: 'Mountain',
   },
@@ -24,7 +24,7 @@ export const RESOURCES: Record<ResourceType, Resource> = {
     dropChance: 0.15,
     minMass: 0.40,
     maxMass: 0.60,
-    pricePerKg: 1.15,
+    pricePerKg: 1.07,
     xp: 2,
     icon: 'Flame',
   },
@@ -37,7 +37,7 @@ export const RESOURCES: Record<ResourceType, Resource> = {
     dropChance: 0.04,
     minMass: 0.20,
     maxMass: 0.40,
-    pricePerKg: 4.03,
+    pricePerKg: 3.80,
     xp: 4,
     icon: 'CircleDot',
   },
@@ -50,7 +50,7 @@ export const RESOURCES: Record<ResourceType, Resource> = {
     dropChance: 0.01,
     minMass: 0.30,
     maxMass: 0.50,
-    pricePerKg: 11.50,
+    pricePerKg: 10.60,
     xp: 8,
     icon: 'Hammer',
   },
@@ -59,6 +59,13 @@ export const RESOURCES: Record<ResourceType, Resource> = {
 export const RESOURCE_LIST = Object.values(RESOURCES);
 
 export const MINES: Mine[] = [
+  {
+    id: 0,
+    nameUk: 'Звалище',
+    nameEn: 'The Dump',
+    reqLevel: 1,
+    drops: { stone: 100, coal: 0, copper: 0, iron: 0 },
+  },
   {
     id: 1,
     nameUk: 'Шахта 1',
@@ -71,19 +78,23 @@ export const MINES: Mine[] = [
     nameUk: 'Шахта 2',
     nameEn: 'Mine 2',
     reqLevel: 4,
-    drops: { stone: 55, coal: 30, copper: 12, iron: 3 },
+    drops: { stone: 71, coal: 19.5, copper: 7.3, iron: 2.2 },
   },
   {
     id: 3,
     nameUk: 'Шахта 3',
     nameEn: 'Mine 3',
     reqLevel: 7,
-    drops: { stone: 30, coal: 45, copper: 18, iron: 7 },
+    drops: { stone: 64, coal: 22.7, copper: 9.5, iron: 3.8 },
   },
 ];
 
 export function getMineById(id: number): Mine {
   return MINES.find((m) => m.id === id) || MINES[0];
+}
+
+export function isDumpMine(mineId: number): boolean {
+  return mineId === 0;
 }
 
 export function getRandomResourceForMine(mineId: number): Resource {
@@ -124,3 +135,14 @@ export const DIG_COOLDOWN_MS = 300;
 export const BASE_AUTO_DIG_INTERVAL_MS = 10000;
 export const BASE_AUTO_BASKET_MAX = 50;
 export const MIN_LEASE_SECONDS = 100;
+
+export const BASE_DIAMOND_DROP_CHANCE = 0.00001;
+export const DIAMOND_DOUBLE_DROP_CHANCE = 0.15;
+export const DIAMOND_BASE_AMOUNT = 1;
+
+export function rollDiamondDrop(bonusChance: number = 0): { dropped: boolean; amount: number } {
+  const chance = BASE_DIAMOND_DROP_CHANCE + bonusChance;
+  if (Math.random() >= chance) return { dropped: false, amount: 0 };
+  const amount = Math.random() < DIAMOND_DOUBLE_DROP_CHANCE ? DIAMOND_BASE_AMOUNT + 1 : DIAMOND_BASE_AMOUNT;
+  return { dropped: true, amount };
+}

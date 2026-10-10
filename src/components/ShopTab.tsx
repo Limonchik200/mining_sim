@@ -8,8 +8,10 @@ import {
   getPickaxeTier,
   getActiveLeasePricePerSec,
   getAutoLeasePricePerSec,
+  getFoodPrice,
 } from '@/config/pickaxesConfig';
 import { RESOURCES, RESOURCE_LIST, MIN_LEASE_SECONDS, getMineById } from '@/config/minesConfig';
+import { DAILY_REWARDS, getDailyRewardScaled } from '@/config/rewardsConfig';
 import { convertToSeconds, formatMoney, formatTime } from '@/config';
 import {
   Clock,
@@ -105,8 +107,8 @@ export default function ShopTab() {
     (!state.dailyCalendar?.lastClaimTimestamp || Date.now() - state.dailyCalendar.lastClaimTimestamp >= 20 * 3600 * 1000);
 
   const calculateDailyReward = (day: number) => {
-    const baseReward = 500;
-    return Math.round(baseReward * Math.pow(1.1, day - 1));
+    const reward = DAILY_REWARDS[day - 1];
+    return getDailyRewardScaled(reward, state.level);
   };
 
   return (
@@ -209,7 +211,14 @@ export default function ShopTab() {
           {[1, 2, 3, 4, 5, 6, 7].map((day) => {
             const isPassed = day < dailyStreakDays || (day === dailyStreakDays && !canClaimDaily);
             const isCurrent = day === dailyStreakDays && canClaimDaily;
-            const rewardAmount = calculateDailyReward(day);
+            const reward = calculateDailyReward(day);
+            const rewardLabel = reward.type === 'cash'
+              ? formatMoney(reward.amount)
+              : reward.type === 'gems'
+              ? `${reward.amount} 💎`
+              : reward.caseRarity === 'epic'
+              ? (lang === 'uk' ? 'Епічний' : 'Epic')
+              : (lang === 'uk' ? 'Звичайний' : 'Common');
 
             return (
               <div
@@ -225,7 +234,10 @@ export default function ShopTab() {
                 <span className="text-[10px] uppercase font-semibold">
                   {lang === 'uk' ? `День ${day}` : `Day ${day}`}
                 </span>
-                <span className="text-xs font-bold mt-1">{formatMoney(rewardAmount)}</span>
+                {reward.type === 'case' ? (
+                  <Gift className="w-4 h-4 mt-1" />
+                ) : null}
+                <span className="text-[10px] font-bold mt-1">{rewardLabel}</span>
                 {isPassed && <CheckCircle2 className="w-3 h-3 mt-1 text-success-500" />}
               </div>
             );
@@ -476,6 +488,7 @@ export default function ShopTab() {
             const name = lang === 'uk' ? food.nameUk : food.nameEn;
             const activeBuff = state.buffs.find((b) => b.id === food.id && b.expiresAt > Date.now());
             const buffRemaining = activeBuff ? Math.ceil((activeBuff.expiresAt - Date.now()) / 1000) : 0;
+            const foodPrice = getFoodPrice(food, currentMineId);
 
             return (
               <div
@@ -506,10 +519,10 @@ export default function ShopTab() {
                 </div>
                 <button
                   onClick={() => buyFood(food.id)}
-                  disabled={state.balance < food.price}
+                  disabled={state.balance < foodPrice}
                   className="btn-primary px-3 py-1.5 text-xs whitespace-nowrap"
                 >
-                  {formatMoney(food.price)}
+                  {formatMoney(foodPrice)}
                 </button>
               </div>
             );

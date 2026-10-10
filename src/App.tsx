@@ -3,6 +3,7 @@ import TabNav from '@/components/TabNav';
 import MiningTab from '@/components/MiningTab';
 import ShopTab from '@/components/ShopTab';
 import UpgradesTab from '@/components/UpgradesTab';
+import ExpeditionsTab from '@/components/ExpeditionsTab';
 import SettingsTab from '@/components/SettingsTab';
 import Notifications from '@/components/Notifications';
 import FloatTexts from '@/components/FloatTexts';
@@ -93,6 +94,7 @@ function GameApp() {
         {activeTab === 'mining' && <MiningTab />}
         {activeTab === 'shop' && <ShopTab />}
         {activeTab === 'upgrades' && <UpgradesTab />}
+        {activeTab === 'expeditions' && <ExpeditionsTab />}
         {activeTab === 'settings' && <SettingsTab />}
       </main>
 
@@ -107,6 +109,13 @@ function GameApp() {
       <Notifications />
       <FloatTexts />
       <BackpackModal />
+
+      {/* Version badge */}
+      <div className="fixed bottom-16 right-3 z-50 pointer-events-none select-none">
+        <span className="text-[10px] font-mono font-semibold text-neutral-400 dark:text-neutral-600 bg-neutral-100/70 dark:bg-neutral-900/70 px-2 py-0.5 rounded-md backdrop-blur-sm">
+          V4.0.0
+        </span>
+      </div>
     </div>
   );
 }

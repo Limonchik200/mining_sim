@@ -13,16 +13,16 @@ export const CASE_RARITIES: Record<CaseRarity, { nameUk: string; nameEn: string;
 
 export const CASE_LOOT_TABLES: Record<CaseRarity, CaseLootTableEntry[]> = {
   common: [
-    { chance: 90, type: 'cash', label: 'Гроші ($30 × рівень)', labelEn: 'Cash ($30 × level)' },
+    { chance: 90, type: 'cash', label: 'Гроші (від $30)', labelEn: 'Cash (from $30)' },
     { chance: 10, type: 'gems', label: 'Алмази (1-3 💎)', labelEn: 'Gems (1-3 💎)' },
   ],
   rare: [
-    { chance: 74, type: 'cash', label: 'Гроші ($80 × рівень)', labelEn: 'Cash ($80 × level)' },
+    { chance: 74, type: 'cash', label: 'Гроші (від $80)', labelEn: 'Cash (from $80)' },
     { chance: 25, type: 'gems', label: 'Алмази (3-6 💎)', labelEn: 'Gems (3-6 💎)' },
     { chance: 1, type: 'itembag', label: 'Сумка з предметом', labelEn: 'Item Bag' },
   ],
   epic: [
-    { chance: 40, type: 'cash', label: 'Гроші ($190 × рівень)', labelEn: 'Cash ($190 × level)' },
+    { chance: 40, type: 'cash', label: 'Гроші (від $190)', labelEn: 'Cash (from $190)' },
     { chance: 50, type: 'gems', label: 'Алмази (8-18 💎)', labelEn: 'Gems (8-18 💎)' },
     { chance: 10, type: 'itembag', label: 'Сумка з предметом', labelEn: 'Item Bag' },
   ],
@@ -54,7 +54,7 @@ export function rollCaseRarity(): CaseRarity {
 
 export function openCaseLoot(rarity: CaseRarity, playerLevel: number): CaseLootResult {
   const roll = Math.random();
-  const levelMultiplier = 1 + 0.1 * (playerLevel - 1);
+  const levelMultiplier = Math.pow(1.10, playerLevel - 1);
 
   const cashResult = (base: number): CaseLootResult => {
     const cash = Math.round(base * levelMultiplier * 100) / 100;
