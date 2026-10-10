@@ -7,17 +7,17 @@ import {
 
 export const UPGRADE_CONFIG = {
   activeLeaseMult: {
-    baseCost: 24,
-    maxLevel: 50,
+    baseCost: 40,
+    maxLevel: 30,
     stepPerLevel: 0.03,
   },
   autoLeaseMult: {
-    baseCost: 42,
-    maxLevel: 50,
+    baseCost: 50,
+    maxLevel: 30,
     stepPerLevel: 0.03,
   },
   autoCooldown: {
-    baseCost: 11,
+    baseCost: 15,
     costGrowth: 0.25,
     reductionPerLevel: 0.2,
     minCooldown: 4.0,
@@ -29,9 +29,9 @@ export const UPGRADE_CONFIG = {
     maxLevel: 30,
   },
   caseChance: {
-    baseCost: 22,
+    baseCost: 18,
     costGrowth: 0.40,
-    maxLevel: 30,
+    maxLevel: 40,
   },
   energyMax: {
     baseCost: 30,
@@ -42,13 +42,13 @@ export const UPGRADE_CONFIG = {
   energyRegen: {
     baseCost: 25,
     costGrowth: 0.25,
-    maxLevel: 20,
+    maxLevel: 30,
     reductionPerLevel: 1,
     minRegenSeconds: 10,
   },
   energyRegenAmount: {
-    baseCost: 20,
-    costGrowth: 0.20,
+    baseCost: 50,
+    costGrowth: 0.80,
     maxLevel: 20,
     bonusPerLevel: 0.5,
   },
