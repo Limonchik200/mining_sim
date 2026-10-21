@@ -157,24 +157,24 @@ export const FOOD_ITEMS: FoodItem[] = [
 ];
 
 export const ACTIVE_LEASE_PRICE_PER_SEC = 0.25;
-export const AUTO_LEASE_PRICE_PER_SEC = 0.05;
+export const AUTO_LEASE_PRICE_PER_SEC = 0.07;
 export const STARTER_GIFT_SECONDS = 300;
 
 export function getActiveLeasePricePerSec(mineId: number): number {
   if (mineId === 0) return 0;
   const mineLevel = Math.max(1, mineId);
-  return ACTIVE_LEASE_PRICE_PER_SEC * (1 + 0.45 * (mineLevel - 1));
+  return ACTIVE_LEASE_PRICE_PER_SEC * (1 + 0.50 * (mineLevel - 1));
 }
 
 export function getAutoLeasePricePerSec(mineId: number): number {
   if (mineId === 0) return 0;
   const mineLevel = Math.max(1, mineId);
-  return AUTO_LEASE_PRICE_PER_SEC * (1 + 0.45 * (mineLevel - 1));
+  return AUTO_LEASE_PRICE_PER_SEC * (1 + 0.50 * (mineLevel - 1));
 }
 
 export function getFoodPrice(food: FoodItem, mineId: number): number {
   const mineLevel = Math.max(1, mineId);
-  return Math.round(food.price * (1 + 0.30 * (mineLevel - 1)) * 100) / 100;
+  return Math.round(food.price * (1 + 0.65 * (mineLevel - 1)) * 100) / 100;
 }
 
 export function isUnlimitedDurability(pickaxeTierId: string): boolean {

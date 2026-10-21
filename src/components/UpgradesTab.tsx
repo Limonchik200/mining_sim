@@ -15,6 +15,8 @@ import {
   getEnergyRegenAmountValue,
   isEnergyUpgradeDiamond,
   getEnergyUpgradeDiamondCost,
+  getBackpackCost,
+  getBackpackWeightLimit,
   UPGRADE_CONFIG,
 } from '@/config/upgradesConfig';
 import { getCaseChanceValue } from '@/config/casesConfig';
@@ -32,6 +34,7 @@ import {
   Battery,
   Timer,
   Sparkles,
+  Backpack,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -150,6 +153,9 @@ export default function UpgradesTab() {
     upgradeEnergyMax,
     upgradeEnergyRegen,
     upgradeEnergyRegenAmount,
+    upgradeBackpack,
+    currentBackpackLimit,
+    currentBackpackWeight,
     t,
   } = useGame();
 
@@ -245,7 +251,26 @@ export default function UpgradesTab() {
         />
       </div>
 
-      {/* Section 3: Cases */}
+      {/* Section 3: Mine */}
+      <div className="card p-4 space-y-3">
+        <SectionHeader icon={Backpack} title={t('upSectionMine')} color="#eab308" />
+        <UpgradeCard
+          icon={Backpack}
+          iconColor="#eab308"
+          title={t('upBackpack')}
+          desc={t('upBackpackDesc')}
+          level={u.backpackLvl ?? 0}
+          maxLevel={UPGRADE_CONFIG.backpack.maxLevel}
+          currentValue={`${currentBackpackWeight.toFixed(2)}/${getBackpackWeightLimit(u.backpackLvl ?? 0).toFixed(2)} kg`}
+          nextValue={`${getBackpackWeightLimit((u.backpackLvl ?? 0) + 1).toFixed(2)} kg`}
+          cost={getBackpackCost(u.backpackLvl ?? 0)}
+          canAfford={state.balance >= getBackpackCost(u.backpackLvl ?? 0)}
+          onUpgrade={upgradeBackpack}
+          t={t}
+        />
+      </div>
+
+      {/* Section 4: Cases */}
       <div className="card p-4 space-y-3">
         <SectionHeader icon={Gift} title={t('upSectionCases')} color="#a855f7" />
         <UpgradeCard

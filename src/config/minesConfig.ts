@@ -14,6 +14,7 @@ export const RESOURCES: Record<ResourceType, Resource> = {
     maxMass: 0.70,
     pricePerKg: 0.20,
     xp: 1,
+    weight: 1,
     icon: 'Mountain',
   },
   coal: {
@@ -28,6 +29,7 @@ export const RESOURCES: Record<ResourceType, Resource> = {
     maxMass: 0.60,
     pricePerKg: 1.07,
     xp: 2,
+    weight: 1,
     icon: 'Flame',
   },
   copper: {
@@ -42,6 +44,7 @@ export const RESOURCES: Record<ResourceType, Resource> = {
     maxMass: 0.40,
     pricePerKg: 3.80,
     xp: 4,
+    weight: 1,
     icon: 'CircleDot',
   },
   iron: {
@@ -56,11 +59,16 @@ export const RESOURCES: Record<ResourceType, Resource> = {
     maxMass: 0.50,
     pricePerKg: 10.60,
     xp: 8,
+    weight: 1,
     icon: 'Hammer',
   },
 };
 
 export const RESOURCE_LIST = Object.values(RESOURCES);
+
+export function getResourceWeight(type: ResourceType): number {
+  return RESOURCES[type]?.weight ?? 1;
+}
 
 export const MINES: Mine[] = [
   {
@@ -148,7 +156,8 @@ export const BASE_DIAMOND_DROP_CHANCE = 0.00001;
 export const DIAMOND_DOUBLE_DROP_CHANCE = 0.15;
 export const DIAMOND_BASE_AMOUNT = 1;
 
-export function rollDiamondDrop(bonusChance: number = 0): { dropped: boolean; amount: number } {
+export function rollDiamondDrop(bonusChance: number = 0, mineId: number = -1): { dropped: boolean; amount: number } {
+  if (mineId === 0) return { dropped: false, amount: 0 };
   const chance = BASE_DIAMOND_DROP_CHANCE + bonusChance;
   if (Math.random() >= chance) return { dropped: false, amount: 0 };
   const amount = Math.random() < DIAMOND_DOUBLE_DROP_CHANCE ? DIAMOND_BASE_AMOUNT + 1 : DIAMOND_BASE_AMOUNT;

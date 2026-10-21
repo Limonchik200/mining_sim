@@ -18,10 +18,11 @@ import {
   ChevronDown,
   FlaskConical,
   Mountain,
+  Weight,
 } from 'lucide-react';
 
 export default function BackpackModal() {
-  const { state, backpackOpen, setBackpackOpen, openCase, openAllCases, openCasesByRarity, t, lang } = useGame();
+  const { state, backpackOpen, setBackpackOpen, openCase, openAllCases, openCasesByRarity, currentBackpackLimit, currentBackpackWeight, t, lang } = useGame();
   const [results, setResults] = useState<CaseOpenResult[] | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [expandedRarity, setExpandedRarity] = useState<CaseRarity | null>(null);
@@ -97,6 +98,31 @@ export default function BackpackModal() {
               >
                 <X className="w-4 h-4 text-neutral-600 dark:text-neutral-400" />
               </button>
+            </div>
+
+            {/* Backpack Weight Bar */}
+            <div className="mb-4 rounded-xl p-3 bg-neutral-50 dark:bg-neutral-850/50 border border-neutral-200 dark:border-neutral-800">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-xs font-bold text-neutral-700 dark:text-neutral-300 flex items-center gap-1.5">
+                  <Weight className="w-3.5 h-3.5 text-warning-500" />
+                  {t('backpackWeight')}
+                </span>
+                <span className={`text-xs font-bold ${currentBackpackWeight >= currentBackpackLimit ? 'text-error-500' : 'text-neutral-600 dark:text-neutral-400'}`}>
+                  {currentBackpackWeight.toFixed(2)} / {currentBackpackLimit.toFixed(2)} kg
+                </span>
+              </div>
+              <div className="h-2.5 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-300 ${
+                    currentBackpackWeight >= currentBackpackLimit
+                      ? 'bg-error-500'
+                      : currentBackpackWeight >= currentBackpackLimit * 0.8
+                      ? 'bg-warning-500'
+                      : 'bg-success-500'
+                  }`}
+                  style={{ width: `${Math.min(100, (currentBackpackWeight / currentBackpackLimit) * 100)}%` }}
+                />
+              </div>
             </div>
 
             <div className="mb-4">

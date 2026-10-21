@@ -1,4 +1,5 @@
 import type { CaseRarity, CaseLootResult, CaseLootTableEntry, CaseLootType } from '@/types/inventory';
+import { scaledReward } from '@/config';
 
 export const BASE_CASE_DROP_CHANCE = 0.001;
 export const CASE_CHANCE_PER_LEVEL = 0.0005;
@@ -41,10 +42,18 @@ export function getCaseChanceValue(currentLevel: number): number {
   return BASE_CASE_DROP_CHANCE + currentLevel * CASE_CHANCE_PER_LEVEL;
 }
 
-export function rollCaseDrop(caseChanceLevel: number): boolean {
+export function rollCaseDrop(caseChanceLevel: number, mineId: number = -1): boolean {
+  if (mineId === 0) return false;
   const base = getCaseChanceValue(caseChanceLevel);
   const dampened = base / (1 + base * 0.5);
   return Math.random() < dampened;
+}
+
+export function rollAutoCaseDrop(caseChanceLevel: number, mineId: number = -1): boolean {
+  if (mineId === 0) return false;
+  const base = getCaseChanceValue(caseChanceLevel);
+  const dampened = base / (1 + base * 0.5);
+  return Math.random() < dampened / 3;
 }
 
 export function rollCaseRarity(): CaseRarity {
@@ -60,10 +69,9 @@ export function rollCaseRarity(): CaseRarity {
 export function openCaseLoot(rarity: CaseRarity, playerLevel: number): CaseLootResult {
   const roll = Math.random();
   const L = playerLevel;
-  const levelMultiplier = 1 + (0.8 * L) + (0.02 * Math.pow(L, 1.4));
 
   const cashResult = (base: number): CaseLootResult => {
-    const cash = Math.round(base * levelMultiplier * 100) / 100;
+    const cash = scaledReward(base, L);
     return { type: 'cash', amount: cash, label: `Гроші ${cash.toFixed(2)}`, labelEn: `Cash ${cash.toFixed(2)}`, labelRu: `Деньги ${cash.toFixed(2)}` };
   };
   const gemResult = (min: number, max: number): CaseLootResult => {

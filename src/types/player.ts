@@ -14,6 +14,7 @@ export interface UpgradeState {
   energyMaxLvl: number;
   energyRegenLvl: number;
   energyRegenAmountLvl?: number;
+  backpackLvl?: number;
 }
 
 export interface GameState {
@@ -46,6 +47,7 @@ export interface GameState {
   xp: number;
 
   cases: import('./inventory').CaseItem[];
+  autoBasketCases: import('./inventory').CaseItem[];
   itemBags: number;
 
   upgrades: UpgradeState;

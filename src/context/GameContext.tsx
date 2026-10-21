@@ -49,6 +49,7 @@ import { isDumpMine } from '@/config/minesConfig';
 import {
   CASE_RARITIES,
   rollCaseDrop,
+  rollAutoCaseDrop,
   rollCaseRarity,
   openCaseLoot,
 } from '@/config/casesConfig';
@@ -70,6 +71,8 @@ import {
   getEnergyRegenAmountValue,
   isEnergyUpgradeDiamond,
   getEnergyUpgradeDiamondCost,
+  getBackpackCost,
+  getBackpackWeightLimit,
 } from '@/config/upgradesConfig';
 import { DAILY_REWARDS, DAILY_CLAIM_COOLDOWN_MS, getDailyRewardScaled, type DailyReward } from '@/config/rewardsConfig';
 import { convertToSeconds } from '@/config';
@@ -151,6 +154,7 @@ function createInitialState(): GameState {
     level: 1,
     xp: 0,
     cases: [],
+    autoBasketCases: [],
     itemBags: 0,
     upgrades: {
       activeLeaseMult: 0,
@@ -161,6 +165,7 @@ function createInitialState(): GameState {
       energyMaxLvl: 0,
       energyRegenLvl: 0,
       energyRegenAmountLvl: 0,
+      backpackLvl: 0,
     },
     starterGiftClaimed: false,
     redeemedPromoCodes: [],
@@ -206,6 +211,7 @@ function migrateState(saved: Partial<GameState>): GameState {
   merged.upgrades.energyMaxLvl = Math.min(merged.upgrades.energyMaxLvl, UPGRADE_CONFIG.energyMax.maxLevel);
   merged.upgrades.energyRegenLvl = Math.min(merged.upgrades.energyRegenLvl, UPGRADE_CONFIG.energyRegen.maxLevel);
   merged.upgrades.energyRegenAmountLvl = Math.min(merged.upgrades.energyRegenAmountLvl ?? 0, UPGRADE_CONFIG.energyRegenAmount.maxLevel);
+  merged.upgrades.backpackLvl = Math.min(merged.upgrades.backpackLvl ?? 0, UPGRADE_CONFIG.backpack.maxLevel);
 
   merged.maxEnergy = getEnergyMaxValue(merged.upgrades.energyMaxLvl);
   if (merged.energy > merged.maxEnergy) merged.energy = merged.maxEnergy;
@@ -217,6 +223,7 @@ function migrateState(saved: Partial<GameState>): GameState {
   ownedSet.add('shovel');
   merged.ownedPickaxes = Array.from(ownedSet);
   merged.itemBags = saved.itemBags ?? 0;
+  merged.autoBasketCases = saved.autoBasketCases ?? [];
 
   merged.materials = saved.materials ?? {};
   merged.activeExpeditions = saved.activeExpeditions ?? [];
@@ -319,6 +326,7 @@ interface GameContextValue {
   upgradeAutoCooldown: () => void;
   upgradeBasketCap: () => void;
   upgradeCaseChance: () => void;
+  upgradeBackpack: () => void;
   openCase: (caseId: string) => CaseOpenResult | null;
   openAllCases: () => CaseOpenResult[];
   openCasesByRarity: (rarity: CaseRarity) => CaseOpenResult[];
@@ -326,6 +334,8 @@ interface GameContextValue {
   setBackpackOpen: (open: boolean) => void;
   currentAutoCooldownMs: number;
   currentBasketCap: number;
+  currentBackpackLimit: number;
+  currentBackpackWeight: number;
   activeLeaseMult: number;
   autoLeaseMult: number;
   currentMineId: number;
@@ -447,6 +457,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const currentAutoCooldownMs = getAutoCooldownMs(state.upgrades.autoCooldownLvl);
   const currentBasketCap = getBasketCapValue(state.upgrades.basketCapLvl);
+  const currentBackpackLimit = getBackpackWeightLimit(state.upgrades.backpackLvl ?? 0);
+  const currentBackpackWeight = Math.round(
+    Object.entries(state.inventory).reduce((sum, [type, entry]) => {
+      const res = RESOURCES[type as ResourceType];
+      const w = res?.weight ?? 1;
+      return sum + entry.mass * w;
+    }, 0) * 100
+  ) / 100;
   const activeLeaseMult = getLeaseMultValue('activeLeaseMult', state.upgrades.activeLeaseMult);
   const autoLeaseMult = getLeaseMultValue('autoLeaseMult', state.upgrades.autoLeaseMult);
   const currentEnergyMaxBase = getEnergyMaxValue(state.upgrades.energyMaxLvl);
@@ -592,6 +610,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           const basketCap = getBasketCapValue(next.upgrades.basketCapLvl);
           const tier = getPickaxeTier(next.activePickaxeTierId);
           const elapsedSinceDig = now - next.lastAutoDigAt;
+          const yieldCount = Math.max(1, tier.yieldMultiplier);
 
           if (
             elapsedSinceDig >= autoCooldown &&
@@ -601,9 +620,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
           ) {
             const missedDigs = Math.min(
               Math.floor(elapsedSinceDig / autoCooldown),
-              basketCap - next.autoBasket.length
+              Math.ceil((basketCap - next.autoBasket.length) / yieldCount)
             );
             let basket = [...next.autoBasket];
+            let basketCases = [...next.autoBasketCases];
             let activePickaxe = { ...next.activePickaxe };
             let sparePickaxes = [...next.sparePickaxes];
             let totalDigs = next.totalDigs;
@@ -616,9 +636,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
                 break;
               }
 
-              const resource = getRandomResourceForMine(next.autoLeaseMineId || 1);
-              const mass = Math.round(getRandomMass(resource) * tier.yieldMultiplier * 100) / 100;
-              basket.push({ resource: resource.type, mass, xp: resource.xp, timestamp: now });
+              for (let j = 0; j < yieldCount && basket.length < basketCap; j++) {
+                const resource = getRandomResourceForMine(next.autoLeaseMineId || 1);
+                const mass = Math.round(getRandomMass(resource) * 100) / 100;
+                basket.push({ resource: resource.type, mass, xp: resource.xp, timestamp: now });
+              }
               totalDigs++;
 
               const newDur = activePickaxe.durability - tier.durabilityCost;
@@ -636,13 +658,20 @@ export function GameProvider({ children }: { children: ReactNode }) {
                 activePickaxe = { ...activePickaxe, durability: newDur };
               }
 
-              if (rollCaseDrop(next.upgrades.caseChanceLvl)) {
+              if (rollAutoCaseDrop(next.upgrades.caseChanceLvl, next.autoLeaseMineId || 1)) {
                 const rarity = rollCaseRarity();
-                next.cases = [...next.cases, { id: `case-${now}-${i}-${Math.random()}`, rarity, opened: false }];
+                basketCases.push({ id: `case-${now}-${i}-${Math.random()}`, rarity, opened: false });
+              }
+
+              const autoDiamond = rollDiamondDrop(0, next.autoLeaseMineId || 1);
+              if (autoDiamond.dropped) {
+                next.gems = next.gems + autoDiamond.amount;
+                next.totalGemsEarned = (next.totalGemsEarned || 0) + autoDiamond.amount;
               }
             }
 
             next.autoBasket = basket;
+            next.autoBasketCases = basketCases;
             next.activePickaxe = activePickaxe;
             next.sparePickaxes = sparePickaxes;
             next.totalDigs = totalDigs;
@@ -726,7 +755,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
         const autoCooldown = getAutoCooldownMs(next.upgrades.autoCooldownLvl) / 1000;
         const maxDigs = Math.floor(offlineSec / autoCooldown);
         const basketCap = getBasketCapValue(next.upgrades.basketCapLvl);
+        const yieldCount = Math.max(1, getPickaxeTier(next.activePickaxeTierId).yieldMultiplier);
         let basket = [...next.autoBasket];
+        let basketCases = [...next.autoBasketCases];
         let digsDone = 0;
         const tier = getPickaxeTier(next.activePickaxeTierId);
 
@@ -735,9 +766,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
             break;
           }
 
-          const resource = getRandomResourceForMine(next.autoLeaseMineId || 1);
-          const mass = Math.round(getRandomMass(resource) * tier.yieldMultiplier * 100) / 100;
-          basket.push({ resource: resource.type, mass, xp: resource.xp, timestamp: now });
+          for (let j = 0; j < yieldCount && basket.length < basketCap; j++) {
+            const resource = getRandomResourceForMine(next.autoLeaseMineId || 1);
+            const mass = Math.round(getRandomMass(resource) * 100) / 100;
+            basket.push({ resource: resource.type, mass, xp: resource.xp, timestamp: now });
+          }
           digsDone++;
 
           const newDur = next.activePickaxe.durability - tier.durabilityCost;
@@ -754,14 +787,21 @@ export function GameProvider({ children }: { children: ReactNode }) {
             next.activePickaxe = { ...next.activePickaxe, durability: newDur };
           }
 
-          if (rollCaseDrop(next.upgrades.caseChanceLvl)) {
+          if (rollAutoCaseDrop(next.upgrades.caseChanceLvl, next.autoLeaseMineId || 1)) {
             const rarity = rollCaseRarity();
-            next.cases = [...next.cases, { id: `case-${now}-${i}-${Math.random()}`, rarity, opened: false }];
+            basketCases.push({ id: `case-${now}-${i}-${Math.random()}`, rarity, opened: false });
+          }
+
+          const offlineDiamond = rollDiamondDrop(0, next.autoLeaseMineId || 1);
+          if (offlineDiamond.dropped) {
+            next.gems = next.gems + offlineDiamond.amount;
+            next.totalGemsEarned = (next.totalGemsEarned || 0) + offlineDiamond.amount;
           }
         }
 
         if (digsDone > 0) {
           next.autoBasket = basket;
+          next.autoBasketCases = basketCases;
           next.totalDigs = next.totalDigs + digsDone;
           next.lastAutoDigAt = now;
           changed = true;
@@ -827,6 +867,19 @@ export function GameProvider({ children }: { children: ReactNode }) {
         pushNotification({ message: tr('noDurability'), type: 'error' });
         return;
       }
+      const backpackLvl = current.upgrades.backpackLvl ?? 0;
+      const backpackLimit = getBackpackWeightLimit(backpackLvl);
+      const currentWeight = Math.round(
+        Object.entries(current.inventory).reduce((sum, [type, entry]) => {
+          const res = RESOURCES[type as ResourceType];
+          const w = res?.weight ?? 1;
+          return sum + entry.mass * w;
+        }, 0) * 100
+      ) / 100;
+      if (currentWeight >= backpackLimit) {
+        pushNotification({ message: tr('backpackFull'), type: 'error' });
+        return;
+      }
 
       const rolls: { resource: Resource; mass: number }[] = [];
       for (let i = 0; i < tier.yieldMultiplier; i++) {
@@ -836,7 +889,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       }
       const totalMass = rolls.reduce((sum, r) => sum + r.mass, 0);
       const totalXp = rolls.reduce((sum, r) => sum + r.resource.xp, 0);
-      const diamondDrop = rollDiamondDrop(0);
+      const diamondDrop = rollDiamondDrop(0, mineId);
 
       setState((prev) => {
         let next = { ...prev };
@@ -874,7 +927,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           pushNotification({ message: `${tr('notifLevelUp')} ${xpRes.newLevel}!`, type: 'success' });
         }
 
-        if (rollCaseDrop(prev.upgrades.caseChanceLvl)) {
+        if (rollCaseDrop(prev.upgrades.caseChanceLvl, mineId)) {
           const rarity = rollCaseRarity();
           next.cases = [...prev.cases, { id: `case-${Date.now()}-${Math.random()}`, rarity, opened: false }];
           pushNotification({ message: tr('notifCaseDropped'), type: 'case', color: CASE_RARITIES[rarity].color });
@@ -909,7 +962,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const collectBasket = useCallback(() => {
     setState((prev) => {
-      if (prev.autoBasket.length === 0) {
+      if (prev.autoBasket.length === 0 && prev.autoBasketCases.length === 0) {
         pushNotification({ message: tr('notifNothingToCollect'), type: 'info' });
         return prev;
       }
@@ -922,13 +975,26 @@ export function GameProvider({ children }: { children: ReactNode }) {
         };
         totalXp += item.xp;
       }
-      let next: GameState = { ...prev, autoBasket: [], inventory: inv };
+      const transferredCases = prev.autoBasketCases.length;
+      let next: GameState = {
+        ...prev,
+        autoBasket: [],
+        autoBasketCases: [],
+        inventory: inv,
+        cases: prev.autoBasketCases.length > 0
+          ? [...prev.cases, ...prev.autoBasketCases]
+          : prev.cases,
+      };
       const xpRes = applyXp(next, totalXp);
       next = xpRes.state;
       if (xpRes.leveledUp) {
         pushNotification({ message: `${tr('notifLevelUp')} ${xpRes.newLevel}!`, type: 'success' });
       }
-      pushNotification({ message: tr('notifBasketCollected'), type: 'success' });
+      if (transferredCases > 0) {
+        pushNotification({ message: `${tr('notifBasketCollected')} (+${transferredCases} ${tr('cases')})`, type: 'success' });
+      } else {
+        pushNotification({ message: tr('notifBasketCollected'), type: 'success' });
+      }
       return next;
     });
   }, [pushNotification, tr]);
@@ -1150,7 +1216,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
               id: `pickaxe-${tierId}-${Date.now()}`,
               pickaxeTierId: tierId,
               name: lang === 'ru' ? tier.nameRu : (lang === 'uk' ? tier.nameUk : tier.nameEn),
-              durability: tier.maxDurability,
+              durability: oldPickaxe.durability,
               maxDurability: tier.maxDurability,
             },
             activePickaxeTierId: tierId,
@@ -2057,6 +2123,24 @@ export function GameProvider({ children }: { children: ReactNode }) {
     pushNotification({ message: `${name} → ${levelName}!`, type: 'success' });
   }, [pushNotification, tr, lang]);
 
+  const upgradeBackpack = useCallback(() => {
+    const lvl = stateRef.current.upgrades.backpackLvl ?? 0;
+    if (lvl >= UPGRADE_CONFIG.backpack.maxLevel) {
+      pushNotification({ message: tr('notifUpgradeMaxed'), type: 'warning' });
+      return;
+    }
+    const cost = getBackpackCost(lvl);
+    if (stateRef.current.balance < cost) {
+      pushNotification({ message: tr('notifNoMoney'), type: 'error' });
+      return;
+    }
+    setState((prev) => ({
+      ...prev,
+      balance: Math.round((prev.balance - cost) * 100) / 100,
+      upgrades: { ...prev.upgrades, backpackLvl: (prev.upgrades.backpackLvl ?? 0) + 1 },
+    }));
+  }, [pushNotification, tr]);
+
   const [backpackOpen, setBackpackOpen] = useState(false);
   const [itemsOpen, setItemsOpen] = useState(false);
 
@@ -2099,6 +2183,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setBackpackOpen,
     currentAutoCooldownMs,
     currentBasketCap,
+    currentBackpackLimit,
+    currentBackpackWeight,
+    upgradeBackpack,
     activeLeaseMult,
     autoLeaseMult,
     currentMineId: currentMineIdState,

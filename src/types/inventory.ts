@@ -13,6 +13,7 @@ export interface Resource {
   maxMass: number;
   pricePerKg: number;
   xp: number;
+  weight: number;
   icon: string;
 }
 

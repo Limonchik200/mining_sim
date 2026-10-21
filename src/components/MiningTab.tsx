@@ -3,7 +3,8 @@ import { useGame } from '@/context/GameContext';
 import { formatTime } from '@/config';
 import { getPickaxeTier, getRepairCost, isUnlimitedDurability } from '@/config/pickaxesConfig';
 import { getMineById, MINES, RESOURCES, isDumpMine } from '@/config/minesConfig';
-import type { ResourceType } from '@/types';
+import { CASE_RARITIES } from '@/config/casesConfig';
+import type { ResourceType, CaseRarity } from '@/types';
 import {
   Pickaxe,
   Package,
@@ -17,6 +18,7 @@ import {
   Lock,
   Wrench,
   ShoppingBag,
+  Gift,
 } from 'lucide-react';
 
 export default function MiningTab() {
@@ -382,9 +384,31 @@ export default function MiningTab() {
         {Object.keys(basketSummary).length > 0 && (
           <div className="flex flex-wrap gap-1.5 mb-3">
             {Object.entries(basketSummary).map(([type, data]) => {
+              const res = RESOURCES[type as ResourceType];
+              const resName = lang === 'ru' ? res.nameRu : (lang === 'uk' ? res.nameUk : res.nameEn);
               return (
-                <span key={type} className="text-xs px-2 py-0.5 rounded-lg bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 font-medium">
-                  {data.mass.toFixed(2)} kg ({data.count})
+                <span key={type} className="text-xs px-2 py-0.5 rounded-lg font-medium flex items-center gap-1" style={{ backgroundColor: res.bgColor, color: res.color }}>
+                  {resName} ×{data.count} ({data.mass.toFixed(2)}kg)
+                </span>
+              );
+            })}
+          </div>
+        )}
+
+        {state.autoBasketCases.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            {Object.entries(
+              state.autoBasketCases.reduce((acc, c) => {
+                acc[c.rarity] = (acc[c.rarity] || 0) + 1;
+                return acc;
+              }, {} as Record<CaseRarity, number>)
+            ).map(([rarity, count]) => {
+              const cfg = CASE_RARITIES[rarity as CaseRarity];
+              const rName = lang === 'ru' ? cfg.nameRu : (lang === 'uk' ? cfg.nameUk : cfg.nameEn);
+              return (
+                <span key={rarity} className="text-xs px-2 py-0.5 rounded-lg font-medium flex items-center gap-1" style={{ backgroundColor: cfg.glowColor, color: cfg.color }}>
+                  <Gift className="w-3 h-3" />
+                  {rName} ×{count}
                 </span>
               );
             })}

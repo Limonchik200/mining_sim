@@ -1,4 +1,4 @@
-import { formatNumber } from '@/config';
+import { formatNumber, scaledReward } from '@/config';
 
 export type DailyRewardType = 'cash' | 'gems' | 'case';
 
@@ -23,10 +23,8 @@ export const DAILY_RESET_HOUR_UTC = 0;
 export const DAILY_CLAIM_COOLDOWN_MS = 20 * 3600 * 1000;
 
 export function getDailyRewardScaled(reward: DailyReward, playerLevel: number): { type: DailyRewardType; amount: number; caseRarity?: string } {
-  const L = playerLevel;
-  const levelMultiplier = 1 + (0.8 * L) + (0.02 * Math.pow(L, 1.4));
   if (reward.type === 'cash') {
-    return { type: 'cash', amount: Math.round((reward.baseAmount || 0) * levelMultiplier * 100) / 100 };
+    return { type: 'cash', amount: scaledReward(reward.baseAmount || 0, playerLevel) };
   }
   if (reward.type === 'gems') {
     return { type: 'gems', amount: reward.gems || 0 };

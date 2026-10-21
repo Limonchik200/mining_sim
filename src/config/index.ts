@@ -56,3 +56,35 @@ export function convertToSeconds(value: number, unit: string): number {
       return value;
   }
 }
+
+export const PROGRESSION_TRANSITION_LEVEL = 15;
+
+export function progressionMultiplier(level: number): number {
+  const L = Math.max(1, level);
+  const T = PROGRESSION_TRANSITION_LEVEL;
+  if (L <= T) return Math.pow(1.225, L - 1);
+  const geoValue = Math.pow(1.225, T - 1);
+  const geoSlope = geoValue * Math.log(1.225);
+  const C = 0.018;
+  const delta = L - T;
+  return geoValue + geoSlope * delta + C * delta * delta;
+}
+
+export function rewardMultiplier(level: number): number {
+  const L = Math.max(1, level);
+  const T = PROGRESSION_TRANSITION_LEVEL;
+  if (L <= T) return Math.pow(1.095, L - 1);
+  const geoValue = Math.pow(1.095, T - 1);
+  const geoSlope = geoValue * Math.log(1.095);
+  const C = 0.004;
+  const delta = L - T;
+  return geoValue + geoSlope * delta + C * delta * delta;
+}
+
+export function progressionCost(base: number, level: number): number {
+  return Math.round(base * progressionMultiplier(level) * 100) / 100;
+}
+
+export function scaledReward(base: number, level: number): number {
+  return Math.round(base * rewardMultiplier(level) * 100) / 100;
+}

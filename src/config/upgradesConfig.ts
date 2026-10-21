@@ -4,71 +4,22 @@ import {
   BASE_AUTO_DIG_INTERVAL_MS,
   BASE_AUTO_BASKET_MAX,
 } from './minesConfig';
+import { progressionCost } from '@/config';
 
 export const UPGRADE_CONFIG = {
-  activeLeaseMult: {
-    baseCost: 40,
-    maxLevel: 30,
-    stepPerLevel: 0.03,
-  },
-  autoLeaseMult: {
-    baseCost: 50,
-    maxLevel: 30,
-    stepPerLevel: 0.03,
-  },
-  autoCooldown: {
-    baseCost: 15,
-    costGrowth: 0.25,
-    reductionPerLevel: 0.2,
-    minCooldown: 4.0,
-    maxLevel: 30,
-  },
-  basketCap: {
-    baseCost: 25,
-    costGrowth: 2,
-    maxLevel: 30,
-  },
-  caseChance: {
-    baseCost: 18,
-    costGrowth: 0.40,
-    maxLevel: 40,
-  },
-  energyMax: {
-    baseCost: 30,
-    costGrowth: 0.20,
-    maxLevel: 30,
-    bonusPerLevel: 50,
-  },
-  energyRegen: {
-    baseCost: 25,
-    costGrowth: 0.25,
-    maxLevel: 30,
-    reductionPerLevel: 1,
-    minRegenSeconds: 10,
-  },
-  energyRegenAmount: {
-    baseCost: 50,
-    costGrowth: 0.80,
-    maxLevel: 20,
-    bonusPerLevel: 0.5,
-  },
+  activeLeaseMult: { baseCost: 40, maxLevel: 100, stepPerLevel: 0.01 },
+  autoLeaseMult: { baseCost: 50, maxLevel: 100, stepPerLevel: 0.01 },
+  autoCooldown: { baseCost: 15, reductionPerLevel: 0.04, minCooldown: 4.0, maxLevel: 150 },
+  basketCap: { baseCost: 25, maxLevel: 30 },
+  caseChance: { baseCost: 18, maxLevel: 40 },
+  energyMax: { baseCost: 30, maxLevel: 30, bonusPerLevel: 50 },
+  energyRegen: { baseCost: 25, maxLevel: 30, reductionPerLevel: 1, minRegenSeconds: 10 },
+  energyRegenAmount: { baseCost: 50, maxLevel: 20, bonusPerLevel: 0.5 },
+  backpack: { baseCost: 50, maxLevel: 100, bonusPerLevel: 0.60 },
 } as const;
 
-function tieredCostGrowth(level: number): number {
-  if (level < 10) return 0.05;
-  if (level < 20) return 0.075;
-  if (level < 30) return 0.10;
-  if (level < 40) return 0.125;
-  return 0.15;
-}
-
 export function getLeaseMultCost(upgrade: 'activeLeaseMult' | 'autoLeaseMult', currentLevel: number): number {
-  const cfg = UPGRADE_CONFIG[upgrade];
-  let cost = cfg.baseCost;
-  for (let i = 0; i < currentLevel; i++) {
-    cost *= 1 + tieredCostGrowth(i);
-  }
-  return Math.round(cost * 100) / 100;
+  return progressionCost(UPGRADE_CONFIG[upgrade].baseCost, currentLevel + 1);
 }
 
 export function getLeaseMultValue(upgrade: 'activeLeaseMult' | 'autoLeaseMult', currentLevel: number): number {
@@ -77,8 +28,7 @@ export function getLeaseMultValue(upgrade: 'activeLeaseMult' | 'autoLeaseMult', 
 }
 
 export function getAutoCooldownCost(currentLevel: number): number {
-  const cfg = UPGRADE_CONFIG.autoCooldown;
-  return Math.round(cfg.baseCost * Math.pow(1 + cfg.costGrowth, currentLevel) * 100) / 100;
+  return progressionCost(UPGRADE_CONFIG.autoCooldown.baseCost, currentLevel + 1);
 }
 
 export function getAutoCooldownMs(currentLevel: number): number {
@@ -88,8 +38,7 @@ export function getAutoCooldownMs(currentLevel: number): number {
 }
 
 export function getBasketCapCost(currentLevel: number): number {
-  const cfg = UPGRADE_CONFIG.basketCap;
-  return Math.round(cfg.baseCost * Math.pow(cfg.costGrowth, currentLevel) * 100) / 100;
+  return progressionCost(UPGRADE_CONFIG.basketCap.baseCost, currentLevel + 1);
 }
 
 export function getBasketCapValue(currentLevel: number): number {
@@ -97,13 +46,11 @@ export function getBasketCapValue(currentLevel: number): number {
 }
 
 export function getCaseChanceCost(currentLevel: number): number {
-  const cfg = UPGRADE_CONFIG.caseChance;
-  return Math.round(cfg.baseCost * Math.pow(1 + cfg.costGrowth, currentLevel) * 100) / 100;
+  return progressionCost(UPGRADE_CONFIG.caseChance.baseCost, currentLevel + 1);
 }
 
 export function getEnergyMaxCost(currentLevel: number): number {
-  const cfg = UPGRADE_CONFIG.energyMax;
-  return Math.round(cfg.baseCost * Math.pow(1 + cfg.costGrowth, currentLevel) * 100) / 100;
+  return progressionCost(UPGRADE_CONFIG.energyMax.baseCost, currentLevel + 1);
 }
 
 export function getEnergyMaxValue(currentLevel: number): number {
@@ -111,8 +58,7 @@ export function getEnergyMaxValue(currentLevel: number): number {
 }
 
 export function getEnergyRegenCost(currentLevel: number): number {
-  const cfg = UPGRADE_CONFIG.energyRegen;
-  return Math.round(cfg.baseCost * Math.pow(1 + cfg.costGrowth, currentLevel) * 100) / 100;
+  return progressionCost(UPGRADE_CONFIG.energyRegen.baseCost, currentLevel + 1);
 }
 
 export function getEnergyRegenValue(currentLevel: number): number {
@@ -121,12 +67,22 @@ export function getEnergyRegenValue(currentLevel: number): number {
 }
 
 export function getEnergyRegenAmountCost(currentLevel: number): number {
-  const cfg = UPGRADE_CONFIG.energyRegenAmount;
-  return Math.round(cfg.baseCost * Math.pow(1 + cfg.costGrowth, currentLevel) * 100) / 100;
+  return progressionCost(UPGRADE_CONFIG.energyRegenAmount.baseCost, currentLevel + 1);
 }
 
 export function getEnergyRegenAmountValue(currentLevel: number): number {
   return 1 + currentLevel * UPGRADE_CONFIG.energyRegenAmount.bonusPerLevel;
+}
+
+export const BASE_BACKPACK_WEIGHT_LIMIT = 100;
+
+export function getBackpackCost(currentLevel: number): number {
+  return progressionCost(UPGRADE_CONFIG.backpack.baseCost, currentLevel + 1);
+}
+
+export function getBackpackWeightLimit(currentLevel: number): number {
+  const cfg = UPGRADE_CONFIG.backpack;
+  return Math.round(BASE_BACKPACK_WEIGHT_LIMIT * Math.pow(1 + cfg.bonusPerLevel, currentLevel) * 100) / 100;
 }
 
 export const ENERGY_UPGRADE_DIAMOND_THRESHOLD = 5;
