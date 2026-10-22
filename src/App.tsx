@@ -5,11 +5,11 @@ import ShopTab from '@/components/ShopTab';
 import UpgradesTab from '@/components/UpgradesTab';
 import ExpeditionsTab from '@/components/ExpeditionsTab';
 import SettingsTab from '@/components/SettingsTab';
+import EquipmentTab from '@/components/EquipmentTab';
 import Notifications from '@/components/Notifications';
 import FloatTexts from '@/components/FloatTexts';
-import BackpackModal from '@/components/BackpackModal';
 import ItemsModal from '@/components/ItemsModal';
-import { Pickaxe, Backpack, Coins, Gem } from 'lucide-react';
+import { Pickaxe, Coins, Gem } from 'lucide-react';
 import { formatMoney } from '@/config';
 import { xpForLevel } from '@/config/upgradesConfig';
 
@@ -59,7 +59,7 @@ function Balances() {
 }
 
 function GameApp() {
-  const { activeTab, t, state, backpackOpen, setBackpackOpen } = useGame();
+  const { activeTab, t, state } = useGame();
 
   return (
     <div className="min-h-screen bg-neutral-100 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 transition-colors duration-300">
@@ -74,27 +74,12 @@ function GameApp() {
         </div>
       </header>
 
-      {/* Left-middle floating backpack button (mining tab only) */}
-      {activeTab === 'mining' && (
-        <button
-          onClick={() => setBackpackOpen(!backpackOpen)}
-          className="fixed left-2 sm:left-3 top-1/2 -translate-y-1/2 z-40 w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-primary-500 hover:bg-primary-600 text-white shadow-xl shadow-primary-500/30 flex items-center justify-center transition-all hover:scale-110 active:scale-95"
-          title={t('backpack')}
-        >
-          <Backpack className="w-6 h-6" />
-          {state.cases.filter((c) => !c.opened).length > 0 && (
-            <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-error-500 text-white text-[10px] font-bold flex items-center justify-center">
-              {state.cases.filter((c) => !c.opened).length}
-            </span>
-          )}
-        </button>
-      )}
-
       {/* Main content */}
       <main className="max-w-2xl mx-auto px-3 sm:px-4 py-4 pb-28 space-y-4" style={{ paddingBottom: 'calc(7rem + env(safe-area-inset-bottom, 0px))' }}>
         {activeTab === 'mining' && <MiningTab />}
         {activeTab === 'shop' && <ShopTab />}
         {activeTab === 'upgrades' && <UpgradesTab />}
+        {activeTab === 'equipment' && <EquipmentTab />}
         {activeTab === 'expeditions' && <ExpeditionsTab />}
         {activeTab === 'settings' && <SettingsTab />}
       </main>
@@ -109,13 +94,12 @@ function GameApp() {
       {/* Overlays */}
       <Notifications />
       <FloatTexts />
-      <BackpackModal />
       <ItemsModal />
 
       {/* Version badge */}
       <div className="fixed bottom-16 right-3 z-50 pointer-events-none select-none">
         <span className="text-[10px] font-mono font-semibold text-neutral-400 dark:text-neutral-600 bg-neutral-100/70 dark:bg-neutral-900/70 px-2 py-0.5 rounded-md backdrop-blur-sm">
-          V5.0.0
+          V7.0.0
         </span>
       </div>
     </div>

@@ -1,9 +1,9 @@
 export type Lang = 'uk' | 'en' | 'ru';
 export type Theme = 'dark' | 'light';
-export type Tab = 'mining' | 'shop' | 'upgrades' | 'expeditions' | 'settings';
+export type Tab = 'mining' | 'shop' | 'upgrades' | 'expeditions' | 'settings' | 'equipment';
 export type TimeUnit = 'seconds' | 'minutes' | 'hours';
 
-export type ResourceType = 'stone' | 'coal' | 'copper' | 'iron';
+export type ResourceType = 'stone' | 'coal' | 'copper' | 'iron' | 'silver' | 'gold';
 export type CaseRarity = 'common' | 'rare' | 'epic' | 'legendary' | 'energy';
 
 export interface Resource {
@@ -18,6 +18,7 @@ export interface Resource {
   maxMass: number;
   pricePerKg: number;
   xp: number;
+  weight: number;
   icon: string;
 }
 
@@ -86,6 +87,58 @@ export interface UpgradeState {
   energyMaxLvl: number;
   energyRegenLvl: number;
   energyRegenAmountLvl: number;
+  backpackLvl?: number;
+}
+
+export interface MineUnlockRequirements {
+  level: number;
+  price: number;
+  helmetLevel?: number;
+  flashlightLevel?: number;
+  glovesLevel?: number;
+  respiratorLevel?: number;
+  respiratorFilter?: boolean;
+  railsCount?: number;
+  cartStation?: boolean;
+  ventilationLevel?: number;
+  lightingLevel?: number;
+  woodenBracingCount?: number;
+  unlockTimeMinutes: number;
+}
+
+export interface MineEnvironment {
+  baseTemperature: number;
+  oxygenConsumptionPerMin: number;
+}
+
+export interface Mine {
+  id: number;
+  nameUk: string;
+  nameEn: string;
+  nameRu: string;
+  reqLevel: number;
+  drops: Record<string, number>;
+  unlockRequirements?: MineUnlockRequirements;
+  environment?: MineEnvironment;
+}
+
+export interface MineUnlockTimer {
+  mineId: number;
+  startedAt: number;
+  durationMs: number;
+}
+
+export interface EquipmentUpgradeState {
+  helmetLevel: number;
+  flashlightLevel: number;
+  glovesLevel: number;
+  respiratorLevel: number;
+  respiratorFilterPurchased: boolean;
+  lightingLevel: number;
+  ventilationLevel: number;
+  railsCount: number;
+  cartStationPurchased: boolean;
+  woodenBracingCount: number;
 }
 
 export interface GameState {
@@ -96,7 +149,7 @@ export interface GameState {
   activePickaxe: InventoryItem | null;
   activePickaxeTierId: string;
   sparePickaxes: InventoryItem[];
-  inventory: Record<ResourceType, { mass: number; count: number }>;
+  inventory: Record<string, { mass: number; count: number }>;
   autoBasket: AutoBasketItem[];
   autoBasketMax: number;
 
@@ -120,9 +173,14 @@ export interface GameState {
   xp: number;
 
   cases: CaseItem[];
+  autoBasketCases: CaseItem[];
   itemBags: number;
 
   upgrades: UpgradeState;
+  equipment: EquipmentUpgradeState;
+  unlockedMines: number[];
+  mineUnlockTimers: MineUnlockTimer[];
+  ownedEquipment: string[];
 
   starterGiftClaimed: boolean;
   redeemedPromoCodes: string[];
@@ -146,6 +204,12 @@ export interface GameState {
 
   ownedItems: import('./types/items').OwnedItem[];
   equippedItems: import('./types/items').EquippedItems;
+  slot6Unlocked: boolean;
+
+  craftInventory: Record<string, number>;
+  fuel: import('./types/craft').FuelState;
+  materialsShop: import('./types/craft').MaterialsShopState;
+  lifeSupport: import('./types/craft').LifeSupportState;
 
   lastSavedAt: number;
 }

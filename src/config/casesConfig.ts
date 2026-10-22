@@ -2,7 +2,7 @@ import type { CaseRarity, CaseLootResult, CaseLootTableEntry, CaseLootType } fro
 import { scaledReward } from '@/config';
 
 export const BASE_CASE_DROP_CHANCE = 0.001;
-export const CASE_CHANCE_PER_LEVEL = 0.0005;
+export const CASE_CHANCE_PER_LEVEL = 0.0001;
 export const CASE_CHANCE_MAX_LEVEL = 30;
 
 export const CASE_RARITIES: Record<CaseRarity, { nameUk: string; nameEn: string; nameRu: string; chance: number; color: string; glowColor: string }> = {

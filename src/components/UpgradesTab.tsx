@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useGame } from '@/context/GameContext';
 import { formatMoney } from '@/config';
 import {
@@ -21,6 +22,8 @@ import {
 } from '@/config/upgradesConfig';
 import { getCaseChanceValue } from '@/config/casesConfig';
 import { getCaseChanceCost } from '@/config/upgradesConfig';
+import CraftPanel from '@/components/CraftPanel';
+import EquipmentPanel from '@/components/EquipmentPanel';
 import {
   Zap,
   Clock,
@@ -35,6 +38,8 @@ import {
   Timer,
   Sparkles,
   Backpack,
+  Hammer,
+  HardHat,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -157,7 +162,50 @@ export default function UpgradesTab() {
     currentBackpackLimit,
     currentBackpackWeight,
     t,
+    lang,
   } = useGame();
+
+  const [subTab, setSubTab] = useState<'upgrades' | 'craft' | 'equipment'>('upgrades');
+
+  const subTabBtn = (tab: 'upgrades' | 'craft' | 'equipment', Icon: LucideIcon, label: string) => (
+    <button
+      onClick={() => setSubTab(tab)}
+      className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
+        subTab === tab
+          ? 'bg-primary-500 text-white'
+          : 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'
+      }`}
+    >
+      <Icon className="w-4 h-4 inline mr-1.5" />
+      {label}
+    </button>
+  );
+
+  const switcher = (
+    <div className="flex gap-2 p-1 rounded-xl bg-neutral-100 dark:bg-neutral-850">
+      {subTabBtn('upgrades', Zap, lang === 'ru' ? 'Прокачка' : (lang === 'uk' ? 'Прокачка' : 'Upgrades'))}
+      {subTabBtn('craft', Hammer, lang === 'ru' ? 'Крафт' : (lang === 'uk' ? 'Крафт' : 'Craft'))}
+      {subTabBtn('equipment', HardHat, lang === 'ru' ? 'Спорядження' : (lang === 'uk' ? 'Спорядження' : 'Equipment'))}
+    </div>
+  );
+
+  if (subTab === 'craft') {
+    return (
+      <div className="space-y-4">
+        {switcher}
+        <CraftPanel />
+      </div>
+    );
+  }
+
+  if (subTab === 'equipment') {
+    return (
+      <div className="space-y-4">
+        {switcher}
+        <EquipmentPanel />
+      </div>
+    );
+  }
 
   const u = state.upgrades;
 
@@ -184,6 +232,8 @@ export default function UpgradesTab() {
           </div>
         </div>
       </div>
+
+      {switcher}
 
       {/* Section 1: Multipliers */}
       <div className="card p-4 space-y-3">

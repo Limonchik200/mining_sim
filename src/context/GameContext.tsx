@@ -5,6 +5,7 @@ import {
   useRef,
   useCallback,
   useState,
+  useMemo,
   type ReactNode,
 } from 'react';
 import type {
@@ -22,9 +23,7 @@ import type {
 } from '@/types';
 import {
   ENERGY_MAX,
-  ENERGY_REGEN_SECONDS,
   DIG_COOLDOWN_MS,
-  BASE_AUTO_BASKET_MAX,
   MIN_LEASE_SECONDS,
   RESOURCES,
   RESOURCE_LIST,
@@ -73,9 +72,40 @@ import {
   getEnergyUpgradeDiamondCost,
   getBackpackCost,
   getBackpackWeightLimit,
+  EQUIPMENT_CONFIG,
+  RESPIRATOR_FILTER_PRICE,
+  CART_STATION_PRICE,
+  RAIL_UNIT_PRICE,
+  WOODEN_BRACING_UNIT_PRICE,
+  equipmentUpgradeCost,
+  equipmentMaxLevelForMine,
+  type EquipmentType,
 } from '@/config/upgradesConfig';
+import { MINES, getMineById } from '@/config/minesConfig';
+import type { MineUnlockRequirements, MineUnlockTimer, EquipmentUpgradeState } from '@/types';
+import type { CraftRecipe, OxygenTankType, BatteryType, CoolerType, CoolerMode } from '@/types/craft';
+import { CRAFT_RECIPES, canCraft as canCraftRecipe, craftRecipe as executeCraftRecipe, getCraftItemName } from '@/config/craftConfig';
+import { generateMaterialsShopSlots, getSlotPrice, MATERIALS_SHOP_REFRESH_MS } from '@/config/materialsShopConfig';
+import {
+  CANISTER_PRICE,
+  createCanister,
+  generateDiesel95Price,
+  getAvailableFuelSpace,
+  addFuel,
+  DIESEL95_UPDATE_MS,
+} from '@/config/fuelConfig';
+import { OXYGEN_TANK_CONFIGS, createOxygenTank } from '@/config/oxygenConfig';
+import { BATTERY_CONFIGS, createBattery } from '@/config/batteryConfig';
+import { COOLER_CONFIGS, createCooler, getCoolerDegradationPerSec } from '@/config/coolerConfig';
+import {
+  GENERATOR_PRICE,
+  GENERATOR_FUEL_PER_MIN,
+  GENERATOR_LITHIUM_SLOTS,
+  canActivateGenerator,
+} from '@/config/generatorConfig';
+import { getAvailableSpace, getBatterySpace, getOxygenTankSpace, getCanisterSpace, getGeneratorSpace, getTotalSpace, getUsedSpace, MAX_SHELVES, SHELF_SPACE } from '@/config/warehouseConfig';
 import { DAILY_REWARDS, DAILY_CLAIM_COOLDOWN_MS, getDailyRewardScaled, type DailyReward } from '@/config/rewardsConfig';
-import { convertToSeconds } from '@/config';
+import { convertToSeconds, formatMoney } from '@/config';
 import { translations, type TranslationKey } from '@/i18n';
 import {
   EXPEDITION_TIERS,
@@ -87,212 +117,32 @@ import {
 import {
   ITEM_TYPES,
   rollItemFromBag,
-  getItemEffect,
   UPGRADE_COSTS,
   getItemName,
   getItemLevelName,
   type MaterialCost,
 } from '@/config/itemsConfig';
-import type { OwnedItem, EquippedItems, ItemEffect, ItemType, ItemLevel } from '@/types/items';
+import type { OwnedItem, ItemEffect, ItemLevel } from '@/types/items';
+import {
+  STORAGE_KEY,
+  EXPEDITION_REFRESH_MS,
+  MAX_ACTIVE_EXPEDITIONS,
+  generateExpeditionSlots,
+  createInitialState,
+  migrateState,
+  loadState,
+  saveState,
+  applyXp,
+  type XpResult,
+} from './storage';
+import { computeTotalItemEffects, computeItemEffectsForRegen } from './itemEffects';
+import { processTick, processOfflineProgress } from './autoDig';
 
 export type { CaseOpenResult };
 
-const STORAGE_KEY = 'mining-sim-v3-save';
-const EXPEDITION_REFRESH_MS = 3 * 60 * 60 * 1000;
-const EXPEDITION_SLOTS = 4;
-const MAX_ACTIVE_EXPEDITIONS = 1;
 
-function generateExpeditionSlots(playerLevel: number): GeneratedExpedition[] {
-  const availableTiers = Object.values(EXPEDITION_TIERS)
-    .filter((t) => playerLevel >= t.requiredPlayerLevel)
-    .map((t) => t.tier);
-  if (availableTiers.length === 0) availableTiers.push(1);
-  const slots: GeneratedExpedition[] = [];
-  for (let i = 0; i < EXPEDITION_SLOTS; i++) {
-    const tier = availableTiers[Math.floor(Math.random() * availableTiers.length)];
-    slots.push(generateExpedition(tier));
-  }
-  return slots;
-}
 
-function createInitialState(): GameState {
-  return {
-    balance: 0,
-    gems: 0,
-    energy: ENERGY_MAX,
-    maxEnergy: ENERGY_MAX,
-    activePickaxe: {
-      id: 'starter-shovel',
-      pickaxeTierId: 'shovel',
-      name: 'Shovel',
-      durability: 999999,
-      maxDurability: 999999,
-    },
-    activePickaxeTierId: 'shovel',
-    sparePickaxes: [],
-    inventory: {
-      stone: { mass: 0, count: 0 },
-      coal: { mass: 0, count: 0 },
-      copper: { mass: 0, count: 0 },
-      iron: { mass: 0, count: 0 },
-    },
-    autoBasket: [],
-    autoBasketMax: BASE_AUTO_BASKET_MAX,
-    activeLeaseEndsAt: null,
-    activeLeaseTotal: 0,
-    activeLeaseMineId: 1,
-    autoMiningEndsAt: null,
-    autoMiningTotal: 0,
-    autoLeaseMineId: 1,
-    lastAutoDigAt: Date.now(),
-    buffs: [],
-    lastEnergyRegenAt: Date.now(),
-    totalDigs: 0,
-    totalEarned: 0,
-    totalCasesOpened: 0,
-    totalGemsEarned: 0,
-    level: 1,
-    xp: 0,
-    cases: [],
-    autoBasketCases: [],
-    itemBags: 0,
-    upgrades: {
-      activeLeaseMult: 0,
-      autoLeaseMult: 0,
-      autoCooldownLvl: 0,
-      basketCapLvl: 0,
-      caseChanceLvl: 0,
-      energyMaxLvl: 0,
-      energyRegenLvl: 0,
-      energyRegenAmountLvl: 0,
-      backpackLvl: 0,
-    },
-    starterGiftClaimed: false,
-    redeemedPromoCodes: [],
-    ownedPickaxes: ['shovel', 'rusty'],
-    currentMineId: 0,
-    dailyCalendar: {
-      lastClaimDay: 0,
-      lastClaimTimestamp: null,
-    },
-    settings: {
-      lang: 'uk',
-      theme: 'dark',
-    },
-    materials: {},
-    availableExpeditions: [],
-    activeExpeditions: [],
-    expeditionRefreshAt: Date.now() + EXPEDITION_REFRESH_MS,
-    ownedItems: [],
-    equippedItems: [null, null, null, null, null, null],
-    slot6Unlocked: false,
-    lastSavedAt: Date.now(),
-  };
-}
 
-function migrateState(saved: Partial<GameState>): GameState {
-  const base = createInitialState();
-  const merged: GameState = {
-    ...base,
-    ...saved,
-    settings: { ...base.settings, ...saved.settings },
-    inventory: { ...base.inventory, ...saved.inventory },
-    upgrades: { ...base.upgrades, ...(saved.upgrades || {}) },
-  };
-
-  merged.activeLeaseMineId = saved.activeLeaseMineId ?? base.activeLeaseMineId;
-  merged.autoLeaseMineId = saved.autoLeaseMineId ?? base.autoLeaseMineId;
-
-  merged.upgrades.activeLeaseMult = Math.min(merged.upgrades.activeLeaseMult, UPGRADE_CONFIG.activeLeaseMult.maxLevel);
-  merged.upgrades.autoLeaseMult = Math.min(merged.upgrades.autoLeaseMult, UPGRADE_CONFIG.autoLeaseMult.maxLevel);
-  merged.upgrades.autoCooldownLvl = Math.min(merged.upgrades.autoCooldownLvl, UPGRADE_CONFIG.autoCooldown.maxLevel);
-  merged.upgrades.basketCapLvl = Math.min(merged.upgrades.basketCapLvl, UPGRADE_CONFIG.basketCap.maxLevel);
-  merged.upgrades.caseChanceLvl = Math.min(merged.upgrades.caseChanceLvl, UPGRADE_CONFIG.caseChance.maxLevel);
-  merged.upgrades.energyMaxLvl = Math.min(merged.upgrades.energyMaxLvl, UPGRADE_CONFIG.energyMax.maxLevel);
-  merged.upgrades.energyRegenLvl = Math.min(merged.upgrades.energyRegenLvl, UPGRADE_CONFIG.energyRegen.maxLevel);
-  merged.upgrades.energyRegenAmountLvl = Math.min(merged.upgrades.energyRegenAmountLvl ?? 0, UPGRADE_CONFIG.energyRegenAmount.maxLevel);
-  merged.upgrades.backpackLvl = Math.min(merged.upgrades.backpackLvl ?? 0, UPGRADE_CONFIG.backpack.maxLevel);
-
-  merged.maxEnergy = getEnergyMaxValue(merged.upgrades.energyMaxLvl);
-  if (merged.energy > merged.maxEnergy) merged.energy = merged.maxEnergy;
-
-  merged.autoBasketMax = getBasketCapValue(merged.upgrades.basketCapLvl);
-
-  const ownedSet = new Set(merged.ownedPickaxes || []);
-  ownedSet.add('rusty');
-  ownedSet.add('shovel');
-  merged.ownedPickaxes = Array.from(ownedSet);
-  merged.itemBags = saved.itemBags ?? 0;
-  merged.autoBasketCases = saved.autoBasketCases ?? [];
-
-  merged.materials = saved.materials ?? {};
-  merged.activeExpeditions = saved.activeExpeditions ?? [];
-  merged.expeditionRefreshAt = saved.expeditionRefreshAt ?? (Date.now() + EXPEDITION_REFRESH_MS);
-  if (!saved.availableExpeditions || saved.availableExpeditions.length === 0) {
-    merged.availableExpeditions = generateExpeditionSlots(merged.level);
-  } else {
-    merged.availableExpeditions = saved.availableExpeditions;
-  }
-
-  if (merged.activePickaxe) {
-    const tier = getPickaxeTier(merged.activePickaxeTierId);
-    merged.activePickaxe.maxDurability = tier.maxDurability;
-    merged.activePickaxe.name = merged.settings.lang === 'ru' ? tier.nameRu : (merged.settings.lang === 'uk' ? tier.nameUk : tier.nameEn);
-    if (merged.activePickaxe.durability > tier.maxDurability) {
-      merged.activePickaxe.durability = tier.maxDurability;
-    }
-  }
-
-  merged.ownedItems = saved.ownedItems ?? [];
-  merged.equippedItems = saved.equippedItems ?? [null, null, null, null, null, null];
-  while (merged.equippedItems.length < 6) merged.equippedItems.push(null);
-  merged.slot6Unlocked = saved.slot6Unlocked ?? false;
-
-  merged.sparePickaxes = merged.sparePickaxes.map((px) => {
-    const tier = getPickaxeTier(px.pickaxeTierId);
-    return {
-      ...px,
-      maxDurability: tier.maxDurability,
-      name: merged.settings.lang === 'ru' ? tier.nameRu : (merged.settings.lang === 'uk' ? tier.nameUk : tier.nameEn),
-      durability: Math.min(px.durability, tier.maxDurability),
-    };
-  });
-
-  return merged;
-}
-
-function loadState(): GameState {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      console.log('[GameContext] No save found, starting fresh.');
-      return createInitialState();
-    }
-    const saved = JSON.parse(raw) as Partial<GameState>;
-    const migrated = migrateState(saved);
-    console.log('[GameContext] Save loaded.', {
-      level: migrated.level,
-      balance: migrated.balance,
-      gems: migrated.gems,
-      ownedItems: migrated.ownedItems.length,
-      equippedItems: migrated.equippedItems.filter(Boolean).length,
-      savedAt: new Date(migrated.lastSavedAt).toISOString(),
-    });
-    return migrated;
-  } catch (e) {
-    console.error('[GameContext] Failed to load save, starting fresh.', e);
-    return createInitialState();
-  }
-}
-
-function saveState(state: GameState) {
-  try {
-    const toSave = { ...state, lastSavedAt: Date.now() };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
-  } catch (e) {
-    console.error('[GameContext] Failed to save state.', e);
-  }
-}
 
 interface GameContextValue {
   state: GameState;
@@ -360,6 +210,37 @@ interface GameContextValue {
   unlockSlot6: () => void;
   isSlotUnlocked: (slot: number) => boolean;
   totalItemEffects: ItemEffect;
+  unlockedMines: number[];
+  isMineUnlocked: (mineId: number) => boolean;
+  startMineUnlock: (mineId: number) => void;
+  speedUpMineUnlock: (mineId: number, minutes: number) => void;
+  checkMineUnlockRequirements: (mineId: number) => { met: boolean; requirements: { label: string; current: string; required: string; met: boolean }[] };
+  upgradeEquipment: (type: EquipmentType) => void;
+  purchaseEquipment: (type: EquipmentType) => void;
+  purchaseRespiratorFilter: () => void;
+  purchaseCartStation: () => void;
+  purchaseRails: (count: number) => void;
+  purchaseWoodenBracing: (count: number) => void;
+  highestUnlockedMine: number;
+  craftItem: (recipeIndex: number) => void;
+  buyMaterialSlot: (slotId: string) => void;
+  buyCanister: () => void;
+  buyFuel: (liters: number) => void;
+  buyOxygenTank: (type: OxygenTankType) => void;
+  buyBattery: (type: BatteryType) => void;
+  buyCooler: (type: CoolerType) => void;
+  toggleCooler: (coolerId: string) => void;
+  setCoolerMode: (coolerId: string, mode: CoolerMode) => void;
+  repairCooler: (coolerId: string) => void;
+  buyGenerator: () => void;
+  toggleGenerator: () => void;
+  refuelGenerator: () => void;
+  insertLithiumBattery: (batteryId: string) => void;
+  removeLithiumBattery: (batteryId: string) => void;
+  buyShelf: () => void;
+  sellCanister: (canisterId: string) => void;
+  usedWarehouseSpace: number;
+  totalWarehouseSpace: number;
 }
 
 const GameContext = createContext<GameContextValue | null>(null);
@@ -367,22 +248,7 @@ const GameContext = createContext<GameContextValue | null>(null);
 let notifIdCounter = 0;
 let floatIdCounter = 0;
 
-interface XpResult {
-  state: GameState;
-  leveledUp: boolean;
-  newLevel: number;
-}
 
-function applyXp(state: GameState, xpGain: number): XpResult {
-  let next = { ...state, xp: state.xp + xpGain };
-  let leveledUp = false;
-  while (next.xp >= xpForLevel(next.level)) {
-    next.xp -= xpForLevel(next.level);
-    next.level += 1;
-    leveledUp = true;
-  }
-  return { state: next, leveledUp, newLevel: next.level };
-}
 
 export function GameProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<GameState>(loadState);
@@ -460,6 +326,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const currentBackpackLimit = getBackpackWeightLimit(state.upgrades.backpackLvl ?? 0);
   const currentBackpackWeight = Math.round(
     Object.entries(state.inventory).reduce((sum, [type, entry]) => {
+      if (!entry || !Number.isFinite(entry.mass)) return sum;
       const res = RESOURCES[type as ResourceType];
       const w = res?.weight ?? 1;
       return sum + entry.mass * w;
@@ -471,38 +338,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const currentEnergyRegenSeconds = getEnergyRegenValue(state.upgrades.energyRegenLvl);
   const currentEnergyRegenAmountBase = getEnergyRegenAmountValue(state.upgrades.energyRegenAmountLvl ?? 0);
 
-  const totalItemEffects: ItemEffect = (() => {
-    const agg: ItemEffect = {
-      activeLeaseMultBonus: 0,
-      energyMaxBonus: 0,
-      energyRegenBonus: 0,
-      foodBonusPct: 0,
-      sellMultBonus: 0,
-      expeditionTimeReductionPct: 0,
-      expeditionRefreshReductionPct: 0,
-      expeditionLootChance: 0,
-      expeditionLootMult: 1,
-    };
-    const seenTypes = new Set<ItemType>();
-    for (const uid of state.equippedItems) {
-      if (!uid) continue;
-      const item = state.ownedItems.find((o) => o.uid === uid);
-      if (!item) continue;
-      if (seenTypes.has(item.type)) continue;
-      seenTypes.add(item.type);
-      const eff = getItemEffect(item.type, item.level);
-      agg.activeLeaseMultBonus += eff.activeLeaseMultBonus;
-      agg.energyMaxBonus += eff.energyMaxBonus;
-      agg.energyRegenBonus += eff.energyRegenBonus;
-      agg.foodBonusPct += eff.foodBonusPct;
-      agg.sellMultBonus += eff.sellMultBonus;
-      agg.expeditionTimeReductionPct += eff.expeditionTimeReductionPct;
-      agg.expeditionRefreshReductionPct += eff.expeditionRefreshReductionPct;
-      agg.expeditionLootChance = Math.max(agg.expeditionLootChance, eff.expeditionLootChance);
-      agg.expeditionLootMult = Math.max(agg.expeditionLootMult, eff.expeditionLootMult);
-    }
-    return agg;
-  })();
+  const totalItemEffects: ItemEffect = computeTotalItemEffects(state);
 
   const currentEnergyMax = currentEnergyMaxBase + totalItemEffects.energyMaxBonus;
   const currentEnergyRegenAmount = currentEnergyRegenAmountBase + totalItemEffects.energyRegenBonus;
@@ -534,161 +370,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       lastTickRef.current = now;
       const deltaSec = (now - prev) / 1000;
 
-      setState((prev) => {
-        let next = { ...prev };
-        let changed = false;
-
-        const tickItemEffects: ItemEffect = (() => {
-          const agg: ItemEffect = {
-            activeLeaseMultBonus: 0, energyMaxBonus: 0, energyRegenBonus: 0,
-            foodBonusPct: 0, sellMultBonus: 0, expeditionTimeReductionPct: 0,
-            expeditionRefreshReductionPct: 0, expeditionLootChance: 0, expeditionLootMult: 1,
-          };
-          const seen = new Set<ItemType>();
-          for (const eid of prev.equippedItems) {
-            if (!eid) continue;
-            const it = prev.ownedItems.find((o) => o.uid === eid);
-            if (!it || seen.has(it.type)) continue;
-            seen.add(it.type);
-            const e = getItemEffect(it.type, it.level);
-            agg.energyMaxBonus += e.energyMaxBonus;
-            agg.energyRegenBonus += e.energyRegenBonus;
-            agg.foodBonusPct += e.foodBonusPct;
-          }
-          return agg;
-        })();
-
-        const effectiveMaxEnergy = prev.maxEnergy + tickItemEffects.energyMaxBonus;
-        if (prev.energy < effectiveMaxEnergy) {
-          const activeBuffs = next.buffs.filter((b) => b.expiresAt > now);
-          let totalRegenMult = 1;
-          for (const buff of activeBuffs) {
-            totalRegenMult += buff.regenMultiplier;
-          }
-          if (activeBuffs.length !== next.buffs.length) {
-            next.buffs = activeBuffs;
-            changed = true;
-          }
-          const regenSeconds = getEnergyRegenValue(next.upgrades.energyRegenLvl);
-          const regenMult = getEnergyRegenAmountValue(next.upgrades.energyRegenAmountLvl ?? 0) + tickItemEffects.energyRegenBonus;
-          const regenAmount = (deltaSec / regenSeconds) * totalRegenMult * regenMult;
-          const newEnergy = Math.min(effectiveMaxEnergy, next.energy + regenAmount);
-          if (newEnergy !== next.energy) {
-            next.energy = newEnergy;
-            changed = true;
-          }
-        }
-
-        if (next.activeLeaseEndsAt && now > next.activeLeaseEndsAt) {
-          next.activeLeaseEndsAt = null;
-          next.activeLeaseTotal = 0;
-          changed = true;
-          pushNotification({ message: tr('notifLeaseExpired'), type: 'warning' });
-        }
-        if (next.autoMiningEndsAt && now > next.autoMiningEndsAt) {
-          next.autoMiningEndsAt = null;
-          next.autoMiningTotal = 0;
-          changed = true;
-          pushNotification({ message: tr('notifAutoLeaseExpired'), type: 'warning' });
-        }
-
-        if (next.expeditionRefreshAt && now > next.expeditionRefreshAt) {
-          next.availableExpeditions = generateExpeditionSlots(next.level);
-          next.expeditionRefreshAt = now + EXPEDITION_REFRESH_MS;
-          changed = true;
-          pushNotification({ message: tr('expeditionsRefreshed'), type: 'info' });
-        }
-
-        if (next.level >= 3 && next.availableExpeditions.length === 0) {
-          next.availableExpeditions = generateExpeditionSlots(next.level);
-          next.expeditionRefreshAt = now + EXPEDITION_REFRESH_MS;
-          changed = true;
-        }
-
-        if (next.autoMiningEndsAt && now < next.autoMiningEndsAt) {
-          const autoCooldown = getAutoCooldownMs(next.upgrades.autoCooldownLvl);
-          const basketCap = getBasketCapValue(next.upgrades.basketCapLvl);
-          const tier = getPickaxeTier(next.activePickaxeTierId);
-          const elapsedSinceDig = now - next.lastAutoDigAt;
-          const yieldCount = Math.max(1, tier.yieldMultiplier);
-
-          if (
-            elapsedSinceDig >= autoCooldown &&
-            next.autoBasket.length < basketCap &&
-            next.activePickaxe &&
-            next.activePickaxe.durability >= tier.durabilityCost
-          ) {
-            const missedDigs = Math.min(
-              Math.floor(elapsedSinceDig / autoCooldown),
-              Math.ceil((basketCap - next.autoBasket.length) / yieldCount)
-            );
-            let basket = [...next.autoBasket];
-            let basketCases = [...next.autoBasketCases];
-            let activePickaxe = { ...next.activePickaxe };
-            let sparePickaxes = [...next.sparePickaxes];
-            let totalDigs = next.totalDigs;
-            let pickaxeBroken = false;
-
-            for (let i = 0; i < missedDigs; i++) {
-              if (basket.length >= basketCap) break;
-              if (!activePickaxe || activePickaxe.durability < tier.durabilityCost) {
-                pickaxeBroken = true;
-                break;
-              }
-
-              for (let j = 0; j < yieldCount && basket.length < basketCap; j++) {
-                const resource = getRandomResourceForMine(next.autoLeaseMineId || 1);
-                const mass = Math.round(getRandomMass(resource) * 100) / 100;
-                basket.push({ resource: resource.type, mass, xp: resource.xp, timestamp: now });
-              }
-              totalDigs++;
-
-              const newDur = activePickaxe.durability - tier.durabilityCost;
-              if (newDur <= 0) {
-                if (sparePickaxes.length > 0) {
-                  const spare = sparePickaxes[0];
-                  activePickaxe = { ...spare };
-                  sparePickaxes = sparePickaxes.slice(1);
-                } else {
-                  activePickaxe = { ...activePickaxe, durability: 0 };
-                  pickaxeBroken = true;
-                  break;
-                }
-              } else {
-                activePickaxe = { ...activePickaxe, durability: newDur };
-              }
-
-              if (rollAutoCaseDrop(next.upgrades.caseChanceLvl, next.autoLeaseMineId || 1)) {
-                const rarity = rollCaseRarity();
-                basketCases.push({ id: `case-${now}-${i}-${Math.random()}`, rarity, opened: false });
-              }
-
-              const autoDiamond = rollDiamondDrop(0, next.autoLeaseMineId || 1);
-              if (autoDiamond.dropped) {
-                next.gems = next.gems + autoDiamond.amount;
-                next.totalGemsEarned = (next.totalGemsEarned || 0) + autoDiamond.amount;
-              }
-            }
-
-            next.autoBasket = basket;
-            next.autoBasketCases = basketCases;
-            next.activePickaxe = activePickaxe;
-            next.sparePickaxes = sparePickaxes;
-            next.totalDigs = totalDigs;
-            next.lastAutoDigAt = now;
-
-            if (pickaxeBroken && !sparePickaxes.length) {
-              pushNotification({ message: tr('notifNoSparePickaxe'), type: 'error' });
-            }
-            if (next.autoBasket.length >= basketCap) {
-              pushNotification({ message: tr('notifBasketFull'), type: 'warning' });
-            }
-            changed = true;
-          }
-        }
-
-        return changed ? next : prev;
-      });
+      setState((prev) => processTick(prev, now, deltaSec, pushNotification, tr));
     }, 250);
 
     return () => clearInterval(interval);
@@ -701,115 +383,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
     if (!lastSaved || now - lastSaved < 2000) return;
 
     const offlineSec = (now - lastSaved) / 1000;
-    let changed = false;
 
-    setState((prev) => {
-      let next = { ...prev };
-
-      if (next.energy < next.maxEnergy) {
-        const offlineItemEffects: ItemEffect = (() => {
-          const agg: ItemEffect = {
-            activeLeaseMultBonus: 0, energyMaxBonus: 0, energyRegenBonus: 0,
-            foodBonusPct: 0, sellMultBonus: 0, expeditionTimeReductionPct: 0,
-            expeditionRefreshReductionPct: 0, expeditionLootChance: 0, expeditionLootMult: 1,
-          };
-          const seen = new Set<ItemType>();
-          for (const eid of prev.equippedItems) {
-            if (!eid) continue;
-            const it = prev.ownedItems.find((o) => o.uid === eid);
-            if (!it || seen.has(it.type)) continue;
-            seen.add(it.type);
-            const e = getItemEffect(it.type, it.level);
-            agg.energyMaxBonus += e.energyMaxBonus;
-            agg.energyRegenBonus += e.energyRegenBonus;
-          }
-          return agg;
-        })();
-        const effectiveMax = next.maxEnergy + offlineItemEffects.energyMaxBonus;
-        const activeBuffs = next.buffs.filter((b) => b.expiresAt > now);
-        let totalRegenMult = 1;
-        for (const buff of activeBuffs) totalRegenMult += buff.regenMultiplier;
-        next.buffs = activeBuffs;
-        const regenSeconds = getEnergyRegenValue(next.upgrades.energyRegenLvl);
-        const regenMult = getEnergyRegenAmountValue(next.upgrades.energyRegenAmountLvl ?? 0) + offlineItemEffects.energyRegenBonus;
-        const regenAmount = (offlineSec / regenSeconds) * totalRegenMult * regenMult;
-        next.energy = Math.min(effectiveMax, next.energy + regenAmount);
-        changed = true;
-      }
-
-      next.buffs = next.buffs.filter((b) => b.expiresAt > now);
-      if (next.buffs.length !== prev.buffs.length) changed = true;
-
-      if (next.activeLeaseEndsAt && now > next.activeLeaseEndsAt) {
-        next.activeLeaseEndsAt = null;
-        next.activeLeaseTotal = 0;
-        changed = true;
-      }
-      if (next.autoMiningEndsAt && now > next.autoMiningEndsAt) {
-        next.autoMiningEndsAt = null;
-        next.autoMiningTotal = 0;
-        changed = true;
-      }
-
-      if (next.autoMiningEndsAt && now < next.autoMiningEndsAt) {
-        const autoCooldown = getAutoCooldownMs(next.upgrades.autoCooldownLvl) / 1000;
-        const maxDigs = Math.floor(offlineSec / autoCooldown);
-        const basketCap = getBasketCapValue(next.upgrades.basketCapLvl);
-        const yieldCount = Math.max(1, getPickaxeTier(next.activePickaxeTierId).yieldMultiplier);
-        let basket = [...next.autoBasket];
-        let basketCases = [...next.autoBasketCases];
-        let digsDone = 0;
-        const tier = getPickaxeTier(next.activePickaxeTierId);
-
-        for (let i = 0; i < maxDigs && basket.length < basketCap; i++) {
-          if (!next.activePickaxe || next.activePickaxe.durability < tier.durabilityCost) {
-            break;
-          }
-
-          for (let j = 0; j < yieldCount && basket.length < basketCap; j++) {
-            const resource = getRandomResourceForMine(next.autoLeaseMineId || 1);
-            const mass = Math.round(getRandomMass(resource) * 100) / 100;
-            basket.push({ resource: resource.type, mass, xp: resource.xp, timestamp: now });
-          }
-          digsDone++;
-
-          const newDur = next.activePickaxe.durability - tier.durabilityCost;
-          if (newDur <= 0) {
-            if (next.sparePickaxes.length > 0) {
-              const spare = next.sparePickaxes[0];
-              next.activePickaxe = { ...spare };
-              next.sparePickaxes = next.sparePickaxes.slice(1);
-            } else {
-              next.activePickaxe = { ...next.activePickaxe, durability: 0 };
-              break;
-            }
-          } else {
-            next.activePickaxe = { ...next.activePickaxe, durability: newDur };
-          }
-
-          if (rollAutoCaseDrop(next.upgrades.caseChanceLvl, next.autoLeaseMineId || 1)) {
-            const rarity = rollCaseRarity();
-            basketCases.push({ id: `case-${now}-${i}-${Math.random()}`, rarity, opened: false });
-          }
-
-          const offlineDiamond = rollDiamondDrop(0, next.autoLeaseMineId || 1);
-          if (offlineDiamond.dropped) {
-            next.gems = next.gems + offlineDiamond.amount;
-            next.totalGemsEarned = (next.totalGemsEarned || 0) + offlineDiamond.amount;
-          }
-        }
-
-        if (digsDone > 0) {
-          next.autoBasket = basket;
-          next.autoBasketCases = basketCases;
-          next.totalDigs = next.totalDigs + digsDone;
-          next.lastAutoDigAt = now;
-          changed = true;
-        }
-      }
-
-      return changed ? next : prev;
-    });
+    setState((prev) => processOfflineProgress(prev, now, offlineSec));
     lastTickRef.current = now;
   }, []);
 
@@ -871,6 +446,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const backpackLimit = getBackpackWeightLimit(backpackLvl);
       const currentWeight = Math.round(
         Object.entries(current.inventory).reduce((sum, [type, entry]) => {
+          if (!entry || !Number.isFinite(entry.mass)) return sum;
           const res = RESOURCES[type as ResourceType];
           const w = res?.weight ?? 1;
           return sum + entry.mass * w;
@@ -1453,17 +1029,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const claimDailyReward = useCallback(() => {
     const current = stateRef.current;
     const dc = current.dailyCalendar || { lastClaimDay: 0, lastClaimTimestamp: null };
-    const nextDay = dc.lastClaimDay + 1;
-    if (nextDay > DAILY_REWARDS.length) {
-      pushNotification({ message: tr('claimed'), type: 'info' });
-      return;
-    }
-    const reward: DailyReward = DAILY_REWARDS[nextDay - 1];
     const now = Date.now();
     if (dc.lastClaimTimestamp && now - dc.lastClaimTimestamp < DAILY_CLAIM_COOLDOWN_MS) {
       pushNotification({ message: tr('locked'), type: 'warning' });
       return;
     }
+    const nextDay = dc.lastClaimDay >= DAILY_REWARDS.length ? 1 : dc.lastClaimDay + 1;
+    const reward: DailyReward = DAILY_REWARDS[nextDay - 1];
     const scaled = getDailyRewardScaled(reward, current.level);
     let rewardLabel = '';
     if (scaled.type === 'cash') {
@@ -1935,20 +1507,28 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
       const newMaterials = { ...current.materials };
       let lootMult = 1;
-      if (Math.random() < totalItemEffects.expeditionLootChance) {
-        lootMult = totalItemEffects.expeditionLootMult;
+      let basketTriggered = false;
+      if (Math.random() < (totalItemEffects.expeditionLootChance || 0)) {
+        lootMult = totalItemEffects.expeditionLootMult || 1;
+        basketTriggered = true;
       }
+      const bonusCash = basketTriggered ? expedition.cashReward * (lootMult - 1) : 0;
+      const bonusGems = basketTriggered ? Math.ceil(expedition.diamondReward * (lootMult - 1)) : 0;
+      const bonusMaterials: Record<string, number> = {};
       for (const mat of expedition.materialsReward) {
+        const baseAmount = mat.amount;
+        const bonusAmount = basketTriggered ? Math.ceil(mat.amount * lootMult) - baseAmount : 0;
+        if (bonusAmount > 0) bonusMaterials[mat.materialId] = bonusAmount;
         newMaterials[mat.materialId] = (newMaterials[mat.materialId] || 0) + Math.ceil(mat.amount * lootMult);
       }
 
       setState((prev) => {
         let next: GameState = {
           ...prev,
-          balance: Math.round((prev.balance + expedition.cashReward) * 100) / 100,
-          gems: prev.gems + expedition.diamondReward,
-          totalEarned: Math.round((prev.totalEarned + expedition.cashReward) * 100) / 100,
-          totalGemsEarned: prev.totalGemsEarned + expedition.diamondReward,
+          balance: Math.round((prev.balance + expedition.cashReward + bonusCash) * 100) / 100,
+          gems: prev.gems + expedition.diamondReward + bonusGems,
+          totalEarned: Math.round((prev.totalEarned + expedition.cashReward + bonusCash) * 100) / 100,
+          totalGemsEarned: prev.totalGemsEarned + expedition.diamondReward + bonusGems,
           materials: newMaterials,
           activeExpeditions: prev.activeExpeditions.filter((e) => e.id !== expeditionId),
           cases: [...prev.cases, ...newCases],
@@ -1956,6 +1536,20 @@ export function GameProvider({ children }: { children: ReactNode }) {
         return next;
       });
 
+      if (basketTriggered) {
+        const bonusMatStr = Object.entries(bonusMaterials)
+          .map(([id, amt]) => `${id} +${amt}`)
+          .join(', ');
+        pushNotification({
+          message: lang === 'ru'
+            ? `✨ Бонус: +${formatMoney(bonusCash)}${bonusGems > 0 ? `, +${bonusGems} 💎` : ''}${bonusMatStr ? `, ${bonusMatStr}` : ''}`
+            : lang === 'uk'
+            ? `✨ Бонус: +${formatMoney(bonusCash)}${bonusGems > 0 ? `, +${bonusGems} 💎` : ''}${bonusMatStr ? `, ${bonusMatStr}` : ''}`
+            : `✨ Bonus: +${formatMoney(bonusCash)}${bonusGems > 0 ? `, +${bonusGems} 💎` : ''}${bonusMatStr ? `, ${bonusMatStr}` : ''}`,
+          type: 'drop',
+          color: '#FBBF24',
+        });
+      }
       pushNotification({ message: tr('expeditionsClaimed'), type: 'success' });
     },
     [pushNotification, tr, totalItemEffects]
@@ -2144,6 +1738,888 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [backpackOpen, setBackpackOpen] = useState(false);
   const [itemsOpen, setItemsOpen] = useState(false);
 
+  const unlockedMines = state.unlockedMines || [0, 1];
+  const isMineUnlocked = useCallback((mineId: number): boolean => {
+    return unlockedMines.includes(mineId);
+  }, [unlockedMines]);
+
+  const highestUnlockedMine = useMemo(() => {
+    return unlockedMines.reduce((max, id) => Math.max(max, id), 0);
+  }, [unlockedMines]);
+
+  const checkMineUnlockRequirements = useCallback((mineId: number) => {
+    const mine = getMineById(mineId);
+    const req = mine.unlockRequirements;
+    const eq = state.equipment;
+    const requirements: { label: string; current: string; required: string; met: boolean }[] = [];
+
+    if (!req) return { met: true, requirements };
+
+    requirements.push({
+      label: lang === 'ru' ? 'Уровень' : (lang === 'uk' ? 'Рівень' : 'Level'),
+      current: String(state.level),
+      required: String(req.level),
+      met: state.level >= req.level,
+    });
+    requirements.push({
+      label: lang === 'ru' ? 'Деньги' : (lang === 'uk' ? 'Гроші' : 'Money'),
+      current: formatMoney(state.balance),
+      required: formatMoney(req.price),
+      met: state.balance >= req.price,
+    });
+    if (req.helmetLevel) requirements.push({
+      label: lang === 'ru' ? 'Каска' : (lang === 'uk' ? 'Каска' : 'Helmet'),
+      current: `${eq.helmetLevel} р.`,
+      required: `${req.helmetLevel} р.`,
+      met: eq.helmetLevel >= req.helmetLevel,
+    });
+    if (req.flashlightLevel) requirements.push({
+      label: lang === 'ru' ? 'Фонарик' : (lang === 'uk' ? 'Ліхтарик' : 'Flashlight'),
+      current: `${eq.flashlightLevel} р.`,
+      required: `${req.flashlightLevel} р.`,
+      met: eq.flashlightLevel >= req.flashlightLevel,
+    });
+    if (req.glovesLevel) requirements.push({
+      label: lang === 'ru' ? 'Перчатки' : (lang === 'uk' ? 'Рукавиці' : 'Gloves'),
+      current: `${eq.glovesLevel} р.`,
+      required: `${req.glovesLevel} р.`,
+      met: eq.glovesLevel >= req.glovesLevel,
+    });
+    if (req.respiratorLevel) requirements.push({
+      label: lang === 'ru' ? 'Противогаз' : (lang === 'uk' ? 'Протигаз' : 'Respirator'),
+      current: `${eq.respiratorLevel} р.`,
+      required: `${req.respiratorLevel} р.`,
+      met: eq.respiratorLevel >= req.respiratorLevel,
+    });
+    if (req.ventilationLevel) requirements.push({
+      label: lang === 'ru' ? 'Вентиляция' : (lang === 'uk' ? 'Вентиляція' : 'Ventilation'),
+      current: `${eq.ventilationLevel} р.`,
+      required: `${req.ventilationLevel} р.`,
+      met: eq.ventilationLevel >= req.ventilationLevel,
+    });
+    if (req.lightingLevel) requirements.push({
+      label: lang === 'ru' ? 'Освещение' : (lang === 'uk' ? 'Освітлення' : 'Lighting'),
+      current: `${eq.lightingLevel} р.`,
+      required: `${req.lightingLevel} р.`,
+      met: eq.lightingLevel >= req.lightingLevel,
+    });
+    if (req.railsCount) requirements.push({
+      label: lang === 'ru' ? 'Рельсы' : (lang === 'uk' ? 'Рейки' : 'Rails'),
+      current: `${eq.railsCount} шт.`,
+      required: `${req.railsCount} шт.`,
+      met: eq.railsCount >= req.railsCount,
+    });
+    if (req.cartStation) requirements.push({
+      label: lang === 'ru' ? 'Станция вагонетки' : (lang === 'uk' ? 'Станція вагонетки' : 'Cart Station'),
+      current: eq.cartStationPurchased ? '✓' : '✗',
+      required: '✓',
+      met: eq.cartStationPurchased,
+    });
+    if (req.woodenBracingCount) requirements.push({
+      label: lang === 'ru' ? 'Дерев. крепление' : (lang === 'uk' ? 'Дерев. кріплення' : 'Wooden Bracing'),
+      current: `${eq.woodenBracingCount} шт.`,
+      required: `${req.woodenBracingCount} шт.`,
+      met: eq.woodenBracingCount >= req.woodenBracingCount,
+    });
+
+    const met = requirements.every((r) => r.met);
+    return { met, requirements };
+  }, [state.level, state.balance, state.equipment, lang]);
+
+  const startMineUnlock = useCallback((mineId: number) => {
+    const check = checkMineUnlockRequirements(mineId);
+    if (!check.met) {
+      pushNotification({ message: lang === 'ru' ? 'Не выполнены условия разблокировки' : (lang === 'uk' ? 'Не виконані умови розблокування' : 'Unlock requirements not met'), type: 'error' });
+      return;
+    }
+    const mine = getMineById(mineId);
+    const req = mine.unlockRequirements;
+    if (!req || req.unlockTimeMinutes <= 0) {
+      setState((prev) => ({
+        ...prev,
+        unlockedMines: [...(prev.unlockedMines || []), mineId],
+      }));
+      pushNotification({ message: lang === 'ru' ? 'Шахта разблокирована!' : (lang === 'uk' ? 'Шахту розблоковано!' : 'Mine unlocked!'), type: 'success' });
+      return;
+    }
+    const cost = req.price;
+    setState((prev) => {
+      if (prev.balance < cost) {
+        pushNotification({ message: tr('notifNoMoney'), type: 'error' });
+        return prev;
+      }
+      const timer: MineUnlockTimer = {
+        mineId,
+        startedAt: Date.now(),
+        durationMs: req.unlockTimeMinutes * 60 * 1000,
+      };
+      return {
+        ...prev,
+        balance: Math.round((prev.balance - cost) * 100) / 100,
+        mineUnlockTimers: [...(prev.mineUnlockTimers || []), timer],
+      };
+    });
+    pushNotification({ message: lang === 'ru' ? 'Разблокировка началась!' : (lang === 'uk' ? 'Розблокування почалось!' : 'Unlock started!'), type: 'success' });
+  }, [checkMineUnlockRequirements, pushNotification, lang, tr]);
+
+  const speedUpMineUnlock = useCallback((mineId: number, minutes: number) => {
+    const gemCost = minutes;
+    setState((prev) => {
+      if (prev.gems < gemCost) {
+        pushNotification({ message: lang === 'ru' ? 'Недостаточно алмазов' : (lang === 'uk' ? 'Недостатньо алмазів' : 'Not enough gems'), type: 'error' });
+        return prev;
+      }
+      const timers = prev.mineUnlockTimers || [];
+      const timer = timers.find((t) => t.mineId === mineId);
+      if (!timer) return prev;
+      const reduceMs = minutes * 60 * 1000;
+      const newRemaining = timer.startedAt + timer.durationMs - Date.now() - reduceMs;
+      if (newRemaining <= 0) {
+        return {
+          ...prev,
+          gems: prev.gems - gemCost,
+          mineUnlockTimers: timers.filter((t) => t.mineId !== mineId),
+          unlockedMines: [...(prev.unlockedMines || []), mineId],
+        };
+      }
+      return {
+        ...prev,
+        gems: prev.gems - gemCost,
+        mineUnlockTimers: timers.map((t) =>
+          t.mineId === mineId
+            ? { ...t, durationMs: t.durationMs - reduceMs }
+            : t
+        ),
+      };
+    });
+  }, [pushNotification, lang]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setState((prev) => {
+        const timers = prev.mineUnlockTimers || [];
+        if (timers.length === 0) return prev;
+        const now = Date.now();
+        const completed = timers.filter((t) => now >= t.startedAt + t.durationMs);
+        if (completed.length === 0) return prev;
+        const completedIds = completed.map((t) => t.mineId);
+        return {
+          ...prev,
+          mineUnlockTimers: timers.filter((t) => now < t.startedAt + t.durationMs),
+          unlockedMines: [...new Set([...(prev.unlockedMines || []), ...completedIds])],
+        };
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const upgradeEquipment = useCallback((type: EquipmentType) => {
+    const current = stateRef.current;
+    const eq = current.equipment;
+    const currentLevel =
+      type === 'helmet' ? eq.helmetLevel :
+      type === 'flashlight' ? eq.flashlightLevel :
+      type === 'gloves' ? eq.glovesLevel :
+      type === 'respirator' ? eq.respiratorLevel :
+      type === 'lighting' ? eq.lightingLevel :
+      eq.ventilationLevel;
+    const maxForMine = equipmentMaxLevelForMine(type, highestUnlockedMine);
+    const maxLevel = Math.min(EQUIPMENT_CONFIG[type].maxLevel, maxForMine || EQUIPMENT_CONFIG[type].maxLevel);
+    if (currentLevel >= maxLevel) {
+      pushNotification({ message: lang === 'ru' ? 'Максимальный уровень' : (lang === 'uk' ? 'Максимальний рівень' : 'Max level reached'), type: 'error' });
+      return;
+    }
+    const cost = equipmentUpgradeCost(type, currentLevel);
+    if (current.balance < cost) {
+      pushNotification({ message: tr('notifNoMoney'), type: 'error' });
+      return;
+    }
+    setState((prev) => ({
+      ...prev,
+      balance: Math.round((prev.balance - cost) * 100) / 100,
+      equipment: {
+        ...prev.equipment,
+        [type === 'helmet' ? 'helmetLevel' :
+         type === 'flashlight' ? 'flashlightLevel' :
+         type === 'gloves' ? 'glovesLevel' :
+         type === 'respirator' ? 'respiratorLevel' :
+         type === 'lighting' ? 'lightingLevel' :
+         'ventilationLevel']: currentLevel + 1,
+      },
+    }));
+  }, [highestUnlockedMine, pushNotification, lang, tr]);
+
+  const purchaseEquipment = useCallback((type: EquipmentType) => {
+    const current = stateRef.current;
+    const cfg = EQUIPMENT_CONFIG[type];
+    if (current.ownedEquipment?.includes(type)) {
+      pushNotification({ message: lang === 'ru' ? 'Уже куплено' : (lang === 'uk' ? 'Вже куплено' : 'Already owned'), type: 'info' });
+      return;
+    }
+    if (current.balance < cfg.purchasePrice) {
+      pushNotification({ message: tr('notifNoMoney'), type: 'error' });
+      return;
+    }
+    setState((prev) => ({
+      ...prev,
+      balance: Math.round((prev.balance - cfg.purchasePrice) * 100) / 100,
+      ownedEquipment: [...(prev.ownedEquipment || []), type],
+    }));
+    pushNotification({ message: lang === 'ru' ? 'Куплено!' : (lang === 'uk' ? 'Куплено!' : 'Куплено!'), type: 'success' });
+  }, [pushNotification, lang, tr]);
+
+  const purchaseRespiratorFilter = useCallback(() => {
+    const current = stateRef.current;
+    if (current.equipment.respiratorFilterPurchased) {
+      pushNotification({ message: lang === 'ru' ? 'Уже куплено' : (lang === 'uk' ? 'Вже куплено' : 'Already owned'), type: 'info' });
+      return;
+    }
+    if (current.balance < RESPIRATOR_FILTER_PRICE) {
+      pushNotification({ message: tr('notifNoMoney'), type: 'error' });
+      return;
+    }
+    setState((prev) => ({
+      ...prev,
+      balance: Math.round((prev.balance - RESPIRATOR_FILTER_PRICE) * 100) / 100,
+      equipment: { ...prev.equipment, respiratorFilterPurchased: true },
+    }));
+    pushNotification({ message: lang === 'ru' ? 'Дымовой фильтр куплен!' : (lang === 'uk' ? 'Димовий фільтр куплено!' : 'Smoke filter purchased!'), type: 'success' });
+  }, [pushNotification, lang, tr]);
+
+  const purchaseCartStation = useCallback(() => {
+    const current = stateRef.current;
+    if (current.equipment.cartStationPurchased) {
+      pushNotification({ message: lang === 'ru' ? 'Уже куплено' : (lang === 'uk' ? 'Вже куплено' : 'Already owned'), type: 'info' });
+      return;
+    }
+    if (current.balance < CART_STATION_PRICE) {
+      pushNotification({ message: tr('notifNoMoney'), type: 'error' });
+      return;
+    }
+    setState((prev) => ({
+      ...prev,
+      balance: Math.round((prev.balance - CART_STATION_PRICE) * 100) / 100,
+      equipment: { ...prev.equipment, cartStationPurchased: true },
+    }));
+    pushNotification({ message: lang === 'ru' ? 'Станция вагонетки куплена!' : (lang === 'uk' ? 'Станцію вагонетки куплено!' : 'Cart station purchased!'), type: 'success' });
+  }, [pushNotification, lang, tr]);
+
+  const purchaseRails = useCallback((count: number) => {
+    const current = stateRef.current;
+    const totalCost = RAIL_UNIT_PRICE * count;
+    if (current.balance < totalCost) {
+      pushNotification({ message: tr('notifNoMoney'), type: 'error' });
+      return;
+    }
+    setState((prev) => ({
+      ...prev,
+      balance: Math.round((prev.balance - totalCost) * 100) / 100,
+      equipment: { ...prev.equipment, railsCount: prev.equipment.railsCount + count },
+    }));
+    pushNotification({ message: lang === 'ru' ? `Куплено ${count} рельсов` : (lang === 'uk' ? `Куплено ${count} рейок` : `Purchased ${count} rails`), type: 'success' });
+  }, [pushNotification, lang, tr]);
+
+  const purchaseWoodenBracing = useCallback((count: number) => {
+    const current = stateRef.current;
+    const totalCost = WOODEN_BRACING_UNIT_PRICE * count;
+    if (current.balance < totalCost) {
+      pushNotification({ message: tr('notifNoMoney'), type: 'error' });
+      return;
+    }
+    setState((prev) => ({
+      ...prev,
+      balance: Math.round((prev.balance - totalCost) * 100) / 100,
+      equipment: { ...prev.equipment, woodenBracingCount: prev.equipment.woodenBracingCount + count },
+    }));
+    pushNotification({ message: lang === 'ru' ? `Куплено ${count} креплений` : (lang === 'uk' ? `Куплено ${count} кріплень` : `Purchased ${count} bracing`), type: 'success' });
+  }, [pushNotification, lang, tr]);
+
+  const craftItem = useCallback((recipeIndex: number) => {
+    const recipe = CRAFT_RECIPES[recipeIndex];
+    if (!recipe) return;
+    const current = stateRef.current;
+    const inv = current.craftInventory || {};
+    if (!canCraftRecipe(recipe, inv)) {
+      pushNotification({ message: lang === 'ru' ? 'Недостаточно материалов' : (lang === 'uk' ? 'Недостатньо матеріалів' : 'Not enough materials'), type: 'error' });
+      return;
+    }
+    const newInv = executeCraftRecipe(recipe, inv);
+    if (!newInv) return;
+    const resultName = getCraftItemName(recipe.result, lang);
+    setState((prev) => ({ ...prev, craftInventory: newInv }));
+    pushNotification({ message: lang === 'ru' ? `Скрафчено: ${resultName}` : (lang === 'uk' ? `Скрафчено: ${resultName}` : `Crafted: ${resultName}`), type: 'success' });
+  }, [pushNotification, lang]);
+
+  const buyMaterialSlot = useCallback((slotId: string) => {
+    const current = stateRef.current;
+    const shop = current.materialsShop;
+    if (!shop) return;
+    const slot = shop.slots.find((s) => s.id === slotId);
+    if (!slot || slot.stock <= 0) {
+      pushNotification({ message: lang === 'ru' ? 'Нет в наличии' : (lang === 'uk' ? 'Немає в наявності' : 'Out of stock'), type: 'error' });
+      return;
+    }
+    const price = getSlotPrice(slot);
+    if (current.balance < price) {
+      pushNotification({ message: tr('notifNoMoney'), type: 'error' });
+      return;
+    }
+    setState((prev) => ({
+      ...prev,
+      balance: Math.round((prev.balance - price) * 100) / 100,
+      craftInventory: {
+        ...prev.craftInventory,
+        [slot.materialType]: (prev.craftInventory[slot.materialType] || 0) + slot.packSize,
+      },
+      materialsShop: {
+        ...prev.materialsShop,
+        slots: prev.materialsShop.slots.map((s) =>
+          s.id === slotId ? { ...s, stock: s.stock - 1 } : s
+        ),
+      },
+    }));
+    pushNotification({ message: lang === 'ru' ? `Куплено ${slot.packSize} шт.` : (lang === 'uk' ? `Куплено ${slot.packSize} шт.` : `Purchased ${slot.packSize} pcs.`), type: 'success' });
+  }, [pushNotification, lang, tr]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setState((prev) => {
+        const now = Date.now();
+        if (!prev.materialsShop || now < prev.materialsShop.nextRefreshAt) return prev;
+        const gen = generateMaterialsShopSlots(now);
+        return {
+          ...prev,
+          materialsShop: { slots: gen.slots, refreshedAt: now, nextRefreshAt: gen.nextRefreshAt },
+        };
+      });
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const buyCanister = useCallback(() => {
+    const current = stateRef.current;
+    if (current.balance < CANISTER_PRICE) {
+      pushNotification({ message: tr('notifNoMoney'), type: 'error' });
+      return;
+    }
+    if (current.lifeSupport.shelfCount < 1) {
+      pushNotification({ message: lang === 'ru' ? 'Купите стеллаж на складе!' : (lang === 'uk' ? 'Купіть стелаж на складі!' : 'Buy a shelf for the warehouse!'), type: 'error' });
+      return;
+    }
+    const space = getAvailableSpace(current.lifeSupport, current.fuel);
+    if (space < getCanisterSpace()) {
+      pushNotification({ message: lang === 'ru' ? 'Недостаточно места на стеллажах!' : (lang === 'uk' ? 'Недостатньо місця на стелажах!' : 'Not enough shelf space!'), type: 'error' });
+      return;
+    }
+    const canister = createCanister();
+    setState((prev) => ({
+      ...prev,
+      balance: Math.round((prev.balance - CANISTER_PRICE) * 100) / 100,
+      fuel: { ...prev.fuel, canisters: [...prev.fuel.canisters, canister] },
+    }));
+    pushNotification({ message: lang === 'ru' ? 'Канистра куплена!' : (lang === 'uk' ? 'Каністра куплена!' : 'Canister purchased!'), type: 'success' });
+  }, [pushNotification, lang, tr]);
+
+  const buyFuel = useCallback((liters: number) => {
+    if (liters <= 0) return;
+    const current = stateRef.current;
+    const fuel = current.fuel;
+    const availableSpace = getAvailableFuelSpace(fuel.canisters);
+    if (availableSpace <= 0) {
+      pushNotification({ message: lang === 'ru' ? 'Нет свободных канистр' : (lang === 'uk' ? 'Немає вільних каністр' : 'No free canisters'), type: 'error' });
+      return;
+    }
+    const actualLiters = Math.min(liters, availableSpace);
+    const totalCost = Math.round(actualLiters * fuel.diesel95Price * 100) / 100;
+    if (current.balance < totalCost) {
+      pushNotification({ message: tr('notifNoMoney'), type: 'error' });
+      return;
+    }
+    const newCanisters = addFuel(fuel.canisters, actualLiters);
+    setState((prev) => ({
+      ...prev,
+      balance: Math.round((prev.balance - totalCost) * 100) / 100,
+      fuel: { ...prev.fuel, canisters: newCanisters },
+    }));
+    pushNotification({ message: lang === 'ru' ? `Заправлено ${actualLiters.toFixed(1)}Л за ${totalCost.toFixed(2)}$` : (lang === 'uk' ? `Заправлено ${actualLiters.toFixed(1)}Л за ${totalCost.toFixed(2)}$` : `Refueled ${actualLiters.toFixed(1)}L for ${totalCost.toFixed(2)}$`), type: 'success' });
+  }, [pushNotification, lang, tr]);
+
+  const buyOxygenTank = useCallback((type: OxygenTankType) => {
+    const cfg = OXYGEN_TANK_CONFIGS[type];
+    const current = stateRef.current;
+    if (current.balance < cfg.price) {
+      pushNotification({ message: tr('notifNoMoney'), type: 'error' });
+      return;
+    }
+    if (current.lifeSupport.shelfCount < 1) {
+      pushNotification({ message: lang === 'ru' ? 'Купите стеллаж на складе!' : (lang === 'uk' ? 'Купіть стелаж на складі!' : 'Buy a shelf for the warehouse!'), type: 'error' });
+      return;
+    }
+    const space = getAvailableSpace(current.lifeSupport, current.fuel);
+    if (space < getOxygenTankSpace(type)) {
+      pushNotification({ message: lang === 'ru' ? 'Недостаточно места на стеллажах!' : (lang === 'uk' ? 'Недостатньо місця на стелажах!' : 'Not enough shelf space!'), type: 'error' });
+      return;
+    }
+    const tank = createOxygenTank(type);
+    setState((prev) => ({
+      ...prev,
+      balance: Math.round((prev.balance - cfg.price) * 100) / 100,
+      lifeSupport: {
+        ...prev.lifeSupport,
+        oxygenTanks: [...prev.lifeSupport.oxygenTanks, tank],
+        ownedOxygenTypes: prev.lifeSupport.ownedOxygenTypes.includes(type)
+          ? prev.lifeSupport.ownedOxygenTypes
+          : [...prev.lifeSupport.ownedOxygenTypes, type],
+      },
+    }));
+    pushNotification({ message: lang === 'ru' ? 'Балон куплен!' : (lang === 'uk' ? 'Балон куплено!' : 'Tank purchased!'), type: 'success' });
+  }, [pushNotification, lang, tr]);
+
+  const buyBattery = useCallback((type: BatteryType) => {
+    const cfg = BATTERY_CONFIGS[type];
+    const current = stateRef.current;
+    if (current.balance < cfg.price) {
+      pushNotification({ message: tr('notifNoMoney'), type: 'error' });
+      return;
+    }
+    if (current.lifeSupport.shelfCount < 1) {
+      pushNotification({ message: lang === 'ru' ? 'Купите стеллаж на складе!' : (lang === 'uk' ? 'Купіть стелаж на складі!' : 'Buy a shelf for the warehouse!'), type: 'error' });
+      return;
+    }
+    const space = getAvailableSpace(current.lifeSupport, current.fuel);
+    if (space < getBatterySpace(type)) {
+      pushNotification({ message: lang === 'ru' ? 'Недостаточно места на стеллажах!' : (lang === 'uk' ? 'Недостатньо місця на стелажах!' : 'Not enough shelf space!'), type: 'error' });
+      return;
+    }
+    const battery = createBattery(type);
+    setState((prev) => ({
+      ...prev,
+      balance: Math.round((prev.balance - cfg.price) * 100) / 100,
+      lifeSupport: {
+        ...prev.lifeSupport,
+        batteries: [...prev.lifeSupport.batteries, battery],
+        ownedBatteryTypes: prev.lifeSupport.ownedBatteryTypes.includes(type)
+          ? prev.lifeSupport.ownedBatteryTypes
+          : [...prev.lifeSupport.ownedBatteryTypes, type],
+      },
+    }));
+    pushNotification({ message: lang === 'ru' ? 'Аккумулятор куплен!' : (lang === 'uk' ? 'Акумулятор куплено!' : 'Battery purchased!'), type: 'success' });
+  }, [pushNotification, lang, tr]);
+
+  const buyCooler = useCallback((type: CoolerType) => {
+    const cfg = COOLER_CONFIGS[type];
+    const current = stateRef.current;
+    if (current.balance < cfg.price) {
+      pushNotification({ message: tr('notifNoMoney'), type: 'error' });
+      return;
+    }
+    if (current.lifeSupport.shelfCount < 1) {
+      pushNotification({ message: lang === 'ru' ? 'Купите стеллаж на складе!' : (lang === 'uk' ? 'Купіть стелаж на складі!' : 'Buy a shelf for the warehouse!'), type: 'error' });
+      return;
+    }
+    if (current.lifeSupport.coolers.length >= 1) {
+      pushNotification({ message: lang === 'ru' ? 'Можно иметь только 1 охладитель!' : (lang === 'uk' ? 'Можна мати лише 1 охолоджувач!' : 'You can only have 1 cooler!'), type: 'error' });
+      return;
+    }
+    const cooler = createCooler(type);
+    setState((prev) => ({
+      ...prev,
+      balance: Math.round((prev.balance - cfg.price) * 100) / 100,
+      lifeSupport: {
+        ...prev.lifeSupport,
+        coolers: [...prev.lifeSupport.coolers, cooler],
+        ownedCoolerTypes: prev.lifeSupport.ownedCoolerTypes.includes(type)
+          ? prev.lifeSupport.ownedCoolerTypes
+          : [...prev.lifeSupport.ownedCoolerTypes, type],
+      },
+    }));
+    pushNotification({ message: lang === 'ru' ? 'Охладитель куплен!' : (lang === 'uk' ? 'Охолоджувач куплено!' : 'Cooler purchased!'), type: 'success' });
+  }, [pushNotification, lang, tr]);
+
+  const toggleCooler = useCallback((coolerId: string) => {
+    setState((prev) => ({
+      ...prev,
+      lifeSupport: {
+        ...prev.lifeSupport,
+        coolers: prev.lifeSupport.coolers.map((c) => {
+          if (c.id !== coolerId) return c;
+          if (c.durability <= 0) return c;
+          return { ...c, active: !c.active };
+        }),
+      },
+    }));
+  }, []);
+
+  const setCoolerMode = useCallback((coolerId: string, mode: CoolerMode) => {
+    setState((prev) => ({
+      ...prev,
+      lifeSupport: {
+        ...prev.lifeSupport,
+        coolers: prev.lifeSupport.coolers.map((c) =>
+          c.id === coolerId ? { ...c, mode } : c
+        ),
+      },
+    }));
+  }, []);
+
+  const repairCooler = useCallback((coolerId: string) => {
+    const current = stateRef.current;
+    const cooler = current.lifeSupport.coolers.find((c) => c.id === coolerId);
+    if (!cooler) return;
+    const cfg = COOLER_CONFIGS[cooler.type];
+    if (current.balance < cfg.repairPrice) {
+      pushNotification({ message: tr('notifNoMoney'), type: 'error' });
+      return;
+    }
+    setState((prev) => ({
+      ...prev,
+      balance: Math.round((prev.balance - cfg.repairPrice) * 100) / 100,
+      lifeSupport: {
+        ...prev.lifeSupport,
+        coolers: prev.lifeSupport.coolers.map((c) =>
+          c.id === coolerId ? { ...c, durability: c.maxDurability } : c
+        ),
+      },
+    }));
+    pushNotification({ message: lang === 'ru' ? 'Ремонт завершён!' : (lang === 'uk' ? 'Ремонт завершено!' : 'Repair complete!'), type: 'success' });
+  }, [pushNotification, lang, tr]);
+
+  const buyGenerator = useCallback(() => {
+    const current = stateRef.current;
+    if (current.lifeSupport.generator.purchased) {
+      pushNotification({ message: lang === 'ru' ? 'Уже куплено' : (lang === 'uk' ? 'Вже куплено' : 'Already owned'), type: 'info' });
+      return;
+    }
+    if (current.balance < GENERATOR_PRICE) {
+      pushNotification({ message: tr('notifNoMoney'), type: 'error' });
+      return;
+    }
+    if (current.lifeSupport.shelfCount < 1) {
+      pushNotification({ message: lang === 'ru' ? 'Купите стеллаж на складе!' : (lang === 'uk' ? 'Купіть стелаж на складі!' : 'Buy a shelf for the warehouse!'), type: 'error' });
+      return;
+    }
+    const space = getAvailableSpace(current.lifeSupport, current.fuel);
+    if (space < getGeneratorSpace()) {
+      pushNotification({ message: lang === 'ru' ? 'Недостаточно места на стеллажах!' : (lang === 'uk' ? 'Недостатньо місця на стелажах!' : 'Not enough shelf space!'), type: 'error' });
+      return;
+    }
+    setState((prev) => ({
+      ...prev,
+      balance: Math.round((prev.balance - GENERATOR_PRICE) * 100) / 100,
+      lifeSupport: {
+        ...prev.lifeSupport,
+        generator: { ...prev.lifeSupport.generator, purchased: true },
+      },
+    }));
+    pushNotification({ message: lang === 'ru' ? 'Генератор куплен!' : (lang === 'uk' ? 'Генератор куплено!' : 'Generator purchased!'), type: 'success' });
+  }, [pushNotification, lang, tr]);
+
+  const toggleGenerator = useCallback(() => {
+    const current = stateRef.current;
+    const gen = current.lifeSupport.generator;
+    if (!gen.purchased) return;
+    if (!gen.active) {
+      const hasVentilation = (current.equipment.ventilationLevel ?? 0) > 0;
+      const hasSmokeFilter = !!current.equipment.respiratorFilterPurchased;
+      if (!canActivateGenerator(hasVentilation, hasSmokeFilter)) {
+        pushNotification({ message: lang === 'ru' ? 'Нужна вентиляция и дымовой фильтр!' : (lang === 'uk' ? 'Потрібна вентиляція та димовий фільтр!' : 'Ventilation and smoke filter required!'), type: 'error' });
+        return;
+      }
+      if (gen.fuelLiters <= 0) {
+        pushNotification({ message: lang === 'ru' ? 'Нет топлива!' : (lang === 'uk' ? 'Немає палива!' : 'No fuel!'), type: 'error' });
+        return;
+      }
+    }
+    setState((prev) => ({
+      ...prev,
+      lifeSupport: {
+        ...prev.lifeSupport,
+        generator: { ...prev.lifeSupport.generator, active: !prev.lifeSupport.generator.active },
+      },
+    }));
+  }, [pushNotification, lang]);
+
+  const sellCanister = useCallback((canisterId: string) => {
+    const current = stateRef.current;
+    const canister = current.fuel.canisters.find((c) => c.id === canisterId);
+    if (!canister) return;
+    if (canister.currentFuel > 0) {
+      pushNotification({ message: lang === 'ru' ? 'Можно продать только пустую канистру!' : (lang === 'uk' ? 'Можна продати лише порожню каністру!' : 'You can only sell an empty canister!'), type: 'error' });
+      return;
+    }
+    const sellPrice = Math.round(CANISTER_PRICE * 0.5 * 100) / 100;
+    setState((prev) => ({
+      ...prev,
+      balance: Math.round((prev.balance + sellPrice) * 100) / 100,
+      fuel: { ...prev.fuel, canisters: prev.fuel.canisters.filter((c) => c.id !== canisterId) },
+    }));
+    pushNotification({ message: lang === 'ru' ? `Канистра продана за ${sellPrice}$` : (lang === 'uk' ? `Каністра продана за ${sellPrice}$` : `Canister sold for ${sellPrice}$`), type: 'success' });
+  }, [pushNotification, lang]);
+
+  const refuelGenerator = useCallback(() => {
+    const current = stateRef.current;
+    const gen = current.lifeSupport.generator;
+    if (!gen.purchased) return;
+    const availableFuel = current.fuel.canisters.reduce((sum, c) => sum + c.currentFuel, 0);
+    if (availableFuel <= 0) {
+      pushNotification({ message: lang === 'ru' ? 'Нет дизеля в канистрах!' : (lang === 'uk' ? 'Немає дизеля в каністрах!' : 'No diesel in canisters!'), type: 'error' });
+      return;
+    }
+    const space = gen.tankCapacity - gen.fuelLiters;
+    if (space <= 0) {
+      pushNotification({ message: lang === 'ru' ? 'Бак полон!' : (lang === 'uk' ? 'Бак повний!' : 'Tank is full!'), type: 'info' });
+      return;
+    }
+    const toTransfer = Math.min(availableFuel, space);
+    let remaining = toTransfer;
+    const newCanisters = current.fuel.canisters.map((c) => {
+      if (remaining <= 0) return c;
+      const take = Math.min(c.currentFuel, remaining);
+      remaining -= take;
+      return { ...c, currentFuel: c.currentFuel - take };
+    });
+    setState((prev) => ({
+      ...prev,
+      fuel: { ...prev.fuel, canisters: newCanisters },
+      lifeSupport: {
+        ...prev.lifeSupport,
+        generator: { ...prev.lifeSupport.generator, fuelLiters: prev.lifeSupport.generator.fuelLiters + toTransfer },
+      },
+    }));
+    pushNotification({ message: lang === 'ru' ? `Залито ${toTransfer.toFixed(1)}Л` : (lang === 'uk' ? `Залито ${toTransfer.toFixed(1)}Л` : `Poured ${toTransfer.toFixed(1)}L`), type: 'success' });
+  }, [pushNotification, lang]);
+
+  const insertLithiumBattery = useCallback((batteryId: string) => {
+    setState((prev) => {
+      const gen = prev.lifeSupport.generator;
+      if (gen.lithiumBatteryIds.length >= GENERATOR_LITHIUM_SLOTS) return prev;
+      if (gen.lithiumBatteryIds.includes(batteryId)) return prev;
+      return {
+        ...prev,
+        lifeSupport: {
+          ...prev.lifeSupport,
+          generator: { ...gen, lithiumBatteryIds: [...gen.lithiumBatteryIds, batteryId] },
+        },
+      };
+    });
+  }, []);
+
+  const removeLithiumBattery = useCallback((batteryId: string) => {
+    setState((prev) => ({
+      ...prev,
+      lifeSupport: {
+        ...prev.lifeSupport,
+        generator: {
+          ...prev.lifeSupport.generator,
+          lithiumBatteryIds: prev.lifeSupport.generator.lithiumBatteryIds.filter((id) => id !== batteryId),
+        },
+      },
+    }));
+  }, []);
+
+  const buyShelf = useCallback(() => {
+    const current = stateRef.current;
+    if (current.lifeSupport.shelfCount >= MAX_SHELVES) {
+      pushNotification({ message: lang === 'ru' ? 'Максимум стеллажей!' : (lang === 'uk' ? 'Максимум стелажів!' : 'Maximum shelves reached!'), type: 'info' });
+      return;
+    }
+    const shelfCount = (current.craftInventory?.shelf ?? 0);
+    if (shelfCount < 1) {
+      pushNotification({ message: lang === 'ru' ? 'Нужен стеллаж из крафта!' : (lang === 'uk' ? 'Потрібен стелаж з крафту!' : 'Need a crafted shelf!'), type: 'error' });
+      return;
+    }
+    setState((prev) => ({
+      ...prev,
+      craftInventory: { ...prev.craftInventory, shelf: (prev.craftInventory.shelf ?? 0) - 1 },
+      lifeSupport: { ...prev.lifeSupport, shelfCount: prev.lifeSupport.shelfCount + 1 },
+    }));
+    pushNotification({ message: lang === 'ru' ? 'Стеллаж установлен!' : (lang === 'uk' ? 'Стелаж встановлено!' : 'Shelf installed!'), type: 'success' });
+  }, [pushNotification, lang]);
+
+  const usedWarehouseSpace = getUsedSpace(state.lifeSupport, state.fuel);
+  const totalWarehouseSpace = getTotalSpace(state.lifeSupport.shelfCount);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setState((prev) => {
+        const now = Date.now();
+        if (now - prev.fuel.diesel95PriceUpdatedAt < DIESEL95_UPDATE_MS) return prev;
+        return {
+          ...prev,
+          fuel: {
+            ...prev.fuel,
+            diesel95Price: generateDiesel95Price(),
+            diesel95PriceUpdatedAt: now,
+          },
+        };
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setState((prev) => {
+        const now = Date.now();
+        const deltaSec = 1;
+
+        const activeCoolers = prev.lifeSupport.coolers.filter((c) => c.active && c.durability > 0);
+        const hasChargedBattery = prev.lifeSupport.batteries.some((b) => b.currentCharge > 0);
+        const genActive = prev.lifeSupport.generator.active && prev.lifeSupport.generator.fuelLiters > 0;
+        const mineId = prev.currentMineId ?? 0;
+        const needsOxygen = mineId >= 2;
+
+        let newLifeSupport = prev.lifeSupport;
+        let changed = false;
+
+        if (activeCoolers.length > 0 && !hasChargedBattery) {
+          const newCoolers = newLifeSupport.coolers.map((c) =>
+            c.active ? { ...c, active: false } : c
+          );
+          newLifeSupport = { ...newLifeSupport, coolers: newCoolers };
+          changed = true;
+        }
+
+        const stillActiveCoolers = newLifeSupport.coolers.filter((c) => c.active && c.durability > 0);
+        if (!changed && stillActiveCoolers.length === 0 && !genActive && !needsOxygen) return prev;
+
+        if (activeCoolers.length > 0) {
+          const coolersChanged = newLifeSupport.coolers.some((c) => c.active && c.durability > 0);
+          if (coolersChanged) {
+            const newCoolers = newLifeSupport.coolers.map((c) => {
+              if (!c.active || c.durability <= 0) return c;
+              const cfg = COOLER_CONFIGS[c.type];
+              const degrade = getCoolerDegradationPerSec(cfg, c.mode);
+              const newDurability = Math.max(0, c.durability - degrade * deltaSec);
+              if (newDurability <= 0) {
+                return { ...c, durability: 0, active: false };
+              }
+              return { ...c, durability: newDurability };
+            });
+            if (newCoolers.some((c, i) => c.durability !== newLifeSupport.coolers[i].durability)) {
+              newLifeSupport = { ...newLifeSupport, coolers: newCoolers };
+              changed = true;
+            }
+          }
+        }
+
+        if (activeCoolers.length > 0) {
+          let activeBatteryId = newLifeSupport.activeBatteryId;
+          let batteries = [...newLifeSupport.batteries];
+
+          const totalPowerPerSec = activeCoolers.reduce((sum, c) => {
+            const cfg = COOLER_CONFIGS[c.type];
+            return sum + (cfg.modeConfigs[c.mode]?.powerPerMin ?? 0) / 60;
+          }, 0);
+
+          if (totalPowerPerSec > 0) {
+            let activeBat = activeBatteryId ? batteries.find((b) => b.id === activeBatteryId) : null;
+            if (!activeBat || activeBat.currentCharge <= 0) {
+              const next = batteries.find((b) => b.currentCharge > 0);
+              if (next) {
+                activeBatteryId = next.id;
+                activeBat = next;
+                changed = true;
+              }
+            }
+
+            if (activeBat && activeBat.currentCharge > 0) {
+              const drain = totalPowerPerSec * deltaSec;
+              const newCharge = Math.max(0, activeBat.currentCharge - drain);
+              batteries = batteries.map((b) =>
+                b.id === activeBat!.id ? { ...b, currentCharge: newCharge } : b
+              );
+
+              if (newCharge <= 0) {
+                const batCfg = BATTERY_CONFIGS[activeBat.type];
+                if (batCfg.maxRecharges > 0) {
+                  activeBatteryId = null;
+                } else {
+                  batteries = batteries.filter((b) => b.id !== activeBat!.id);
+                  activeBatteryId = null;
+                }
+              }
+              changed = true;
+            }
+          }
+
+          newLifeSupport = { ...newLifeSupport, batteries, activeBatteryId };
+        }
+
+        if (needsOxygen) {
+          let oxygenTanks = [...newLifeSupport.oxygenTanks];
+          let activeOxygenId = newLifeSupport.activeOxygenTankId;
+
+          const oxygenPerSec = 0.5;
+          let activeTank = activeOxygenId ? oxygenTanks.find((t) => t.id === activeOxygenId) : null;
+
+          if (!activeTank || activeTank.currentOxygen <= 0) {
+            const next = oxygenTanks.find((t) => t.currentOxygen > 0);
+            if (next) {
+              activeOxygenId = next.id;
+              activeTank = next;
+              changed = true;
+            }
+          }
+
+          if (activeTank && activeTank.currentOxygen > 0) {
+            const newOxy = Math.max(0, activeTank.currentOxygen - oxygenPerSec * deltaSec);
+            oxygenTanks = oxygenTanks.map((t) =>
+              t.id === activeTank!.id ? { ...t, currentOxygen: newOxy } : t
+            );
+
+            if (newOxy <= 0) {
+              oxygenTanks = oxygenTanks.filter((t) => t.id !== activeTank!.id);
+              activeOxygenId = null;
+            }
+            changed = true;
+          }
+
+          newLifeSupport = { ...newLifeSupport, oxygenTanks, activeOxygenTankId: activeOxygenId };
+        }
+
+        if (genActive) {
+          const fuelBurned = (GENERATOR_FUEL_PER_MIN / 60) * deltaSec;
+          const newFuel = Math.max(0, newLifeSupport.generator.fuelLiters - fuelBurned);
+
+          let batteries = [...newLifeSupport.batteries];
+          const lithiumIds = newLifeSupport.generator.lithiumBatteryIds;
+          if (lithiumIds.length > 0 && newFuel > 0) {
+            const chargePerBattery = lithiumIds.length === 1 ? 5 / 60 : 2.5 / 60;
+            let batChanged = false;
+            batteries = batteries.map((b) => {
+              if (!lithiumIds.includes(b.id)) return b;
+              if (b.currentCharge >= b.capacity) return b;
+              const newCharge = Math.min(b.capacity, b.currentCharge + chargePerBattery * deltaSec);
+              if (newCharge !== b.currentCharge) {
+                batChanged = true;
+                return { ...b, currentCharge: newCharge };
+              }
+              return b;
+            });
+            if (batChanged) {
+              newLifeSupport = { ...newLifeSupport, batteries };
+              changed = true;
+            }
+          }
+
+          newLifeSupport = {
+            ...newLifeSupport,
+            generator: {
+              ...newLifeSupport.generator,
+              fuelLiters: newFuel,
+              active: newFuel > 0,
+            },
+          };
+          changed = true;
+        }
+
+        return changed ? { ...prev, lifeSupport: newLifeSupport } : prev;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const value: GameContextValue = {
     state,
     notifications,
@@ -2210,6 +2686,37 @@ export function GameProvider({ children }: { children: ReactNode }) {
     unlockSlot6,
     isSlotUnlocked,
     totalItemEffects,
+    unlockedMines,
+    isMineUnlocked,
+    startMineUnlock,
+    speedUpMineUnlock,
+    checkMineUnlockRequirements,
+    upgradeEquipment,
+    purchaseEquipment,
+    purchaseRespiratorFilter,
+    purchaseCartStation,
+    purchaseRails,
+    purchaseWoodenBracing,
+    highestUnlockedMine,
+    craftItem,
+    buyMaterialSlot,
+    buyCanister,
+    buyFuel,
+    buyOxygenTank,
+    buyBattery,
+    buyCooler,
+    toggleCooler,
+    setCoolerMode,
+    repairCooler,
+    buyGenerator,
+    toggleGenerator,
+    refuelGenerator,
+    insertLithiumBattery,
+    removeLithiumBattery,
+    buyShelf,
+    sellCanister,
+    usedWarehouseSpace,
+    totalWarehouseSpace,
   };
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

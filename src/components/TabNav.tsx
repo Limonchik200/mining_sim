@@ -1,6 +1,6 @@
 import { useGame } from '@/context/GameContext';
 import type { Tab } from '@/types';
-import { Pickaxe, ShoppingCart, TrendingUp, Compass, Settings, Lock } from 'lucide-react';
+import { Pickaxe, ShoppingCart, TrendingUp, Compass, Settings, Lock, Backpack } from 'lucide-react';
 
 export default function TabNav() {
   const { activeTab, setActiveTab, t, state } = useGame();
@@ -9,6 +9,7 @@ export default function TabNav() {
     { id: 'mining', icon: Pickaxe, label: t('tabMining') },
     { id: 'shop', icon: ShoppingCart, label: t('tabShop') },
     { id: 'upgrades', icon: TrendingUp, label: t('tabUpgrades') },
+    { id: 'equipment', icon: Backpack, label: t('tabEquipment') },
     { id: 'expeditions', icon: Compass, label: t('tabExpeditions'), locked: state.level < 3 },
     { id: 'settings', icon: Settings, label: t('tabSettings') },
   ];

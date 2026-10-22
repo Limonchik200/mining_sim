@@ -15,8 +15,9 @@ export default function DailyCalendar() {
 
   const dc = state.dailyCalendar || { lastClaimDay: 0, lastClaimTimestamp: null };
   const now = Date.now();
-  const nextDay = dc.lastClaimDay + 1;
-  const canClaim = nextDay <= DAILY_REWARDS.length &&
+  const cycleDay = dc.lastClaimDay > DAILY_REWARDS.length ? DAILY_REWARDS.length : dc.lastClaimDay;
+  const nextDay = cycleDay >= DAILY_REWARDS.length ? 1 : cycleDay + 1;
+  const canClaim =
     (!dc.lastClaimTimestamp || now - dc.lastClaimTimestamp >= 20 * 3600 * 1000);
 
   const timeUntilCanClaim = dc.lastClaimTimestamp
@@ -24,7 +25,7 @@ export default function DailyCalendar() {
     : 0;
   const secondsUntilClaim = Math.floor(timeUntilCanClaim / 1000);
 
-  const cycleComplete = dc.lastClaimDay >= DAILY_REWARDS.length;
+  const cycleReset = dc.lastClaimDay >= DAILY_REWARDS.length;
 
   return (
     <div className="card p-4">
@@ -33,7 +34,7 @@ export default function DailyCalendar() {
           <Calendar className="w-5 h-5 text-accent-500" />
           {t('dailyCalendar')}
         </h3>
-        {!canClaim && !cycleComplete && timeUntilCanClaim > 0 && (
+        {!canClaim && timeUntilCanClaim > 0 && (
           <span className="text-xs text-neutral-400 flex items-center gap-1 tabular-nums">
             <Clock className="w-3.5 h-3.5" />
             {t('nextRewardIn')} {formatTime(secondsUntilClaim)}
@@ -44,9 +45,9 @@ export default function DailyCalendar() {
       <div className="grid grid-cols-7 gap-1.5 mb-3">
         {DAILY_REWARDS.map((reward, idx) => {
           const dayNum = idx + 1;
-          const isClaimed = dayNum <= dc.lastClaimDay;
+          const isClaimed = cycleReset ? false : dayNum <= dc.lastClaimDay;
           const isNext = dayNum === nextDay && canClaim;
-          const isLocked = dayNum > nextDay;
+          const isLocked = cycleReset ? dayNum > 1 : dayNum > nextDay;
 
           return (
             <div
@@ -79,10 +80,13 @@ export default function DailyCalendar() {
         })}
       </div>
 
-      {cycleComplete ? (
-        <div className="text-center text-xs text-neutral-400 py-2">
-          {lang === 'ru' ? 'Все награды получены! Обновление завтра.' : (lang === 'uk' ? 'Усі нагороди отримано! Оновлення завтра.' : 'All rewards claimed! Resets tomorrow.')}
-        </div>
+      {cycleReset && canClaim ? (
+        <button
+          onClick={claimDailyReward}
+          className="btn-primary w-full py-2 text-sm"
+        >
+          {lang === 'ru' ? 'Начать новый цикл' : (lang === 'uk' ? 'Почати новий цикл' : 'Start new cycle')}
+        </button>
       ) : (
         <button
           onClick={claimDailyReward}

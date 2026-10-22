@@ -3,15 +3,16 @@ import {
   ENERGY_REGEN_SECONDS,
   BASE_AUTO_DIG_INTERVAL_MS,
   BASE_AUTO_BASKET_MAX,
+  MINES,
 } from './minesConfig';
 import { progressionCost } from '@/config';
 
 export const UPGRADE_CONFIG = {
   activeLeaseMult: { baseCost: 40, maxLevel: 100, stepPerLevel: 0.01 },
   autoLeaseMult: { baseCost: 50, maxLevel: 100, stepPerLevel: 0.01 },
-  autoCooldown: { baseCost: 15, reductionPerLevel: 0.04, minCooldown: 4.0, maxLevel: 150 },
-  basketCap: { baseCost: 25, maxLevel: 30 },
-  caseChance: { baseCost: 18, maxLevel: 40 },
+  autoCooldown: { baseCost: 15, reductionPerLevel: 0.04, minCooldown: 1.0, maxLevel: 150 },
+  basketCap: { baseCost: 35, maxLevel: 120 },
+  caseChance: { baseCost: 18, maxLevel: 200 },
   energyMax: { baseCost: 30, maxLevel: 30, bonusPerLevel: 50 },
   energyRegen: { baseCost: 25, maxLevel: 30, reductionPerLevel: 1, minRegenSeconds: 10 },
   energyRegenAmount: { baseCost: 50, maxLevel: 20, bonusPerLevel: 0.5 },
@@ -42,7 +43,11 @@ export function getBasketCapCost(currentLevel: number): number {
 }
 
 export function getBasketCapValue(currentLevel: number): number {
-  return BASE_AUTO_BASKET_MAX * Math.pow(2, currentLevel);
+  if (!Number.isFinite(currentLevel) || currentLevel <= 0) return Math.floor(BASE_AUTO_BASKET_MAX);
+  if (currentLevel <= 15) {
+    return Math.floor(50 + (currentLevel - 1) * 30);
+  }
+  return Math.floor(470 * Math.pow(1.06, currentLevel - 15));
 }
 
 export function getCaseChanceCost(currentLevel: number): number {
@@ -81,8 +86,11 @@ export function getBackpackCost(currentLevel: number): number {
 }
 
 export function getBackpackWeightLimit(currentLevel: number): number {
-  const cfg = UPGRADE_CONFIG.backpack;
-  return Math.round(BASE_BACKPACK_WEIGHT_LIMIT * Math.pow(1 + cfg.bonusPerLevel, currentLevel) * 100) / 100;
+  if (!Number.isFinite(currentLevel) || currentLevel <= 0) return Math.floor(BASE_BACKPACK_WEIGHT_LIMIT);
+  if (currentLevel <= 15) {
+    return Math.floor(100 + (currentLevel - 1) * 50);
+  }
+  return Math.floor(800 * Math.pow(1.06, currentLevel - 15));
 }
 
 export const ENERGY_UPGRADE_DIAMOND_THRESHOLD = 5;
@@ -97,4 +105,52 @@ export function isEnergyUpgradeDiamond(level: number): boolean {
 
 export function xpForLevel(level: number): number {
   return 50 * (level * level) + 50 * level - 50;
+}
+
+export type EquipmentType =
+  | 'helmet'
+  | 'flashlight'
+  | 'gloves'
+  | 'respirator'
+  | 'lighting'
+  | 'ventilation';
+
+export interface EquipmentConfig {
+  purchasePrice: number;
+  upgradeBasePrice: number;
+  maxLevel: number;
+}
+
+export const EQUIPMENT_CONFIG: Record<EquipmentType, EquipmentConfig> = {
+  helmet:     { purchasePrice: 50,   upgradeBasePrice: 30,   maxLevel: 10 },
+  flashlight: { purchasePrice: 150,  upgradeBasePrice: 90,   maxLevel: 10 },
+  gloves:     { purchasePrice: 1400, upgradeBasePrice: 800,  maxLevel: 5 },
+  respirator: { purchasePrice: 2500, upgradeBasePrice: 1500, maxLevel: 5 },
+  lighting:   { purchasePrice: 1200, upgradeBasePrice: 800,  maxLevel: 10 },
+  ventilation:{ purchasePrice: 0,    upgradeBasePrice: 150,  maxLevel: 10 },
+};
+
+export const RESPIRATOR_FILTER_PRICE = 5000;
+export const CART_STATION_PRICE = 2000;
+export const RAIL_UNIT_PRICE = 350;
+export const WOODEN_BRACING_UNIT_PRICE = 600;
+
+export function equipmentUpgradeCost(type: EquipmentType, currentLevel: number): number {
+  const cfg = EQUIPMENT_CONFIG[type];
+  const L = Math.max(0, currentLevel);
+  return Math.round(cfg.upgradeBasePrice * (1 + L * 0.8 + Math.pow(L, 1.65)) * 100) / 100;
+}
+
+export function equipmentMaxLevelForMine(type: EquipmentType, highestUnlockedMine: number): number {
+  const mine = MINES.find((m) => m.id === highestUnlockedMine);
+  if (!mine?.unlockRequirements) return EQUIPMENT_CONFIG[type].maxLevel;
+  const req = mine.unlockRequirements;
+  switch (type) {
+    case 'helmet':      return req.helmetLevel ?? 0;
+    case 'flashlight':  return req.flashlightLevel ?? 0;
+    case 'gloves':      return req.glovesLevel ?? 0;
+    case 'respirator':  return req.respiratorLevel ?? 0;
+    case 'lighting':    return req.lightingLevel ?? 0;
+    case 'ventilation': return req.ventilationLevel ?? 0;
+  }
 }

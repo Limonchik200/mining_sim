@@ -1,4 +1,4 @@
-export type ResourceType = 'stone' | 'coal' | 'copper' | 'iron';
+export type ResourceType = 'stone' | 'coal' | 'copper' | 'iron' | 'silver' | 'gold';
 export type CaseRarity = 'common' | 'rare' | 'epic' | 'legendary' | 'energy';
 
 export interface Resource {

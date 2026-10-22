@@ -61,7 +61,7 @@ export const ITEM_TYPES: Record<ItemType, ItemTypeInfo> = {
   },
   basket: {
     type: 'basket',
-    nameUk: 'Кошик',
+    nameUk: 'Корзинка',
     nameEn: 'Basket',
     nameRu: 'Корзина',
     icon: 'ShoppingBasket',

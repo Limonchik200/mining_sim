@@ -4,6 +4,7 @@ export type Tab = 'mining' | 'shop' | 'upgrades' | 'expeditions' | 'settings';
 export type TimeUnit = 'seconds' | 'minutes' | 'hours';
 
 import type { OwnedItem, EquippedItems, ItemEffect } from './items';
+import type { FuelState, MaterialsShopState, LifeSupportState } from './craft';
 
 export interface UpgradeState {
   activeLeaseMult: number;
@@ -17,6 +18,25 @@ export interface UpgradeState {
   backpackLvl?: number;
 }
 
+export interface EquipmentUpgradeState {
+  helmetLevel: number;
+  flashlightLevel: number;
+  glovesLevel: number;
+  respiratorLevel: number;
+  respiratorFilterPurchased: boolean;
+  lightingLevel: number;
+  ventilationLevel: number;
+  railsCount: number;
+  cartStationPurchased: boolean;
+  woodenBracingCount: number;
+}
+
+export interface MineUnlockTimer {
+  mineId: number;
+  startedAt: number;
+  durationMs: number;
+}
+
 export interface GameState {
   balance: number;
   gems: number;
@@ -25,7 +45,7 @@ export interface GameState {
   activePickaxe: import('./inventory').InventoryItem | null;
   activePickaxeTierId: string;
   sparePickaxes: import('./inventory').InventoryItem[];
-  inventory: Record<import('./inventory').ResourceType, { mass: number; count: number }>;
+  inventory: Record<string, { mass: number; count: number }>;
   autoBasket: import('./inventory').AutoBasketItem[];
   autoBasketMax: number;
 
@@ -51,6 +71,10 @@ export interface GameState {
   itemBags: number;
 
   upgrades: UpgradeState;
+  equipment: EquipmentUpgradeState;
+  unlockedMines: number[];
+  mineUnlockTimers: MineUnlockTimer[];
+  ownedEquipment: string[];
 
   starterGiftClaimed: boolean;
   redeemedPromoCodes: string[];
@@ -75,6 +99,11 @@ export interface GameState {
   ownedItems: OwnedItem[];
   equippedItems: EquippedItems;
   slot6Unlocked: boolean;
+
+  craftInventory: Record<string, number>;
+  fuel: FuelState;
+  materialsShop: MaterialsShopState;
+  lifeSupport: LifeSupportState;
 
   lastSavedAt: number;
 }

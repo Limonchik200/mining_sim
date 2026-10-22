@@ -41,6 +41,9 @@ export default function BackpackModal() {
 
   const unopenedCount = state.cases.filter((c) => !c.opened).length;
 
+  const safeWeight = Number.isFinite(currentBackpackWeight) ? currentBackpackWeight : 0;
+  const safeLimit = Number.isFinite(currentBackpackLimit) ? currentBackpackLimit : 100;
+
   if (!backpackOpen) return null;
 
   const handleOpenOne = (caseId: string) => {
@@ -107,20 +110,20 @@ export default function BackpackModal() {
                   <Weight className="w-3.5 h-3.5 text-warning-500" />
                   {t('backpackWeight')}
                 </span>
-                <span className={`text-xs font-bold ${currentBackpackWeight >= currentBackpackLimit ? 'text-error-500' : 'text-neutral-600 dark:text-neutral-400'}`}>
-                  {currentBackpackWeight.toFixed(2)} / {currentBackpackLimit.toFixed(2)} kg
+                <span className={`text-xs font-bold ${safeWeight >= safeLimit ? 'text-error-500' : 'text-neutral-600 dark:text-neutral-400'}`}>
+                  {safeWeight.toFixed(2)} / {safeLimit.toFixed(2)} kg
                 </span>
               </div>
               <div className="h-2.5 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-300 ${
-                    currentBackpackWeight >= currentBackpackLimit
+                    safeWeight >= safeLimit
                       ? 'bg-error-500'
-                      : currentBackpackWeight >= currentBackpackLimit * 0.8
+                      : safeWeight >= safeLimit * 0.8
                       ? 'bg-warning-500'
                       : 'bg-success-500'
                   }`}
-                  style={{ width: `${Math.min(100, (currentBackpackWeight / currentBackpackLimit) * 100)}%` }}
+                  style={{ width: `${Math.min(100, safeLimit > 0 ? (safeWeight / safeLimit) * 100 : 0)}%` }}
                 />
               </div>
             </div>
@@ -222,28 +225,6 @@ export default function BackpackModal() {
                               </button>
                             </div>
                           )}
-
-                          {!isExpanded && group.length > 1 && (
-                            <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 z-50 hidden group-hover:block pointer-events-none">
-                              <div className="card p-3 min-w-[180px] shadow-xl">
-                                <div className="text-xs font-bold mb-2" style={{ color: rarity.color }}>
-                                  {name}
-                                </div>
-                                <div className="space-y-1">
-                                  {lootTable.map((entry, idx) => (
-                                    <div key={idx} className="flex items-center justify-between text-[11px] gap-2">
-                                      <span className="text-neutral-600 dark:text-neutral-300">
-                                        {lang === 'ru' ? entry.labelRu : (lang === 'uk' ? entry.label : entry.labelEn)}
-                                      </span>
-                                      <span className="font-bold text-neutral-700 dark:text-neutral-200">
-                                        {entry.chance}%
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            </div>
-                          )}
                         </div>
                       </div>
                     );
@@ -314,8 +295,10 @@ export default function BackpackModal() {
 
                 {RESOURCE_LIST.map((res) => {
                   const entry = state.inventory[res.type];
+                  const safeMass = entry && Number.isFinite(entry.mass) ? entry.mass : 0;
+                  const safeCount = entry && Number.isFinite(entry.count) ? entry.count : 0;
                   const name = lang === 'ru' ? res.nameRu : (lang === 'uk' ? res.nameUk : res.nameEn);
-                  const value = entry.mass * res.pricePerKg;
+                  const value = safeMass * res.pricePerKg;
                   return (
                     <div
                       key={res.type}
@@ -331,7 +314,7 @@ export default function BackpackModal() {
                         <div>
                           <span className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">{name}</span>
                           <span className="text-xs text-neutral-400 ml-1.5">
-                            {formatMass(entry.mass)} · {entry.count} {t('items')}
+                            {formatMass(safeMass)} · {safeCount} {t('items')}
                           </span>
                         </div>
                       </div>

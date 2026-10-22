@@ -1,6 +1,9 @@
 import { useState, useMemo, useRef } from 'react';
 import { useGame } from '@/context/GameContext';
 import type { TimeUnit, ResourceType } from '@/types';
+import MaterialsShopSection from '@/components/MaterialsShopSection';
+import FuelStationSection from '@/components/FuelStationSection';
+import LifeSupportSection from '@/components/LifeSupportSection';
 import {
   STARTER_GIFT_SECONDS,
   FOOD_ITEMS,
@@ -104,7 +107,9 @@ export default function ShopTab() {
   };
 
   const dailyStreakDays = state.dailyCalendar?.lastClaimDay || 0;
-  const canClaimDaily = dailyStreakDays < 7 &&
+  const cycleReset = dailyStreakDays >= 7;
+  const displayDay = cycleReset ? 0 : dailyStreakDays;
+  const canClaimDaily =
     (!state.dailyCalendar?.lastClaimTimestamp || Date.now() - state.dailyCalendar.lastClaimTimestamp >= 20 * 3600 * 1000);
 
   const calculateDailyReward = (day: number) => {
@@ -195,7 +200,7 @@ export default function ShopTab() {
                 {lang === 'ru' ? 'Ежедневный календарь' : (lang === 'uk' ? 'Щоденний календар' : 'Daily Calendar')}
               </h2>
               <div className="text-xs text-neutral-400">
-                {lang === 'ru' ? 'Серия:' : (lang === 'uk' ? 'Стрік:' : 'Streak:')} <span className="text-accent-500 font-bold">{dailyStreakDays} {lang === 'ru' ? 'дней' : (lang === 'uk' ? 'день' : 'days')}</span>
+                {lang === 'ru' ? 'Серия:' : (lang === 'uk' ? 'Стрік:' : 'Streak:')} <span className="text-accent-500 font-bold">{cycleReset ? 7 : dailyStreakDays} {lang === 'ru' ? 'дней' : (lang === 'uk' ? 'день' : 'days')}</span>
               </div>
             </div>
           </div>
@@ -204,14 +209,18 @@ export default function ShopTab() {
             disabled={!canClaimDaily}
             className={canClaimDaily ? "btn-accent px-4 py-2 text-xs" : "btn-ghost px-4 py-2 text-xs opacity-50 cursor-not-allowed"}
           >
-            {canClaimDaily ? (lang === 'ru' ? 'Забрать награду' : (lang === 'uk' ? 'Забрати нагороду' : 'Claim Reward')) : (lang === 'ru' ? 'Получено сегодня' : (lang === 'uk' ? 'Отримано сьогодні' : 'Claimed today'))}
+            {canClaimDaily
+              ? (cycleReset
+                ? (lang === 'ru' ? 'Новый цикл' : (lang === 'uk' ? 'Новий цикл' : 'New cycle'))
+                : (lang === 'ru' ? 'Забрать награду' : (lang === 'uk' ? 'Забрати нагороду' : 'Claim Reward')))
+              : (lang === 'ru' ? 'Получено сегодня' : (lang === 'uk' ? 'Отримано сьогодні' : 'Claimed today'))}
           </button>
         </div>
 
         <div className="grid grid-cols-7 gap-1.5 mt-3">
           {[1, 2, 3, 4, 5, 6, 7].map((day) => {
-            const isPassed = day < dailyStreakDays || (day === dailyStreakDays && !canClaimDaily);
-            const isCurrent = day === dailyStreakDays && canClaimDaily;
+            const isPassed = cycleReset ? false : (day < displayDay || (day === displayDay && !canClaimDaily));
+            const isCurrent = cycleReset ? day === 1 : (day === displayDay && canClaimDaily);
             const reward = calculateDailyReward(day);
             const rewardLabel = reward.type === 'cash'
               ? formatMoney(reward.amount)
@@ -530,6 +539,15 @@ export default function ShopTab() {
           })}
         </div>
       </div>
+
+      {/* Materials Shop */}
+      <MaterialsShopSection />
+
+      {/* Fuel Station */}
+      <FuelStationSection />
+
+      {/* Life Support Equipment */}
+      <LifeSupportSection />
 
       {/* Market */}
       <div className="card p-4">
