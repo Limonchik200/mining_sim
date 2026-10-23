@@ -23,7 +23,7 @@ const EQUIP_META: Record<EquipmentType, { icon: LucideIcon; color: string; nameR
 const EQUIP_ORDER: EquipmentType[] = ['helmet', 'flashlight', 'gloves', 'respirator', 'lighting', 'ventilation'];
 
 export default function EquipmentPanel() {
-  const { state, lang, t, upgradeEquipment, purchaseEquipment, purchaseRespiratorFilter, highestUnlockedMine } = useGame();
+  const { state, lang, t, upgradeEquipment, purchaseEquipment, purchaseRespiratorFilter, highestAccessibleMine } = useGame();
   const eq = state.equipment;
   const owned = state.ownedEquipment || [];
 
@@ -65,7 +65,7 @@ export default function EquipmentPanel() {
           const Icon = meta.icon;
           const isOwned = owned.includes(type) || cfg.purchasePrice === 0;
           const level = getLevel(type);
-          const maxForMine = equipmentMaxLevelForMine(type, highestUnlockedMine);
+          const maxForMine = equipmentMaxLevelForMine(type, highestAccessibleMine);
           const effectiveMax = Math.min(cfg.maxLevel, maxForMine);
           const isAbsoluteMax = level >= cfg.maxLevel;
           const isMineLocked = !isAbsoluteMax && level >= effectiveMax;
@@ -73,7 +73,7 @@ export default function EquipmentPanel() {
           const upgradeCost = equipmentUpgradeCost(type, level);
           const canAffordUpgrade = state.balance >= upgradeCost;
           const canAffordBuy = state.balance >= cfg.purchasePrice;
-          const nextMineReq = mineRequiredForNextEquipmentLevel(type, highestUnlockedMine);
+          const nextMineReq = mineRequiredForNextEquipmentLevel(type, highestAccessibleMine);
           const name = tr(meta.nameRu, meta.nameUk, meta.nameEn);
           const desc = tr(meta.descRu, meta.descUk, meta.descEn);
 

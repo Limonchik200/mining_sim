@@ -86,8 +86,8 @@ function GameApp() {
       </main>
 
       {/* Bottom tab nav */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-md border-t border-neutral-200 dark:border-neutral-800" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
-        <div className="max-w-2xl mx-auto px-3 py-2">
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 dark:bg-neutral-900/90 backdrop-blur-md border-t border-neutral-200 dark:border-neutral-800" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+        <div className="max-w-2xl mx-auto px-2 sm:px-3 py-1.5 sm:py-2">
           <TabNav />
         </div>
       </div>
@@ -101,7 +101,7 @@ function GameApp() {
       {/* Version badge */}
       <div className="fixed bottom-16 right-3 z-50 pointer-events-none select-none">
         <span className="text-[10px] font-mono font-semibold text-neutral-400 dark:text-neutral-600 bg-neutral-100/70 dark:bg-neutral-900/70 px-2 py-0.5 rounded-md backdrop-blur-sm">
-          V7.5.0
+          V7.5.3
         </span>
       </div>
     </div>

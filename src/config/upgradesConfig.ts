@@ -12,7 +12,7 @@ export const UPGRADE_CONFIG = {
   autoLeaseMult: { baseCost: 50, maxLevel: 100, stepPerLevel: 0.01 },
   autoCooldown: { baseCost: 15, reductionPerLevel: 0.04, minCooldown: 1.0, maxLevel: 150 },
   basketCap: { baseCost: 35, maxLevel: 120 },
-  caseChance: { baseCost: 18, maxLevel: 200 },
+  caseChance: { baseCost: 18, maxLevel: 250 },
   energyMax: { baseCost: 30, maxLevel: 30, bonusPerLevel: 50 },
   energyRegen: { baseCost: 25, maxLevel: 30, reductionPerLevel: 1, minRegenSeconds: 10 },
   energyRegenAmount: { baseCost: 50, maxLevel: 20, bonusPerLevel: 0.5 },

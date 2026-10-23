@@ -10,7 +10,7 @@ export default function FloatingQuickAccess() {
   const hasItems = state.ownedItems.length > 0 || state.itemBags > 0;
 
   return (
-    <div className="fixed left-3 z-40 flex flex-col items-start gap-2" style={{ bottom: 'calc(5rem + env(safe-area-inset-bottom, 0px))' }}>
+    <div className="fixed left-3 z-50 flex flex-col items-start gap-2" style={{ bottom: 'calc(5.5rem + env(safe-area-inset-bottom, 0px))' }}>
       {expanded && (
         <>
           {basketCount > 0 && (

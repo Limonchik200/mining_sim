@@ -103,6 +103,23 @@ export const PROMO_CODES: PromoCode[] = [
     messageEn: '+15 gems, 1 item bag, 10 scrolls, 1 rainbow stone!',
     messageRu: '+15 алмазов, 1 сумка, 10 свитков, 1 радужный камень!',
   },
+  {
+    code: 'industrial',
+    type: 'mixed',
+    gems: 25,
+    cases: [{ rarity: 'epic', count: 1 }],
+    messageUk: '+25 кристалів та 1 Епічний кейс!',
+    messageEn: '+25 gems and 1 Epic case!',
+    messageRu: '+25 кристаллов и 1 Эпический кейс!',
+  },
+  {
+    code: 'miner2026',
+    type: 'balance',
+    bonusBalance: 1000,
+    messageUk: '+$1000 на баланс!',
+    messageEn: '+$1000 to balance!',
+    messageRu: '+$1000 на баланс!',
+  },
 ];
 
 export function findPromoCode(code: string): PromoCode | null {

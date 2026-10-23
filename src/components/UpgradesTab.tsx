@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useGame } from '@/context/GameContext';
 import { formatMoney } from '@/config';
 import {
@@ -184,6 +184,10 @@ export default function UpgradesTab() {
 
   const [subTab, setSubTab] = useState<'upgrades' | 'craft' | 'equipment'>('upgrades');
 
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [subTab]);
+
   const subTabBtn = (tab: 'upgrades' | 'craft' | 'equipment', Icon: LucideIcon, label: string) => (
     <button
       onClick={() => setSubTab(tab)}
@@ -295,8 +299,8 @@ export default function UpgradesTab() {
           desc={t('upAutoCooldownDesc')}
           level={u.autoCooldownLvl}
           maxLevel={UPGRADE_CONFIG.autoCooldown.maxLevel}
-          currentValue={`${(getAutoCooldownMs(u.autoCooldownLvl) / 1000).toFixed(1)}s`}
-          nextValue={`${(getAutoCooldownMs(u.autoCooldownLvl + 1) / 1000).toFixed(1)}s`}
+          currentValue={`${getAutoCooldownMs(u.autoCooldownLvl) / 1000}s`}
+          nextValue={`${getAutoCooldownMs(u.autoCooldownLvl + 1) / 1000}s`}
           cost={getAutoCooldownCost(u.autoCooldownLvl)}
           canAfford={state.balance >= getAutoCooldownCost(u.autoCooldownLvl)}
           onUpgrade={upgradeAutoCooldown}

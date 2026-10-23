@@ -16,6 +16,8 @@ export interface AutoDigResult {
   notifications: Omit<Notification, 'id'>[];
 }
 
+const AUTO_DURABILITY_MULT = 1.15;
+
 export function processTick(
   prev: GameState,
   now: number,
@@ -133,7 +135,7 @@ export function processAutoDig(
     }
     totalDigs++;
 
-    const newDur = activePickaxe.durability - tier.durabilityCost;
+    const newDur = Math.round(activePickaxe.durability - tier.durabilityCost * AUTO_DURABILITY_MULT);
     if (newDur <= 0) {
       if (sparePickaxes.length > 0) {
         const spare = sparePickaxes[0];
@@ -241,7 +243,7 @@ export function processOfflineProgress(
       }
       digsDone++;
 
-      const newDur = next.activePickaxe.durability - tier.durabilityCost;
+      const newDur = Math.round(next.activePickaxe.durability - tier.durabilityCost * AUTO_DURABILITY_MULT);
       if (newDur <= 0) {
         if (next.sparePickaxes.length > 0) {
           const spare = next.sparePickaxes[0];

@@ -224,6 +224,7 @@ interface GameContextValue {
   purchaseRails: (count: number) => void;
   purchaseWoodenBracing: (count: number) => void;
   highestUnlockedMine: number;
+  highestAccessibleMine: number;
   craftItem: (recipeIndex: number) => void;
   buyMaterialSlot: (slotId: string) => void;
   buyCanister: () => void;
@@ -1804,6 +1805,27 @@ export function GameProvider({ children }: { children: ReactNode }) {
     return unlockedMines.reduce((max, id) => Math.max(max, id), 0);
   }, [unlockedMines]);
 
+  const highestAccessibleMine = useMemo(() => {
+    let best = highestUnlockedMine;
+    const eq = state.equipment;
+    for (const mine of MINES) {
+      if (mine.id <= best) continue;
+      const req = mine.unlockRequirements;
+      if (!req) continue;
+      const eqMet =
+        (!req.helmetLevel || eq.helmetLevel >= req.helmetLevel) &&
+        (!req.flashlightLevel || eq.flashlightLevel >= req.flashlightLevel) &&
+        (!req.glovesLevel || eq.glovesLevel >= req.glovesLevel) &&
+        (!req.respiratorLevel || eq.respiratorLevel >= req.respiratorLevel) &&
+        (!req.lightingLevel || eq.lightingLevel >= req.lightingLevel) &&
+        (!req.ventilationLevel || eq.ventilationLevel >= req.ventilationLevel) &&
+        (!req.cartStation || eq.cartStationPurchased) &&
+        state.level >= req.level;
+      if (eqMet && mine.id > best) best = mine.id;
+    }
+    return best;
+  }, [highestUnlockedMine, state.equipment, state.level]);
+
   const checkMineUnlockRequirements = useCallback((mineId: number) => {
     const mine = getMineById(mineId);
     const req = mine.unlockRequirements;
@@ -2000,7 +2022,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       type === 'respirator' ? eq.respiratorLevel :
       type === 'lighting' ? eq.lightingLevel :
       eq.ventilationLevel;
-    const maxForMine = equipmentMaxLevelForMine(type, highestUnlockedMine);
+    const maxForMine = equipmentMaxLevelForMine(type, highestAccessibleMine);
     const maxLevel = Math.min(EQUIPMENT_CONFIG[type].maxLevel, maxForMine);
     if (currentLevel >= maxLevel) {
       pushNotification({ message: lang === 'ru' ? 'Максимальный уровень' : (lang === 'uk' ? 'Максимальний рівень' : 'Max level reached'), type: 'error' });
@@ -2024,7 +2046,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
          'ventilationLevel']: currentLevel + 1,
       },
     }));
-  }, [highestUnlockedMine, pushNotification, lang, tr]);
+  }, [highestAccessibleMine, pushNotification, lang, tr]);
 
   const purchaseEquipment = useCallback((type: EquipmentType) => {
     const current = stateRef.current;
@@ -2033,9 +2055,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
       pushNotification({ message: lang === 'ru' ? 'Уже куплено' : (lang === 'uk' ? 'Вже куплено' : 'Already owned'), type: 'info' });
       return;
     }
-    const maxForMine = equipmentMaxLevelForMine(type, highestUnlockedMine);
+    const maxForMine = equipmentMaxLevelForMine(type, highestAccessibleMine);
     if (maxForMine < 1) {
-      const nextMine = mineRequiredForNextEquipmentLevel(type, highestUnlockedMine);
+      const nextMine = mineRequiredForNextEquipmentLevel(type, highestAccessibleMine);
       const mineMsg = nextMine ? (lang === 'ru' ? `Откройте шахту ${nextMine.mineId}` : (lang === 'uk' ? `Відкрийте шахту ${nextMine.mineId}` : `Unlock Mine ${nextMine.mineId}`)) : '';
       pushNotification({ message: lang === 'ru' ? `Недоступно. ${mineMsg}` : (lang === 'uk' ? `Недоступно. ${mineMsg}` : `Not available. ${mineMsg}`), type: 'error' });
       return;
@@ -2060,7 +2082,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       },
     }));
     pushNotification({ message: lang === 'ru' ? 'Куплено!' : (lang === 'uk' ? 'Куплено!' : 'Куплено!'), type: 'success' });
-  }, [highestUnlockedMine, pushNotification, lang, tr]);
+  }, [highestAccessibleMine, pushNotification, lang, tr]);
 
   const purchaseRespiratorFilter = useCallback(() => {
     const current = stateRef.current;
@@ -2826,6 +2848,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     purchaseRails,
     purchaseWoodenBracing,
     highestUnlockedMine,
+    highestAccessibleMine,
     craftItem,
     buyMaterialSlot,
     buyCanister,

@@ -25,6 +25,7 @@ import {
   Timer,
   ShoppingBag,
   ChevronRight,
+  AlertTriangle,
 } from 'lucide-react';
 
 export default function MiningTab() {
@@ -279,6 +280,13 @@ export default function MiningTab() {
             )}
           </div>
         </div>
+
+        {state.autoMiningEndsAt && autoMiningRemaining > 0 && (
+          <p className="text-[10px] text-neutral-400 dark:text-neutral-500 mb-3 flex items-center gap-1 italic">
+            <AlertTriangle className="w-3 h-3 text-warning-500 shrink-0" />
+            {lang === 'ru' ? 'Автоматический видобуток увеличивает знос инструмента на +15%' : (lang === 'uk' ? 'Автоматичний видобуток збільшує знос інструменту на +15%' : 'Auto-mining increases tool wear by +15%')}
+          </p>
+        )}
 
         <button
           onClick={collectBasket}
