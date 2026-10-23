@@ -2,13 +2,13 @@ import { useState, useEffect } from 'react';
 import { useGame } from '@/context/GameContext';
 import { formatMoney } from '@/config';
 import { getMineById, isDumpMine } from '@/config/minesConfig';
-import { getPickaxeTier, isUnlimitedDurability } from '@/config/pickaxesConfig';
+import { getPickaxeTier, isUnlimitedDurability, FOOD_ITEMS } from '@/config/pickaxesConfig';
 import { COOLER_CONFIGS, getCoolerDurabilityPct, getCoolerRemainingSec } from '@/config/coolerConfig';
 import { BATTERY_CONFIGS } from '@/config/batteryConfig';
 import { OXYGEN_TANK_CONFIGS } from '@/config/oxygenConfig';
 import { GENERATOR_LITHIUM_SLOTS } from '@/config/generatorConfig';
 import type { CoolerMode, BatteryInstance, OxygenTank, FuelCanister } from '@/types/craft';
-import { Power, Wrench, X, Plus, Minus } from 'lucide-react';
+import { Power, Wrench, X, Plus, Minus, Battery, Wind, Fuel, Candy, CupSoda, Cookie } from 'lucide-react';
 
 function formatRemaining(sec: number): string {
   if (sec <= 0) return '0s';
@@ -66,10 +66,11 @@ function buildShelfItems(ls: import('@/types/craft').LifeSupportState, canisters
   return shelves;
 }
 
-export default function MineRoomView({ onDigActivate }: { onDigActivate: () => void }) {
-  const { state, lang, buyShelf, toggleCooler, setCoolerMode, repairCooler, toggleGenerator, refuelGenerator, insertLithiumBattery, removeLithiumBattery, sellCanister, usedWarehouseSpace, totalWarehouseSpace, currentMineId } = useGame();
+export default function MineRoomView({ onOreVeinClick }: { onOreVeinClick: () => void }) {
+  const { state, lang, buyShelf, toggleCooler, setCoolerMode, repairCooler, toggleGenerator, refuelGenerator, insertLithiumBattery, removeLithiumBattery, sellCanister, usedWarehouseSpace, totalWarehouseSpace, currentMineId, eatFood } = useGame();
   const ls = state.lifeSupport;
   const [showCoolerModal, setShowCoolerModal] = useState(false);
+  const [showFoodModal, setShowFoodModal] = useState(false);
   const [warehouseOpen, setWarehouseOpen] = useState(false);
   const [, force] = useState(0);
 
@@ -95,7 +96,7 @@ export default function MineRoomView({ onDigActivate }: { onDigActivate: () => v
     ? ls.oxygenTanks.find((t) => t.id === ls.activeOxygenTankId)
     : ls.oxygenTanks.find((t) => t.currentOxygen > 0);
   const spareTanks = ls.oxygenTanks.filter((t) => t !== activeTank && t.currentOxygen > 0);
-  const needsOxygen = currentMineId >= 2;
+  const needsOxygen = currentMineId >= 3;
 
   const tier = getPickaxeTier(state.activePickaxeTierId);
   const isShovel = isUnlimitedDurability(state.activePickaxeTierId);
@@ -117,22 +118,26 @@ export default function MineRoomView({ onDigActivate }: { onDigActivate: () => v
   const shelfItems = buildShelfItems(ls, state.fuel.canisters);
   const foodCabinetCount = state.craftInventory?.food_cabinet ?? 0;
   const hasFoodCabinet = foodCabinetCount > 0;
+  const totalFoodCount = Object.values(state.foodInventory ?? {}).reduce((sum, n) => sum + n, 0);
 
   const coolerActive = activeCoolers.length > 0;
   const firstCooler = ls.coolers[0];
 
+  const totalCharge = ls.batteries.reduce((sum, b) => sum + b.currentCharge, 0);
+  const totalOxygen = ls.oxygenTanks.reduce((sum, t) => sum + t.currentOxygen, 0);
+  const totalDiesel = state.fuel.canisters.reduce((sum, c) => sum + c.currentFuel, 0);
+
   return (
     <>
-      {/* ============ MINE ROOM SCENE ============ */}
+      {/* ============ MINE ROOM SCENE — REDESIGNED ============ */}
       <div
         className="relative w-full rounded-2xl overflow-hidden shadow-2xl select-none"
         style={{
           minHeight: '440px',
           background: `
-            radial-gradient(ellipse at 50% 80%, rgba(40,35,30,0.5) 0%, transparent 70%),
-            radial-gradient(ellipse at 20% 30%, rgba(60,50,40,0.3) 0%, transparent 50%),
-            radial-gradient(ellipse at 80% 40%, rgba(50,45,40,0.3) 0%, transparent 50%),
-            linear-gradient(180deg, #1c1a17 0%, #2a2620 30%, #1e1c18 70%, #15130f 100%)
+            radial-gradient(ellipse at 50% 90%, rgba(60,52,42,0.5) 0%, transparent 70%),
+            radial-gradient(ellipse at 70% 20%, rgba(80,70,55,0.25) 0%, transparent 50%),
+            linear-gradient(180deg, #2e2a24 0%, #3a3528 20%, #2e2820 60%, #1f1c16 100%)
           `,
         }}
       >
@@ -151,162 +156,196 @@ export default function MineRoomView({ onDigActivate }: { onDigActivate: () => v
           }}
         />
 
-        {/* Cracks in stone */}
-        <div className="absolute inset-0 pointer-events-none" style={{
-          background: `
-            linear-gradient(105deg, transparent 48%, rgba(0,0,0,0.15) 49%, rgba(0,0,0,0.15) 49.5%, transparent 50%),
-            linear-gradient(75deg, transparent 68%, rgba(0,0,0,0.1) 69%, transparent 70%)
-          `,
-          backgroundSize: '200px 100%, 150px 100%',
-          backgroundPosition: '10% 30%, 70% 60%',
-          backgroundRepeat: 'no-repeat',
-        }} />
-
-        {/* ===== LEFT: TUNNEL + COOLER ===== */}
-        <div className="absolute left-0 top-0 bottom-0 w-[30%] sm:w-[26%]">
-          {/* Cooler - drawn as floor AC unit (LEFT side) */}
-          <div className="relative w-full flex justify-center" style={{ marginTop: '8px' }}>
-            {ls.coolers.length > 0 ? (
-              <button
-                onClick={() => setShowCoolerModal(true)}
-                className="relative transition-transform hover:scale-105"
-                style={{ width: '70px', height: '50px' }}
-              >
-                {/* AC unit body */}
-                <div className="absolute inset-0 rounded-md"
-                  style={{
-                    background: coolerActive
-                      ? 'linear-gradient(180deg, #1a4a5a 0%, #0d3040 50%, #082030 100%)'
-                      : 'linear-gradient(180deg, #3a3a3a 0%, #2a2a2a 50%, #1a1a1a 100%)',
-                    border: '1px solid rgba(0,0,0,0.4)',
-                    boxShadow: coolerActive
-                      ? '0 0 12px rgba(6,182,212,0.25), 0 3px 8px rgba(0,0,0,0.4)'
-                      : '0 3px 8px rgba(0,0,0,0.4)',
-                  }}>
-
-                  {/* Vent grille */}
-                  <div className="absolute top-1 left-1 right-1 bottom-3 rounded-sm overflow-hidden"
-                    style={{ background: 'rgba(0,0,0,0.3)' }}>
-                    {[0, 1, 2, 3].map((i) => (
-                      <div key={i} className="h-0.5 w-full"
-                        style={{
-                          marginTop: '2px',
-                          background: coolerActive ? 'rgba(6,182,212,0.2)' : 'rgba(255,255,255,0.04)',
-                        }} />
-                    ))}
-                  </div>
-
-                  {/* Status LED */}
-                  <div className="absolute bottom-1 right-1.5 w-1.5 h-1.5 rounded-full"
-                    style={{
-                      background: coolerActive ? '#22c55e' : '#525252',
-                      boxShadow: coolerActive ? '0 0 4px #22c55e' : 'none',
-                    }} />
-
-                  {/* Fan blades spinning when active */}
-                  {coolerActive && (
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full"
-                      style={{
-                        animation: 'spin 1.5s linear infinite',
-                        background: `conic-gradient(from 0deg, transparent, rgba(6,182,212,0.2), transparent, rgba(6,182,212,0.2), transparent)`,
-                      }} />
-                  )}
-                </div>
-
-                {/* Floor shadow */}
-                <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-12 h-1 rounded-full"
-                  style={{ background: 'rgba(0,0,0,0.3)', filter: 'blur(2px)' }} />
-
-                {/* Durability label */}
-                <div className="absolute -bottom-4 left-0 right-0 text-center">
-                  <span className="text-[7px] font-bold text-neutral-500">
-                    {coolerActive ? `${getCoolerDurabilityPct(firstCooler)}%` : tr('вимк', 'вимк', 'off')}
-                  </span>
-                </div>
-              </button>
-            ) : (
-              <div className="relative opacity-40" style={{ width: '60px', height: '40px' }}>
-                <div className="absolute inset-0 rounded-md"
-                  style={{ background: 'linear-gradient(180deg, #2a2a2a, #1a1a1a)', border: '1px dashed rgba(255,255,255,0.1)' }} />
-                <div className="absolute -bottom-4 left-0 right-0 text-center">
-                  <span className="text-[7px] text-neutral-700">{tr('немає', 'немає', 'none')}</span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Tunnel perspective */}
-          <div className="absolute inset-0 flex items-center justify-center pb-[120px]">
-            <div className="relative w-full h-[200px]" style={{ perspective: '250px' }}>
-              {/* Tunnel interior */}
+        {/* ===== DEEP TUNNEL PERSPECTIVE — full width backdrop ===== */}
+        <div className="absolute inset-0 pointer-events-none" style={{ perspective: '400px' }}>
+          {/* Tunnel walls converging to center-back */}
+          <div
+            className="absolute left-0 top-[10%] bottom-[25%] w-full"
+            style={{
+              transform: 'rotateX(0deg)',
+              background: `
+                linear-gradient(90deg,
+                  rgba(20,18,15,0.95) 0%,
+                  rgba(30,27,22,0.5) 15%,
+                  rgba(25,22,18,0.15) 40%,
+                  rgba(25,22,18,0.15) 60%,
+                  rgba(30,27,22,0.5) 85%,
+                  rgba(20,18,15,0.95) 100%
+                )
+              `,
+            }}
+          />
+          {/* Tunnel ceiling arch — darker at top, vanishing to center */}
+          <div
+            className="absolute left-0 right-0 top-0 h-[35%]"
+            style={{
+              background: `radial-gradient(ellipse at 50% 100%, transparent 10%, rgba(15,12,10,0.7) 40%, rgba(10,8,5,0.95) 100%)`,
+            }}
+          />
+          {/* Distant dark — the end of the tunnel */}
+          <div
+            className="absolute left-1/2 top-[20%] -translate-x-1/2 w-[40%] h-[50%] rounded-full"
+            style={{
+              background: 'radial-gradient(ellipse, rgba(5,4,3,0.9) 0%, transparent 70%)',
+            }}
+          />
+          {/* Support beams — going into perspective */}
+          {[0, 1, 2, 3].map((i) => {
+            const scale = 1 - i * 0.2;
+            const opacity = 0.4 - i * 0.08;
+            const left = 50 + (i * 8 - 12);
+            return (
               <div
-                className="absolute inset-x-2 top-0 bottom-0 rounded-t-2xl"
+                key={i}
+                className="absolute"
                 style={{
-                  transform: 'rotateX(20deg) rotateY(-8deg)',
-                  transformOrigin: 'bottom center',
-                  background: `
-                    linear-gradient(180deg,
-                      rgba(5,5,5,0.95) 0%,
-                      rgba(20,18,15,0.8) 40%,
-                      rgba(30,27,22,0.5) 100%
-                    )
-                  `,
-                  boxShadow: 'inset 0 8px 30px rgba(0,0,0,0.8), inset 0 -5px 15px rgba(0,0,0,0.5)',
+                  left: `${left}%`,
+                  top: `${15 + i * 5}%`,
+                  width: `${30 * scale}%`,
+                  height: `${60 * scale}%`,
+                  opacity,
+                  borderLeft: '2px solid #3d2b1f',
+                  borderRight: '2px solid #3d2b1f',
+                  borderTop: '3px solid #4a3220',
+                  borderRadius: '8px 8px 0 0',
+                  transform: `perspective(200px) rotateX(5deg)`,
                 }}
-              >
-                {/* Tunnel arch top */}
-                <div className="absolute top-0 left-0 right-0 h-8 rounded-t-2xl"
-                  style={{ background: 'linear-gradient(180deg, rgba(10,8,5,0.9), transparent)' }} />
+              />
+            );
+          })}
+        </div>
 
-                {/* Support beams - wooden */}
-                {[0, 1, 2].map((i) => (
-                  <div key={i} className="absolute left-0 right-0 flex items-center"
-                    style={{ top: `${15 + i * 28}%`, height: '3px' }}>
-                    {/* Left post */}
-                    <div className="w-1.5 h-full rounded-sm" style={{ background: 'linear-gradient(90deg, #3d2b1f, #5a3d2a, #3d2b1f)' }} />
-                    {/* Crossbeam */}
-                    <div className="flex-1 h-full" style={{ background: 'linear-gradient(180deg, #4a3220, #5a3d2a, #4a3220)' }} />
-                    {/* Right post */}
-                    <div className="w-1.5 h-full rounded-sm" style={{ background: 'linear-gradient(90deg, #3d2b1f, #5a3d2a, #3d2b1f)' }} />
-                  </div>
-                ))}
-
-                {/* Rails on floor */}
-                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
-                  <div className="w-0.5 h-16 rounded-sm" style={{ background: 'linear-gradient(180deg, #4a4a4a, #6a6a6a, #3a3a3a)' }} />
-                  <div className="w-0.5 h-16 rounded-sm" style={{ background: 'linear-gradient(180deg, #4a4a4a, #6a6a6a, #3a3a3a)' }} />
-                </div>
-                {/* Rail ties */}
-                {[0, 1, 2, 3].map((i) => (
-                  <div key={i} className="absolute left-1/2 -translate-x-1/2 w-3 h-1 rounded-sm"
-                    style={{ bottom: `${4 + i * 4}px`, background: '#3d2b1f' }} />
-                ))}
-
-                {/* Glowing lanterns */}
-                {[0, 1].map((i) => (
-                  <div key={i} className="absolute rounded-full"
-                    style={{
-                      left: `${20 + i * 55}%`,
-                      top: '20%',
-                      width: '8px',
-                      height: '8px',
-                      background: 'radial-gradient(circle, #fbbf24 0%, #f59e0b 40%, transparent 70%)',
-                      boxShadow: '0 0 12px 4px rgba(251,191,36,0.4), 0 0 24px 8px rgba(251,191,36,0.15)',
-                      animation: `flicker ${2 + i * 0.5}s ease-in-out infinite alternate`,
-                    }} />
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Food Cabinet - drawn as real furniture */}
-          <div className="absolute bottom-3 left-2 right-2">
+        {/* ===== RAILS ROAD — center-bottom going into tunnel ===== */}
+        <div className="absolute left-0 right-0 bottom-0 h-[120px] pointer-events-none" style={{ perspective: '300px' }}>
+          {/* Ground/floor */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background: 'linear-gradient(180deg, rgba(20,18,15,0.3) 0%, rgba(30,27,22,0.7) 100%)',
+              transform: 'rotateX(45deg)',
+              transformOrigin: 'bottom center',
+            }}
+          />
+          {/* Two rails converging toward tunnel */}
+          <div
+            className="absolute bottom-0 left-1/2 -translate-x-1/2"
+            style={{ width: '100%', height: '100px' }}
+          >
+            {/* Left rail */}
             <div
-              className={`relative rounded-md transition-all cursor-pointer ${hasFoodCabinet ? 'hover:scale-[1.02]' : 'opacity-60'}`}
-              style={{ height: '70px' }}
-              onClick={() => {}}
+              className="absolute"
+              style={{
+                bottom: '0',
+                left: '20%',
+                width: '60%',
+                height: '3px',
+                background: 'linear-gradient(90deg, #2a2a2a 0%, #6a6a6a 50%, #4a4a4a 100%)',
+                transform: 'perspective(200px) rotateX(55deg) scaleY(1.5)',
+                transformOrigin: 'bottom center',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.5)',
+              }}
+            />
+            {/* Right rail */}
+            <div
+              className="absolute"
+              style={{
+                bottom: '0',
+                left: '20%',
+                width: '60%',
+                height: '3px',
+                marginTop: '20px',
+                background: 'linear-gradient(90deg, #2a2a2a 0%, #6a6a6a 50%, #4a4a4a 100%)',
+                transform: 'perspective(200px) rotateX(55deg) scaleY(1.5) translateY(20px)',
+                transformOrigin: 'bottom center',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.5)',
+              }}
+            />
+            {/* Rail ties (sleepers) */}
+            {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+              const progress = i / 7;
+              const width = 50 + progress * 30;
+              const left = 50 - width / 2;
+              const bottom = progress * 80;
+              const scale = 0.4 + progress * 0.6;
+              return (
+                <div
+                  key={i}
+                  className="absolute rounded-sm"
+                  style={{
+                    left: `${left}%`,
+                    bottom: `${bottom}px`,
+                    width: `${width}%`,
+                    height: `${4 * scale}px`,
+                    background: `linear-gradient(180deg, #3d2b1f, #5a3d2a)`,
+                    opacity: 0.6 + progress * 0.3,
+                    transform: 'perspective(200px) rotateX(55deg)',
+                    transformOrigin: 'bottom center',
+                  }}
+                />
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ===== LEFT: COOLER + FOOD CABINET ===== */}
+        <div className="absolute left-0 top-0 bottom-0 w-[22%] z-10">
+          {/* Cooler */
+          ls.coolers.length > 0 ? (
+            <button
+              onClick={() => setShowCoolerModal(true)}
+              className="relative transition-transform hover:scale-105"
+              style={{ width: '60px', height: '44px', marginTop: '12px', marginLeft: '8px' }}
             >
-              {/* Cabinet body */}
+              <div className="absolute inset-0 rounded-md"
+                style={{
+                  background: coolerActive
+                    ? 'linear-gradient(180deg, #1a4a5a 0%, #0d3040 50%, #082030 100%)'
+                    : 'linear-gradient(180deg, #3a3a3a 0%, #2a2a2a 50%, #1a1a1a 100%)',
+                  border: '1px solid rgba(0,0,0,0.4)',
+                  boxShadow: coolerActive
+                    ? '0 0 12px rgba(6,182,212,0.25), 0 3px 8px rgba(0,0,0,0.4)'
+                    : '0 3px 8px rgba(0,0,0,0.4)',
+                }}>
+                <div className="absolute top-1 left-1 right-1 bottom-3 rounded-sm overflow-hidden"
+                  style={{ background: 'rgba(0,0,0,0.3)' }}>
+                  {[0, 1, 2, 3].map((i) => (
+                    <div key={i} className="h-0.5 w-full"
+                      style={{ marginTop: '2px', background: coolerActive ? 'rgba(6,182,212,0.2)' : 'rgba(255,255,255,0.04)' }} />
+                  ))}
+                </div>
+                <div className="absolute bottom-1 right-1.5 w-1.5 h-1.5 rounded-full"
+                  style={{
+                    background: coolerActive ? '#22c55e' : '#525252',
+                    boxShadow: coolerActive ? '0 0 4px #22c55e' : 'none',
+                  }} />
+                {coolerActive && (
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-4 h-4 rounded-full"
+                    style={{
+                      animation: 'spin 1.5s linear infinite',
+                      background: `conic-gradient(from 0deg, transparent, rgba(6,182,212,0.2), transparent, rgba(6,182,212,0.2), transparent)`,
+                    }} />
+                )}
+              </div>
+              <div className="absolute -bottom-4 left-0 right-0 text-center">
+                <span className="text-[7px] font-bold text-neutral-500">
+                  {coolerActive ? `${getCoolerDurabilityPct(firstCooler)}%` : tr('вимк', 'вимк', 'off')}
+                </span>
+              </div>
+            </button>
+          ) : (
+            <div className="relative opacity-40" style={{ width: '50px', height: '36px', marginTop: '12px', marginLeft: '8px' }}>
+              <div className="absolute inset-0 rounded-md"
+                style={{ background: 'linear-gradient(180deg, #2a2a2a, #1a1a1a)', border: '1px dashed rgba(255,255,255,0.1)' }} />
+            </div>
+          )}
+
+          {/* Food Cabinet */}
+          <div className="absolute bottom-3 left-2 right-2">
+            <button
+              onClick={() => setShowFoodModal(true)}
+              className="relative rounded-md transition-all w-full hover:opacity-100 hover:scale-105 cursor-pointer"
+              style={{ height: '60px' }}
+            >
               <div className="absolute inset-0 rounded-md"
                 style={{
                   background: hasFoodCabinet
@@ -315,94 +354,67 @@ export default function MineRoomView({ onDigActivate }: { onDigActivate: () => v
                   border: '1px solid rgba(0,0,0,0.3)',
                   boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.05), 0 2px 6px rgba(0,0,0,0.3)',
                 }}>
-                {/* Wood grain lines */}
-                <div className="absolute inset-0 rounded-md opacity-30"
-                  style={{
-                    background: `repeating-linear-gradient(90deg, transparent, transparent 8px, rgba(0,0,0,0.1) 8px, rgba(0,0,0,0.1) 9px)`,
-                  }} />
-
-                {/* Cabinet doors split */}
                 <div className="absolute top-0 bottom-0 left-1/2 w-px" style={{ background: 'rgba(0,0,0,0.4)' }} />
-
-                {/* Handles */}
                 <div className="absolute top-1/2 -translate-y-1/2 left-[40%] w-1 h-4 rounded-sm" style={{ background: '#8a7a5a' }} />
                 <div className="absolute top-1/2 -translate-y-1/2 right-[40%] w-1 h-4 rounded-sm" style={{ background: '#8a7a5a' }} />
-
-                {/* Top shelf line */}
-                <div className="absolute top-1/3 left-1 right-1 h-px" style={{ background: 'rgba(0,0,0,0.2)' }} />
-
-                {/* Food glow if has food */}
                 {hasFoodCabinet && (
-                  <div className="absolute inset-0 rounded-md"
-                    style={{ boxShadow: 'inset 0 0 8px rgba(34,197,94,0.15)' }} />
+                  <div className="absolute inset-0 rounded-md" style={{ boxShadow: 'inset 0 0 8px rgba(34,197,94,0.15)' }} />
                 )}
               </div>
-
-              {/* Label */}
               <div className="absolute -bottom-4 left-0 right-0 text-center">
-                <span className="text-[8px] font-bold text-neutral-500">{tr('Шафа їжі', 'Шафа їжі', 'Food Cabinet')}</span>
+                <span className="text-[8px] font-bold text-neutral-500">{tr('Шафа', 'Шафа', 'Cabinet')}</span>
               </div>
-            </div>
+            </button>
           </div>
         </div>
 
-        {/* ===== CENTER: WAREHOUSE DOOR ===== */}
-        <div className="absolute left-[30%] sm:left-[26%] right-[30%] sm:right-[26%] top-0 bottom-0 flex flex-col items-center justify-center">
+        {/* ===== CENTER: WAREHOUSE DOOR — integrated into tunnel wall, rails wrap around ===== */}
+        <div className="absolute left-[22%] right-[44%] top-[15%] bottom-[20%] flex flex-col items-center justify-center z-10">
           <button
             onClick={() => setWarehouseOpen(true)}
             className="group relative flex flex-col items-center transition-transform hover:scale-105"
-            style={{ filter: warehouseOpen ? 'brightness(1.3)' : 'none' }}
           >
             {/* Stone arch above door */}
-            <div className="relative">
-              {/* Arch top */}
-              <div className="w-[90px] h-[24px] mx-auto rounded-t-full"
-                style={{
-                  background: 'linear-gradient(180deg, #3a352d, #2e2920)',
-                  boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.03), 0 -2px 6px rgba(0,0,0,0.3)',
-                }} />
-
-              {/* Door frame */}
-              <div className="relative w-[80px] mx-auto rounded-b-md overflow-hidden"
-                style={{
-                  height: '120px',
-                  background: 'linear-gradient(180deg, #2a2520 0%, #1e1a15 100%)',
-                  border: '2px solid #3a3225',
-                  borderTop: 'none',
-                  boxShadow: 'inset 0 0 20px rgba(0,0,0,0.7), 0 4px 12px rgba(0,0,0,0.5)',
-                }}>
-
-                {/* Metal door panels */}
-                <div className="absolute inset-1 rounded-sm grid grid-cols-2 grid-rows-3 gap-0.5">
-                  {[0, 1, 2, 3, 4, 5].map((i) => (
-                    <div key={i} className="rounded-sm"
-                      style={{
-                        background: `linear-gradient(${135 + (i % 2) * 45}deg, #3d3528, #2a2418, #3d3528)`,
-                        border: '1px solid rgba(0,0,0,0.2)',
-                        boxShadow: 'inset 1px 1px 2px rgba(255,255,255,0.03)',
-                      }} />
-                  ))}
-                </div>
-
-                {/* Door handle */}
-                <div className="absolute top-1/2 right-1.5 w-2 h-2 rounded-full"
-                  style={{ background: 'radial-gradient(circle, #d4a843, #8a6f20)', boxShadow: '0 0 3px rgba(212,168,67,0.4)' }} />
-
-                {/* Warning sign on door */}
-                <div className="absolute top-2 left-1/2 -translate-x-1/2 w-5 h-3 rounded-sm flex items-center justify-center"
-                  style={{ background: 'rgba(251,146,60,0.15)', border: '1px solid rgba(251,146,60,0.3)' }}>
-                  <span className="text-[6px] font-bold text-orange-400/60">{tr('СКЛАД', 'СКЛАД', 'WH')}</span>
-                </div>
-
-                {/* Hover glow */}
-                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity rounded-sm"
-                  style={{ boxShadow: 'inset 0 0 15px rgba(251,191,36,0.15)' }} />
+            <div className="w-[80px] h-[20px] mx-auto rounded-t-full"
+              style={{
+                background: 'linear-gradient(180deg, #3a352d, #2e2920)',
+                boxShadow: 'inset 0 2px 4px rgba(255,255,255,0.03), 0 -2px 6px rgba(0,0,0,0.3)',
+              }} />
+            {/* Door frame — set into wall */}
+            <div className="relative w-[72px] mx-auto rounded-b-md overflow-hidden"
+              style={{
+                height: '110px',
+                background: 'linear-gradient(180deg, #2a2520 0%, #1e1a15 100%)',
+                border: '2px solid #3a3225',
+                borderTop: 'none',
+                boxShadow: 'inset 0 0 20px rgba(0,0,0,0.7), 0 4px 12px rgba(0,0,0,0.5)',
+              }}>
+              {/* Metal door panels */}
+              <div className="absolute inset-1 rounded-sm grid grid-cols-2 grid-rows-3 gap-0.5">
+                {[0, 1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="rounded-sm"
+                    style={{
+                      background: `linear-gradient(${135 + (i % 2) * 45}deg, #3d3528, #2a2418, #3d3528)`,
+                      border: '1px solid rgba(0,0,0,0.2)',
+                      boxShadow: 'inset 1px 1px 2px rgba(255,255,255,0.03)',
+                    }} />
+                ))}
               </div>
+              {/* Door handle */}
+              <div className="absolute top-1/2 right-1.5 w-2 h-2 rounded-full"
+                style={{ background: 'radial-gradient(circle, #d4a843, #8a6f20)', boxShadow: '0 0 3px rgba(212,168,67,0.4)' }} />
+              {/* Warning sign */}
+              <div className="absolute top-2 left-1/2 -translate-x-1/2 w-5 h-3 rounded-sm flex items-center justify-center"
+                style={{ background: 'rgba(251,146,60,0.15)', border: '1px solid rgba(251,146,60,0.3)' }}>
+                <span className="text-[6px] font-bold text-orange-400/60">{tr('СКЛАД', 'СКЛАД', 'WH')}</span>
+              </div>
+              {/* Hover glow */}
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity rounded-sm"
+                style={{ boxShadow: 'inset 0 0 15px rgba(251,191,36,0.15)' }} />
             </div>
-
             {/* Space indicator */}
             <div className="mt-2 flex flex-col items-center gap-0.5">
-              <div className="w-[70px] h-1 rounded-full bg-black/40 overflow-hidden">
+              <div className="w-[60px] h-1 rounded-full bg-black/40 overflow-hidden">
                 <div
                   className={`h-full transition-all ${usedSpace / totalSpace > 0.9 ? 'bg-red-500' : usedSpace / totalSpace > 0.7 ? 'bg-amber-500' : 'bg-green-500'}`}
                   style={{ width: `${Math.min(100, (usedSpace / totalSpace) * 100)}%` }}
@@ -413,70 +425,80 @@ export default function MineRoomView({ onDigActivate }: { onDigActivate: () => v
           </button>
         </div>
 
-        {/* ===== RIGHT: ORE VEIN ===== */}
-        <div className="absolute right-0 top-0 bottom-0 w-[30%] sm:w-[26%] flex flex-col items-center justify-between py-3">
-
-          {/* Ore vein - drawn as textured rock pile */}
+        {/* ===== RIGHT: ORE MOUNTAIN — compact, harmonious with tunnel ===== */}
+        <div className="absolute right-0 bottom-[80px] top-[20%] w-[34%] z-10 flex flex-col items-center justify-end">
           <button
-            onClick={onDigActivate}
-            disabled={!canDig}
-            className={`relative transition-transform ${canDig ? 'hover:scale-110 cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
-            style={{ marginTop: '20px' }}
+            onClick={onOreVeinClick}
+            className="relative transition-transform hover:scale-105 cursor-pointer w-full h-full flex items-center justify-center"
+            style={{ marginTop: '0' }}
           >
-            <div className="relative" style={{ width: '100px', height: '100px' }}>
-              {/* Main ore pile shape */}
-              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 rounded-t-full"
+            {/* Mountain shape — rising to the ceiling */}
+            <div className="relative w-full h-full flex items-end justify-center">
+              {/* Back layer — dark rock */}
+              <div className="absolute bottom-0 right-0 left-0"
                 style={{
-                  width: '90px',
-                  height: '70px',
+                  height: '60%',
                   background: `
-                    radial-gradient(ellipse at 30% 40%, ${oreColor} 0%, ${oreSecondary} 50%, #2a2520 100%)
+                    radial-gradient(ellipse at 60% 100%, ${oreSecondary} 0%, #2a2520 40%, #1a1510 100%)
                   `,
-                  borderRadius: '45px 45px 8px 8px',
+                  clipPath: 'polygon(15% 100%, 0% 100%, 0% 20%, 30% 5%, 55% 0%, 80% 10%, 100% 5%, 100% 100%, 85% 100%)',
+                }}
+              />
+              {/* Front layer — ore-rich rock */}
+              <div className="absolute bottom-0 right-0 left-0"
+                style={{
+                  height: '50%',
+                  background: `
+                    radial-gradient(ellipse at 50% 80%, ${oreColor} 0%, ${oreSecondary} 35%, #2a2520 70%, #1a1510 100%)
+                  `,
+                  clipPath: 'polygon(10% 100%, 0% 100%, 0% 30%, 20% 10%, 45% 0%, 70% 15%, 100% 5%, 100% 100%, 90% 100%)',
                   boxShadow: canDig
-                    ? `0 0 20px 2px ${oreColor}30, 0 4px 12px rgba(0,0,0,0.5)`
-                    : '0 4px 12px rgba(0,0,0,0.5)',
-                }}>
-
-                {/* Ore specks - shiny bits */}
-                {[0, 1, 2, 3, 4].map((i) => (
+                    ? `inset 0 0 40px ${oreColor}30`
+                    : 'inset 0 0 20px rgba(0,0,0,0.5)',
+                }}
+              >
+                {/* Ore specks — shiny bits */}
+                {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
                   <div key={i} className="absolute rounded-sm"
                     style={{
                       width: `${2 + (i % 3)}px`,
                       height: `${2 + (i % 3)}px`,
-                      left: `${15 + i * 18}%`,
-                      top: `${20 + (i % 4) * 15}%`,
+                      left: `${10 + i * 11}%`,
+                      top: `${15 + (i % 5) * 15}%`,
                       background: oreColor,
                       opacity: 0.8,
                       boxShadow: `0 0 4px ${oreColor}80`,
                     }} />
                 ))}
-
                 {/* Texture lines */}
-                <div className="absolute inset-0 rounded-t-full opacity-20"
+                <div className="absolute inset-0 opacity-15"
                   style={{
-                    background: `repeating-linear-gradient(45deg, transparent, transparent 6px, rgba(0,0,0,0.2) 6px, rgba(0,0,0,0.2) 7px)`,
+                    background: `repeating-linear-gradient(55deg, transparent, transparent 8px, rgba(0,0,0,0.2) 8px, rgba(0,0,0,0.2) 9px)`,
                   }} />
               </div>
 
-              {/* Base shadow */}
-              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-20 h-2 rounded-full"
-                style={{ background: 'rgba(0,0,0,0.4)', filter: 'blur(3px)' }} />
-
               {/* Glow when diggable */}
               {canDig && (
-                <div className="absolute inset-0 rounded-full animate-pulse pointer-events-none"
-                  style={{ boxShadow: `0 0 25px 5px ${oreColor}20` }} />
+                <div className="absolute inset-0 pointer-events-none animate-pulse"
+                  style={{ boxShadow: `inset 0 0 60px ${oreColor}15` }} />
               )}
 
-              {/* Floating particles when digging */}
+              {/* Click hint */}
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20">
+                <div className="text-[10px] font-bold text-neutral-400 bg-black/50 px-2 py-1 rounded-lg flex items-center gap-1 animate-pulse">
+                  {tr('Копать', 'Копати', 'Dig')}
+                  <span className="text-[8px]">→</span>
+                </div>
+              </div>
+
+              {/* Floating particles when can dig */}
               {canDig && [0, 1, 2, 3].map((i) => (
                 <div key={i} className="absolute rounded-full pointer-events-none"
                   style={{
                     width: '3px',
                     height: '3px',
-                    left: `${30 + i * 15}%`,
-                    bottom: `${40 + (i % 2) * 20}px`,
+                    left: `${20 + i * 20}%`,
+                    bottom: `${30 + (i % 2) * 25}px`,
                     background: oreColor,
                     opacity: 0.6,
                     animation: `float-up ${2 + i * 0.3}s ease-out infinite`,
@@ -488,7 +510,7 @@ export default function MineRoomView({ onDigActivate }: { onDigActivate: () => v
         </div>
 
         {/* ===== HUD: Top-left (temperature + oxygen) ===== */}
-        <div className="absolute top-2 left-2 flex flex-col gap-1 z-10">
+        <div className="absolute top-2 left-2 flex flex-col gap-1 z-20">
           {/* Temperature */}
           <div className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5"
             style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)', border: '1px solid rgba(255,255,255,0.06)' }}>
@@ -518,7 +540,7 @@ export default function MineRoomView({ onDigActivate }: { onDigActivate: () => v
         </div>
 
         {/* ===== HUD: Top-right (balance + gems) ===== */}
-        <div className="absolute top-2 right-2 flex flex-col gap-1 z-10 items-end">
+        <div className="absolute top-2 right-2 flex flex-col gap-1 z-20 items-end">
           <div className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5"
             style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)', border: '1px solid rgba(255,255,255,0.06)' }}>
             <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: '#22c55e', boxShadow: '0 0 4px #22c55e60' }} />
@@ -531,31 +553,24 @@ export default function MineRoomView({ onDigActivate }: { onDigActivate: () => v
           </div>
         </div>
 
-        {/* ===== HUD: Bottom-right (energy + pickaxe, only when can dig) ===== */}
-        {canDig && (
-          <div className="absolute bottom-2 right-2 flex flex-col gap-1 z-10 items-end">
-            <div className="flex items-center gap-2 rounded-lg px-2.5 py-1.5"
-              style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)', border: '1px solid rgba(255,255,255,0.06)' }}>
-              <span className="text-[9px] font-bold text-amber-400 uppercase">{tr('Енерг', 'Енерг', 'Eng')}</span>
-              <div className="w-16 h-1.5 rounded-full bg-black/50 overflow-hidden">
-                <div className="h-full bg-amber-400" style={{ width: `${(state.energy / (state.maxEnergy || 300)) * 100}%` }} />
-              </div>
-              <span className="text-[10px] font-bold text-neutral-200 tabular-nums">{Math.floor(state.energy)}</span>
-            </div>
-            <div className="flex items-center gap-2 rounded-lg px-2.5 py-1.5"
-              style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(6px)', border: '1px solid rgba(255,255,255,0.06)' }}>
-              <span className="text-[9px] font-bold text-orange-400 uppercase">{tr('Кирка', 'Кирка', 'Pck')}</span>
-              {!isShovel && state.activePickaxe && (
-                <div className="w-16 h-1.5 rounded-full bg-black/50 overflow-hidden">
-                  <div className="h-full bg-orange-400" style={{ width: `${(state.activePickaxe.durability / state.activePickaxe.maxDurability) * 100}%` }} />
-                </div>
-              )}
-              <span className="text-[10px] font-bold text-neutral-200 tabular-nums">
-                {isShovel ? '∞' : state.activePickaxe?.durability ?? 0}
-              </span>
-            </div>
+        {/* ===== HUD: Bottom bar (total charge, oxygen, diesel) ===== */}
+        <div className="absolute bottom-2 left-2 right-2 flex items-center justify-center gap-2 z-20">
+          <div className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5"
+            style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <Battery className="w-3 h-3 text-green-400 shrink-0" />
+            <span className="text-[10px] font-bold text-green-400 tabular-nums">{totalCharge.toFixed(0)}МВт</span>
           </div>
-        )}
+          <div className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5"
+            style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <Wind className="w-3 h-3 text-cyan-400 shrink-0" />
+            <span className="text-[10px] font-bold text-cyan-400 tabular-nums">{totalOxygen.toFixed(0)}Л</span>
+          </div>
+          <div className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5"
+            style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <Fuel className="w-3 h-3 text-orange-400 shrink-0" />
+            <span className="text-[10px] font-bold text-orange-400 tabular-nums">{totalDiesel.toFixed(0)}Л</span>
+          </div>
+        </div>
 
         {/* CSS keyframes */}
         <style>{`
@@ -587,7 +602,6 @@ export default function MineRoomView({ onDigActivate }: { onDigActivate: () => v
             }}
             onClick={(e) => e.stopPropagation()}>
 
-            {/* Stone texture for warehouse interior */}
             <div className="absolute inset-0 opacity-20 pointer-events-none"
               style={{
                 backgroundImage: `radial-gradient(circle at 30% 20%, rgba(80,70,60,0.1) 1px, transparent 2px), radial-gradient(circle at 70% 60%, rgba(90,80,70,0.1) 1px, transparent 2px)`,
@@ -612,25 +626,19 @@ export default function MineRoomView({ onDigActivate }: { onDigActivate: () => v
 
             {/* Warehouse room with shelves */}
             <div className="relative p-4 space-y-3" style={{ minHeight: '300px' }}>
-
-              {/* Shelves with physical items */}
               <div className="space-y-3">
                 {Array.from({ length: Math.min(shelfCount, 6) }).map((_, shelfIdx) => {
                   const items = shelfItems[shelfIdx] || [];
                   return (
                     <div key={shelfIdx} className="relative">
-                      {/* Shelf board */}
                       <div className="relative h-[36px] rounded-sm flex items-end gap-0.5 px-1.5 pb-0.5"
                         style={{
                           background: 'linear-gradient(180deg, #4a3825 0%, #3d2e1c 60%, #2e2215 100%)',
                           border: '1px solid rgba(0,0,0,0.3)',
                           boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.04), 0 2px 4px rgba(0,0,0,0.3)',
                         }}>
-                        {/* Shelf brackets */}
                         <div className="absolute -left-1 top-0 w-1 h-full rounded-l-sm" style={{ background: '#3d2e1c' }} />
                         <div className="absolute -right-1 top-0 w-1 h-full rounded-r-sm" style={{ background: '#3d2e1c' }} />
-
-                        {/* Items on shelf */}
                         {items.length === 0 ? (
                           <div className="flex-1 flex items-center justify-center">
                             <span className="text-[8px] text-neutral-700">{tr('порожньо', 'порожньо', 'empty')}</span>
@@ -642,8 +650,6 @@ export default function MineRoomView({ onDigActivate }: { onDigActivate: () => v
                     </div>
                   );
                 })}
-
-                {/* Empty shelf slots */}
                 {Array.from({ length: 6 - Math.min(shelfCount, 6) }).map((_, i) => (
                   <div key={`empty-${i}`} className="h-[36px] rounded-sm border border-dashed border-white/5 flex items-center justify-center">
                     <span className="text-[8px] text-neutral-700">{tr('— порожній слот —', '— порожній слот —', '— empty slot —')}</span>
@@ -665,7 +671,6 @@ export default function MineRoomView({ onDigActivate }: { onDigActivate: () => v
                       {ls.generator.active ? tr('Стоп', 'Стоп', 'Stop') : tr('Старт', 'Старт', 'Start')}
                     </button>
                   </div>
-                  {/* Fuel gauge */}
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-[10px] text-neutral-500 w-8">{tr('Паливо', 'Паливо', 'Fuel')}</span>
                     <div className="flex-1 h-2 rounded-full bg-black/40 overflow-hidden">
@@ -678,8 +683,6 @@ export default function MineRoomView({ onDigActivate }: { onDigActivate: () => v
                     <Plus className="w-2.5 h-2.5 inline mr-0.5" />
                     {tr('Заправити з каністр', 'Заправити з каністр', 'Refuel from canisters')}
                   </button>
-
-                  {/* Lithium slots */}
                   <div className="mt-2 grid grid-cols-2 gap-1.5">
                     {Array.from({ length: GENERATOR_LITHIUM_SLOTS }).map((_, slotIdx) => {
                       const batteryId = ls.generator.lithiumBatteryIds[slotIdx];
@@ -767,7 +770,6 @@ export default function MineRoomView({ onDigActivate }: { onDigActivate: () => v
                       </span>
                     </div>
 
-                    {/* Durability bar */}
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-[9px] text-neutral-500 w-12">{tr('Міцність', 'Міцність', 'Durability')}</span>
                       <div className="flex-1 h-1.5 rounded-full bg-black/40 overflow-hidden">
@@ -776,7 +778,6 @@ export default function MineRoomView({ onDigActivate }: { onDigActivate: () => v
                       <span className="text-[9px] text-neutral-400 tabular-nums w-16 text-right">{pct}% · {formatRemaining(remaining)}</span>
                     </div>
 
-                    {/* Action buttons */}
                     <div className="flex gap-1.5">
                       {isBroken ? (
                         <button onClick={() => repairCooler(cooler.id)} disabled={state.balance < cfg.repairPrice}
@@ -792,7 +793,6 @@ export default function MineRoomView({ onDigActivate }: { onDigActivate: () => v
                       )}
                     </div>
 
-                    {/* Mode switcher */}
                     {cfg.hasModes && !isBroken && (
                       <div className="flex gap-1 mt-2">
                         {cfg.modes.map((m) => {
@@ -820,6 +820,82 @@ export default function MineRoomView({ onDigActivate }: { onDigActivate: () => v
           </div>
         </div>
       )}
+
+      {/* ============ FOOD CABINET MODAL ============ */}
+      {showFoodModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3"
+          style={{ background: 'rgba(0,0,0,0.8)' }}
+          onClick={() => setShowFoodModal(false)}>
+          <div className="relative w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"
+            style={{
+              background: 'linear-gradient(180deg, #1e1c18 0%, #2a2620 50%, #1e1c18 100%)',
+              border: '1px solid rgba(255,255,255,0.05)',
+            }}
+            onClick={(e) => e.stopPropagation()}>
+
+            <div className="flex items-center justify-between p-4 border-b border-white/5">
+              <span className="text-sm font-bold text-neutral-300">{tr('Шафа з їжею', 'Шафа з їжею', 'Food Cabinet')}</span>
+              <button onClick={() => setShowFoodModal(false)} className="text-neutral-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-2">
+              {!hasFoodCabinet && (
+                <div className="text-center py-3 mb-2 rounded-lg" style={{ background: 'rgba(251,146,60,0.1)', border: '1px solid rgba(251,146,60,0.2)' }}>
+                  <span className="text-xs text-orange-400 font-medium">
+                    {tr('Шафи немає. Ліміт зберігання їжі: 5 шт.', 'Шафи немає. Ліміт зберігання їжі: 5 шт.', 'No cabinet purchased. Food storage limit: 5 items.')}
+                  </span>
+                </div>
+              )}
+              <div className="flex items-center justify-between text-xs mb-2 px-1">
+                <span className="text-neutral-500">{tr('Зберігання їжі', 'Зберігання їжі', 'Food storage')}</span>
+                <span className="font-bold text-neutral-300">
+                  {totalFoodCount} / {hasFoodCabinet ? 100 : 5} {tr('шт.', 'шт.', 'pcs.')}
+                </span>
+              </div>
+              {FOOD_ITEMS.map((food) => {
+                const count = state.foodInventory?.[food.id] ?? 0;
+                const name = lang === 'ru' ? food.nameRu : (lang === 'uk' ? food.nameUk : food.nameEn);
+                const Icon = food.id === 'snickers' ? Candy : food.id === 'juice' ? CupSoda : Cookie;
+                return (
+                  <div key={food.id}
+                    className="flex items-center justify-between rounded-lg p-3"
+                    style={{ background: count > 0 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.04)' }}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ backgroundColor: food.color + '20' }}>
+                        <Icon className="w-4 h-4" style={{ color: food.color }} />
+                      </div>
+                      <div>
+                        <div className="text-xs font-bold text-neutral-200">{name}</div>
+                        <div className="text-[10px] text-neutral-500">
+                          {food.energyBoost > 0 && <span>+{food.energyBoost} {tr('енергія', 'енергія', 'energy')} </span>}
+                          {food.regenMultiplier > 1 && <span>×{food.regenMultiplier} {tr('реген', 'реген', 'regen')}</span>}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-bold ${count > 0 ? 'text-accent-400' : 'text-neutral-600'}`}>×{count}</span>
+                      <button
+                        onClick={() => eatFood(food.id)}
+                        disabled={count <= 0}
+                        className={`text-[10px] px-3 py-1.5 rounded-lg font-bold ${count > 0 ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' : 'bg-neutral-700 text-neutral-600 cursor-not-allowed'}`}>
+                        {tr('З\'їсти', 'З\'їсти', 'Eat')}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {FOOD_ITEMS.every((f) => (state.foodInventory?.[f.id] ?? 0) === 0) && (
+                <div className="text-center py-6 text-neutral-600 text-xs">
+                  {tr('Шафа порожня. Купіть їжу в магазині.', 'Шафа порожня. Купіть їжу в магазині.', 'Cabinet is empty. Buy food in the shop.')}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -829,16 +905,13 @@ function ShelfItemVisual({ item }: { item: ShelfItem }) {
   if (item.kind === 'generator') {
     return (
       <div className="relative shrink-0 rounded-sm" style={{ width: item.w, height: item.h }}>
-        {/* Generator body */}
         <div className="absolute inset-0 rounded-sm"
           style={{
             background: 'linear-gradient(180deg, #d97316 0%, #b8530f 50%, #8a3d0a 100%)',
             border: '1px solid rgba(0,0,0,0.3)',
             boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.1)',
           }} />
-        {/* Top vent */}
         <div className="absolute top-0.5 left-0.5 right-0.5 h-0.5 rounded-sm" style={{ background: 'rgba(0,0,0,0.3)' }} />
-        {/* Fuel cap */}
         <div className="absolute top-1 right-0.5 w-1 h-1 rounded-full" style={{ background: '#333' }} />
       </div>
     );
@@ -848,19 +921,15 @@ function ShelfItemVisual({ item }: { item: ShelfItem }) {
     const chargePct = item.max > 0 ? (item.charge / item.max) * 100 : 0;
     return (
       <div className="relative shrink-0 rounded-sm" style={{ width: item.w, height: item.h }}>
-        {/* Battery body */}
         <div className="absolute inset-0 rounded-sm"
           style={{
             background: `linear-gradient(180deg, ${item.color}cc 0%, ${item.color}88 50%, ${item.color}44 100%)`,
             border: '1px solid rgba(0,0,0,0.3)',
             boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.1)',
           }} />
-        {/* Terminal top */}
         <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-1 h-0.5 rounded-sm" style={{ background: '#888' }} />
-        {/* Charge indicator fill */}
         <div className="absolute bottom-0 left-0 right-0 rounded-b-sm transition-all"
           style={{ height: `${chargePct}%`, background: `${item.color}60` }} />
-        {/* Label line */}
         <div className="absolute top-1/3 left-0 right-0 h-px" style={{ background: 'rgba(0,0,0,0.15)' }} />
       </div>
     );
@@ -870,7 +939,6 @@ function ShelfItemVisual({ item }: { item: ShelfItem }) {
     const oxygenPct = item.max > 0 ? (item.oxygen / item.max) * 100 : 0;
     return (
       <div className="relative shrink-0" style={{ width: item.w, height: item.h }}>
-        {/* Tank body - cylindrical */}
         <div className="absolute inset-0 rounded-sm"
           style={{
             background: `linear-gradient(90deg, ${item.color}aa 0%, ${item.color}66 30%, ${item.color}aa 60%, ${item.color}44 100%)`,
@@ -878,9 +946,7 @@ function ShelfItemVisual({ item }: { item: ShelfItem }) {
             border: '1px solid rgba(0,0,0,0.3)',
             boxShadow: 'inset 0 0 2px rgba(255,255,255,0.1)',
           }} />
-        {/* Valve cap */}
         <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-1.5 h-1 rounded-t-sm" style={{ background: '#666' }} />
-        {/* Oxygen level fill from bottom */}
         <div className="absolute bottom-0 left-0 right-0 rounded-b-sm transition-all"
           style={{ height: `${oxygenPct}%`, background: `${item.color}40` }} />
       </div>
@@ -890,7 +956,6 @@ function ShelfItemVisual({ item }: { item: ShelfItem }) {
   if (item.kind === 'canister') {
     return (
       <div className="relative shrink-0 rounded-sm" style={{ width: item.w, height: item.h }}>
-        {/* Canister body */}
         <div className="absolute inset-0 rounded-sm"
           style={{
             background: item.empty
@@ -900,10 +965,8 @@ function ShelfItemVisual({ item }: { item: ShelfItem }) {
             boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.08)',
             opacity: item.empty ? 0.6 : 1,
           }} />
-        {/* Cap */}
         <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 w-2 h-0.5 rounded-sm"
           style={{ background: item.empty ? '#333' : '#1a1a1a' }} />
-        {/* Handle */}
         <div className="absolute top-0.5 left-0.5 w-1 h-1 rounded-sm border"
           style={{ borderColor: 'rgba(0,0,0,0.3)', background: item.empty ? '#444' : '#a8530f' }} />
       </div>

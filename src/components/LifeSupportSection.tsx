@@ -16,7 +16,7 @@ function formatRemaining(sec: number): string {
 }
 
 export default function LifeSupportSection() {
-  const { state, lang, t, buyOxygenTank, buyBattery, buyCooler, toggleCooler, setCoolerMode, repairCooler, buyGenerator, toggleGenerator, refuelGenerator, insertLithiumBattery, removeLithiumBattery, buyShelf, usedWarehouseSpace, totalWarehouseSpace } = useGame();
+  const { state, lang, t, buyOxygenTank, buyBattery, buyCooler, toggleCooler, setCoolerMode, switchCooler, repairCooler, buyGenerator, toggleGenerator, refuelGenerator, insertLithiumBattery, removeLithiumBattery, buyShelf, usedWarehouseSpace, totalWarehouseSpace } = useGame();
   const ls = state.lifeSupport;
 
   const tr = (ru: string, uk: string, en: string) => lang === 'ru' ? ru : (lang === 'uk' ? uk : en);
@@ -140,7 +140,7 @@ export default function LifeSupportSection() {
           const cfg = COOLER_CONFIGS[type];
           const owned = ls.coolers.filter((c) => c.type === type);
           const canAfford = state.balance >= cfg.price;
-          const hasCooler = ls.coolers.length > 0;
+          const typeOwned = owned.length > 0;
           return (
             <div key={type} className="rounded-xl p-3 bg-neutral-50 dark:bg-neutral-850/50 border border-neutral-200 dark:border-neutral-800">
               <div className="flex items-center justify-between mb-2">
@@ -152,16 +152,15 @@ export default function LifeSupportSection() {
                     <div className="text-sm font-bold text-neutral-800 dark:text-neutral-200">{tr(cfg.nameRu, cfg.nameUk, cfg.nameEn)}</div>
                     <div className="text-xs text-neutral-400">
                       {cfg.modeConfigs.normal.tempReduction}°C · {cfg.modeConfigs.normal.powerPerMin}МВт/хв
-                      {owned.length > 0 && <span className="ml-1.5 text-success-500">×{owned.length}</span>}
                     </div>
                   </div>
                 </div>
                 <button
                   onClick={() => buyCooler(type)}
-                  disabled={!canAfford || hasCooler}
-                  className={canAfford && !hasCooler ? 'btn-primary px-3 py-1.5 text-xs whitespace-nowrap' : 'btn-ghost px-3 py-1.5 text-xs opacity-50 cursor-not-allowed'}
+                  disabled={!canAfford || typeOwned}
+                  className={canAfford && !typeOwned ? 'btn-primary px-3 py-1.5 text-xs whitespace-nowrap' : 'btn-ghost px-3 py-1.5 text-xs opacity-50 cursor-not-allowed'}
                 >
-                  {hasCooler ? tr('Куплено', 'Куплено', 'Owned') : formatMoney(cfg.price)}
+                  {typeOwned ? tr('Куплено', 'Куплено', 'Owned') : formatMoney(cfg.price)}
                 </button>
               </div>
 
@@ -170,12 +169,13 @@ export default function LifeSupportSection() {
                 const remaining = getCoolerRemainingSec(cooler);
                 const modeCfg = cfg.modeConfigs[cooler.mode];
                 const isBroken = cooler.durability <= 0;
+                const isActive = ls.activeCoolerId === cooler.id && cooler.active;
                 return (
-                  <div key={cooler.id} className="mt-2 p-2 rounded-lg bg-white dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700">
+                  <div key={cooler.id} className={`mt-2 p-2 rounded-lg bg-white dark:bg-neutral-800/50 border ${isActive ? 'border-success-500/40' : 'border-neutral-200 dark:border-neutral-700'}`}>
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-2">
-                        <span className={`text-xs font-bold ${isBroken ? 'text-error-500' : cooler.active ? 'text-success-500' : 'text-neutral-400'}`}>
-                          {isBroken ? tr('Сломан', 'Зламаний', 'Broken') : cooler.active ? tr('Включён', 'Увімкнений', 'Active') : tr('Выключен', 'Вимкнений', 'Off')}
+                        <span className={`text-xs font-bold ${isBroken ? 'text-error-500' : isActive ? 'text-success-500' : 'text-neutral-400'}`}>
+                          {isBroken ? tr('Сломан', 'Зламаний', 'Broken') : isActive ? tr('Активен', 'Активний', 'Active') : tr('Выключен', 'Вимкнений', 'Off')}
                         </span>
                         {!isBroken && <span className="text-[10px] text-neutral-400">{pct}% · {formatRemaining(remaining)}</span>}
                       </div>
@@ -185,9 +185,14 @@ export default function LifeSupportSection() {
                             <Wrench className="w-3 h-3 inline mr-0.5" />
                             {tr('Ремонт', 'Ремонт', 'Repair')} {formatMoney(cfg.repairPrice)}
                           </button>
-                        ) : (
-                          <button onClick={() => toggleCooler(cooler.id)} className={`btn px-2 py-1 text-[10px] rounded-md ${cooler.active ? 'bg-error-500/20 text-error-500' : 'bg-success-500/20 text-success-500'}`}>
+                        ) : isActive ? (
+                          <button onClick={() => toggleCooler(cooler.id)} className="btn px-2 py-1 text-[10px] rounded-md bg-error-500/20 text-error-500">
                             <Power className="w-3 h-3 inline" />
+                          </button>
+                        ) : (
+                          <button onClick={() => switchCooler(cooler.id)} className="btn px-2 py-1 text-[10px] rounded-md bg-success-500/20 text-success-500">
+                            <Power className="w-3 h-3 inline mr-0.5" />
+                            {tr('Включить', 'Увімкнути', 'Switch')}
                           </button>
                         )}
                       </div>

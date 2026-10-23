@@ -96,19 +96,18 @@ export function processAutoDig(
   const elapsedSinceDig = now - next.lastAutoDigAt;
   const yieldCount = Math.max(1, tier.yieldMultiplier);
 
+  const currentMass = next.autoBasket.reduce((s, it) => s + it.mass, 0);
+
   if (
     elapsedSinceDig < autoCooldown ||
-    next.autoBasket.length >= basketCap ||
+    currentMass >= basketCap ||
     !next.activePickaxe ||
     next.activePickaxe.durability < tier.durabilityCost
   ) {
     return state;
   }
 
-  const missedDigs = Math.min(
-    Math.floor(elapsedSinceDig / autoCooldown),
-    Math.ceil((basketCap - next.autoBasket.length) / yieldCount)
-  );
+  const missedDigs = Math.floor(elapsedSinceDig / autoCooldown);
   let basket = [...next.autoBasket];
   let basketCases = [...next.autoBasketCases];
   let activePickaxe = { ...next.activePickaxe };
@@ -118,17 +117,19 @@ export function processAutoDig(
   let gems = next.gems;
   let totalGemsEarned = next.totalGemsEarned;
 
+  let basketMass = currentMass;
   for (let i = 0; i < missedDigs; i++) {
-    if (basket.length >= basketCap) break;
+    if (basketMass >= basketCap) break;
     if (!activePickaxe || activePickaxe.durability < tier.durabilityCost) {
       pickaxeBroken = true;
       break;
     }
 
-    for (let j = 0; j < yieldCount && basket.length < basketCap; j++) {
+    for (let j = 0; j < yieldCount && basketMass < basketCap; j++) {
       const resource = getRandomResourceForMine(next.autoLeaseMineId || 1);
       const mass = Math.round(getRandomMass(resource) * 100) / 100;
       basket.push({ resource: resource.type, mass, xp: resource.xp, timestamp: now });
+      basketMass += mass;
     }
     totalDigs++;
 
@@ -171,7 +172,7 @@ export function processAutoDig(
   if (pickaxeBroken && !sparePickaxes.length) {
     pushNotification({ message: tr('notifNoSparePickaxe'), type: 'error' });
   }
-  if (next.autoBasket.length >= basketCap) {
+  if (basketMass >= basketCap) {
     pushNotification({ message: tr('notifBasketFull'), type: 'warning' });
   }
 
@@ -225,14 +226,16 @@ export function processOfflineProgress(
     let basketCases = [...next.autoBasketCases];
     let digsDone = 0;
     const tier = getPickaxeTier(next.activePickaxeTierId);
+    let basketMass = basket.reduce((s, it) => s + it.mass, 0);
 
-    for (let i = 0; i < maxDigs && basket.length < basketCap; i++) {
+    for (let i = 0; i < maxDigs && basketMass < basketCap; i++) {
       if (!next.activePickaxe || next.activePickaxe.durability < tier.durabilityCost) break;
 
-      for (let j = 0; j < yieldCount && basket.length < basketCap; j++) {
+      for (let j = 0; j < yieldCount && basketMass < basketCap; j++) {
         const resource = getRandomResourceForMine(next.autoLeaseMineId || 1);
         const mass = Math.round(getRandomMass(resource) * 100) / 100;
         basket.push({ resource: resource.type, mass, xp: resource.xp, timestamp: now });
+        basketMass += mass;
       }
       digsDone++;
 

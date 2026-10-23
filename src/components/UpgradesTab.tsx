@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useGame } from '@/context/GameContext';
 import { formatMoney } from '@/config';
 import {
@@ -40,6 +40,7 @@ import {
   Backpack,
   Hammer,
   HardHat,
+  Mountain,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -75,12 +76,26 @@ function UpgradeCard({
   useDiamonds,
 }: UpgradeCardProps) {
   const isMaxed = maxLevel !== undefined && level >= maxLevel;
+  const [burst, setBurst] = useState(false);
+
+  const handleUpgrade = () => {
+    onUpgrade();
+    setBurst(true);
+    setTimeout(() => setBurst(false), 600);
+  };
 
   return (
-    <div className="rounded-xl p-4 bg-neutral-50 dark:bg-neutral-850/50 border border-neutral-200 dark:border-neutral-800">
+    <div
+      className={`relative rounded-xl p-4 bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-850/50 dark:to-neutral-900/50 border border-neutral-200 dark:border-neutral-800 transition-all duration-300 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/5 ${burst ? 'animate-upgrade-burst' : ''}`}
+    >
+      {burst && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <Sparkles className="w-8 h-8 text-amber-400 animate-fade-scale" />
+        </div>
+      )}
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: iconColor + '20' }}>
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center transition-transform duration-300 hover:scale-110" style={{ backgroundColor: iconColor + '20' }}>
             <Icon className="w-5 h-5" style={{ color: iconColor }} />
           </div>
           <div>
@@ -110,15 +125,17 @@ function UpgradeCard({
       </div>
 
       {isMaxed ? (
-        <div className="w-full py-2 text-sm font-semibold text-center rounded-xl bg-success-500/10 text-success-500 flex items-center justify-center gap-1.5">
-          <Lock className="w-4 h-4" />
+        <div className="w-full py-2 text-sm font-bold text-center rounded-xl bg-success-500/10 text-success-500 flex items-center justify-center gap-1.5 border border-success-500/20">
+          <Sparkles className="w-4 h-4" />
           {t('maxLevelReached')}
         </div>
       ) : (
         <button
-          onClick={onUpgrade}
+          onClick={handleUpgrade}
           disabled={!canAfford}
-          className="btn-primary w-full py-2 text-sm flex items-center justify-center gap-1.5"
+          className={`btn-primary w-full py-2 text-sm flex items-center justify-center gap-1.5 transition-all duration-200 hover:shadow-md hover:shadow-amber-500/20 active:scale-95 ${
+            !canAfford ? 'opacity-50 cursor-not-allowed' : ''
+          }`}
         >
           <ChevronUp className="w-4 h-4" />
           {t('buyUpgrade')} ·{' '}
@@ -172,8 +189,8 @@ export default function UpgradesTab() {
       onClick={() => setSubTab(tab)}
       className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
         subTab === tab
-          ? 'bg-primary-500 text-white'
-          : 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'
+          ? 'bg-primary-500 text-white shadow-md shadow-primary-500/20'
+          : 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800'
       }`}
     >
       <Icon className="w-4 h-4 inline mr-1.5" />
@@ -339,7 +356,7 @@ export default function UpgradesTab() {
         />
       </div>
 
-      {/* Section 4: Energy */}
+      {/* Section 5: Energy */}
       <div className="card p-4 space-y-3">
         <SectionHeader icon={Battery} title={t('upSectionEnergy')} color="#3b82f6" />
         <UpgradeCard

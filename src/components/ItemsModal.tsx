@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useGame } from '@/context/GameContext';
-import { ITEM_TYPES, ITEM_LEVEL_NAMES, UPGRADE_COSTS, getItemEffect, getItemName, getItemLevelName } from '@/config/itemsConfig';
+import { ITEM_TYPES, ITEM_LEVEL_NAMES, UPGRADE_COSTS, getItemEffect, getItemName, getItemLevelName, getItemRarityName } from '@/config/itemsConfig';
 import { MATERIALS_CONFIG } from '@/config/expeditions';
 import type { ItemType, OwnedItem, ItemLevel } from '@/types/items';
 import type { Lang } from '@/types';
@@ -19,6 +19,7 @@ import {
   Gem,
   Plus,
   Lock,
+  CheckCircle2,
 } from 'lucide-react';
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
@@ -84,10 +85,13 @@ function ItemCard({
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left rounded-2xl p-3 border-2 transition-all hover:scale-[1.02] active:scale-[0.98] ${isEquipped ? 'ring-2 ring-success-500/30' : ''}`}
+      className={`w-full text-left rounded-2xl p-3 border-2 transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] hover:shadow-lg ${isEquipped ? 'ring-2 ring-success-500/40 shadow-md shadow-success-500/10' : ''}`}
       style={{
         borderColor: levelInfo.color + (isEquipped ? '' : '60'),
-        backgroundColor: levelInfo.color + (isEquipped ? '12' : '08'),
+        background: isEquipped
+          ? `linear-gradient(135deg, ${levelInfo.color}15, ${info.color}08)`
+          : undefined,
+        backgroundColor: isEquipped ? undefined : levelInfo.color + '08',
         order: isEquipped ? 0 : 1,
       }}
     >
@@ -108,7 +112,8 @@ function ItemCard({
           </div>
         </div>
         {isEquipped && (
-          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-success-500/20 text-success-500 whitespace-nowrap">
+          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-success-500/20 text-success-500 whitespace-nowrap flex items-center gap-0.5">
+            <CheckCircle2 className="w-2.5 h-2.5" />
             {t('itemsSlot')} {equipSlot !== null ? equipSlot + 1 : ''}
           </span>
         )}
@@ -127,10 +132,102 @@ function ItemCard({
   );
 }
 
+function ItemRevealModal({
+  item,
+  lang,
+  onClose,
+  onOpenAnother,
+  canOpenAnother,
+  t,
+}: {
+  item: OwnedItem;
+  lang: Lang;
+  onClose: () => void;
+  onOpenAnother: () => void;
+  canOpenAnother: boolean;
+  t: (k: any) => string;
+}) {
+  const info = ITEM_TYPES[item.type];
+  const Icon = ICON_MAP[info.icon] || Package;
+  const levelInfo = ITEM_LEVEL_NAMES[item.level];
+
+  return (
+    <div
+      className="fixed inset-0 z-[65] flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        className="card w-full max-w-xs p-6 animate-drop-in text-center"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="text-xs font-bold uppercase tracking-wide text-warning-500 mb-4 flex items-center justify-center gap-1.5">
+          <Sparkles className="w-4 h-4" />
+          {lang === 'ru' ? 'Из сумки выпал:' : (lang === 'uk' ? 'З сумки випав:' : 'From the bag:')}
+        </div>
+
+        <div className="relative inline-flex items-center justify-center mb-4">
+          <div
+            className="absolute inset-0 rounded-full blur-2xl animate-pulse"
+            style={{ backgroundColor: info.color + '40' }}
+          />
+          <div
+            className="relative w-24 h-24 rounded-2xl flex items-center justify-center animate-drop-bounce"
+            style={{ backgroundColor: info.color + '20', boxShadow: `0 0 30px ${info.color}60` }}
+          >
+            <Icon className="w-12 h-12" style={{ color: info.color }} />
+          </div>
+        </div>
+
+        <div className="text-base font-bold mb-1" style={{ color: info.color }}>
+          {getItemName(item.type, lang)}
+        </div>
+        <div className="flex items-center justify-center gap-1.5 mb-4">
+          <span
+            className="text-[10px] font-bold px-2 py-0.5 rounded-md"
+            style={{ backgroundColor: levelInfo.color + '20', color: levelInfo.color }}
+          >
+            {getItemLevelName(item.level, lang)}
+          </span>
+          <span
+            className="text-[10px] font-semibold px-2 py-0.5 rounded-md"
+            style={{ backgroundColor: ITEM_LEVEL_NAMES[1].color + '15', color: '#94a3b8' }}
+          >
+            {getItemRarityName(item.rarity, lang)}
+          </span>
+        </div>
+
+        <div className="text-[10px] text-neutral-500 dark:text-neutral-400 mb-4 leading-relaxed">
+          <EffectDescription type={item.type} level={item.level} lang={lang} />
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={onClose}
+            className="flex-1 py-2.5 text-sm font-bold rounded-xl bg-neutral-200 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors"
+          >
+            {t('close')}
+          </button>
+          {canOpenAnother && (
+            <button
+              onClick={onOpenAnother}
+              className="flex-1 py-2.5 text-sm font-bold rounded-xl bg-warning-500 text-white hover:bg-warning-600 transition-colors flex items-center justify-center gap-1.5 active:scale-95"
+            >
+              <Package className="w-4 h-4" />
+              {lang === 'ru' ? 'Ещё' : (lang === 'uk' ? 'Ще' : 'Open another')}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ItemsModal() {
   const { state, itemsOpen, setItemsOpen, openItemBag, equipItem, unequipItem, upgradeItem, unlockSlot6, isSlotUnlocked, t, lang, totalItemEffects } = useGame();
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
   const [selectedItem, setSelectedItem] = useState<OwnedItem | null>(null);
+  const [revealedItem, setRevealedItem] = useState<OwnedItem | null>(null);
+  const [bagOpening, setBagOpening] = useState(false);
 
   if (!itemsOpen) return null;
 
@@ -166,6 +263,17 @@ export default function ItemsModal() {
     .map((uid, idx) => (uid === null && isSlotUnlocked(idx) ? idx : null))
     .filter((idx): idx is number => idx !== null);
 
+  const handleOpenBag = () => {
+    setBagOpening(true);
+    setTimeout(() => {
+      const result = openItemBag();
+      if (result) {
+        setRevealedItem(result);
+      }
+      setBagOpening(false);
+    }, 800);
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3"
@@ -184,8 +292,8 @@ export default function ItemsModal() {
           <div className="flex items-center gap-2">
             {state.itemBags > 0 && (
               <button
-                onClick={openItemBag}
-                className="px-3 py-1.5 text-xs font-bold rounded-lg bg-warning-500 text-white hover:bg-warning-600 transition-colors flex items-center gap-1.5 animate-pulse-glow"
+                onClick={handleOpenBag}
+                className="px-3 py-1.5 text-xs font-bold rounded-lg bg-warning-500 text-white hover:bg-warning-600 transition-all flex items-center gap-1.5 animate-pulse-glow active:scale-95"
               >
                 <Package className="w-3.5 h-3.5" />
                 {t('itemsOpenBag')} ({state.itemBags})
@@ -274,16 +382,16 @@ export default function ItemsModal() {
                       setSelectedSlot(slotIdx);
                     }
                   }}
-                  className={`aspect-square rounded-xl border-2 flex flex-col items-center justify-center transition-all relative ${
+                  className={`aspect-square rounded-xl border-2 flex flex-col items-center justify-center transition-all duration-300 relative ${
                     item
-                      ? 'border-transparent'
+                      ? 'border-transparent hover:shadow-md hover:scale-105'
                       : selectedSlot === slotIdx
                       ? 'border-primary-500 bg-primary-500/10 animate-pulse'
                       : 'border-dashed border-neutral-300 dark:border-neutral-700 hover:border-neutral-400 dark:hover:border-neutral-600'
                   }`}
                   style={
                     item && levelInfo
-                      ? { backgroundColor: (info?.color || '#94a3b8') + '15', borderColor: levelInfo.color + '80' }
+                      ? { backgroundColor: (info?.color || '#94a3b8') + '15', borderColor: levelInfo.color + '80', boxShadow: `0 0 12px ${levelInfo.color}30` }
                       : undefined
                   }
                 >
@@ -306,8 +414,6 @@ export default function ItemsModal() {
               );
             })}
           </div>
-
-          {/* Context menu for equipped slot removed — now opens ItemDetailsModal */}
 
           {selectedSlot !== null && (
             <p className="text-[10px] text-primary-500 mt-1.5 text-center font-medium">
@@ -344,7 +450,7 @@ export default function ItemsModal() {
         </div>
       </div>
 
-      {/* Item Details Modal — rendered outside scrolling container for proper centering */}
+      {/* Item Details Modal */}
       {selectedItem && (
         <ItemDetailsModal
           item={selectedItem}
@@ -368,6 +474,28 @@ export default function ItemsModal() {
             setSelectedItem(null);
           }}
           onClose={() => setSelectedItem(null)}
+          t={t}
+        />
+      )}
+
+      {/* Bag opening animation overlay */}
+      {bagOpening && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-none">
+          <div className="relative">
+            <Package className="w-20 h-20 text-warning-500 animate-bag-shake" />
+            <div className="absolute inset-0 rounded-full bg-warning-500/20 animate-ping" />
+          </div>
+        </div>
+      )}
+
+      {/* Item reveal modal */}
+      {revealedItem && (
+        <ItemRevealModal
+          item={revealedItem}
+          lang={lang}
+          onClose={() => setRevealedItem(null)}
+          onOpenAnother={handleOpenBag}
+          canOpenAnother={state.itemBags > 0}
           t={t}
         />
       )}

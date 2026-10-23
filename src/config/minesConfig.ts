@@ -73,7 +73,7 @@ export const RESOURCES: Record<ResourceType, Resource> = {
     minMass: 0.15,
     maxMass: 0.35,
     pricePerKg: 15.45,
-    xp: 16,
+    xp: 6,
     weight: 1,
     icon: 'CircleDollarSign',
   },
@@ -88,7 +88,7 @@ export const RESOURCES: Record<ResourceType, Resource> = {
     minMass: 0.10,
     maxMass: 0.25,
     pricePerKg: 21.80,
-    xp: 32,
+    xp: 8,
     weight: 1,
     icon: 'Medal',
   },
@@ -139,7 +139,7 @@ export const MINES: Mine[] = [
       unlockTimeMinutes: 15,
     },
     environment: {
-      baseTemperature: 14,
+      baseTemperature: 16,
       oxygenConsumptionPerMin: 0,
     },
   },
@@ -158,7 +158,7 @@ export const MINES: Mine[] = [
       unlockTimeMinutes: 30,
     },
     environment: {
-      baseTemperature: 13,
+      baseTemperature: 17,
       oxygenConsumptionPerMin: 4,
     },
   },
@@ -179,7 +179,7 @@ export const MINES: Mine[] = [
       unlockTimeMinutes: 45,
     },
     environment: {
-      baseTemperature: 12,
+      baseTemperature: 18,
       oxygenConsumptionPerMin: 5,
     },
   },
@@ -200,7 +200,7 @@ export const MINES: Mine[] = [
       unlockTimeMinutes: 60,
     },
     environment: {
-      baseTemperature: 11,
+      baseTemperature: 19,
       oxygenConsumptionPerMin: 6,
     },
   },
@@ -222,7 +222,7 @@ export const MINES: Mine[] = [
       unlockTimeMinutes: 75,
     },
     environment: {
-      baseTemperature: 10,
+      baseTemperature: 20,
       oxygenConsumptionPerMin: 7,
     },
   },
@@ -245,7 +245,7 @@ export const MINES: Mine[] = [
       unlockTimeMinutes: 90,
     },
     environment: {
-      baseTemperature: 9,
+      baseTemperature: 21,
       oxygenConsumptionPerMin: 8,
     },
   },
@@ -268,7 +268,7 @@ export const MINES: Mine[] = [
       unlockTimeMinutes: 105,
     },
     environment: {
-      baseTemperature: 8,
+      baseTemperature: 22,
       oxygenConsumptionPerMin: 9,
     },
   },
@@ -293,7 +293,7 @@ export const MINES: Mine[] = [
       unlockTimeMinutes: 120,
     },
     environment: {
-      baseTemperature: 7,
+      baseTemperature: 23,
       oxygenConsumptionPerMin: 10,
     },
   },
@@ -318,7 +318,7 @@ export const MINES: Mine[] = [
       unlockTimeMinutes: 135,
     },
     environment: {
-      baseTemperature: 6,
+      baseTemperature: 24,
       oxygenConsumptionPerMin: 11,
     },
   },

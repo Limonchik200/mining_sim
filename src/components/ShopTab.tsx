@@ -32,6 +32,9 @@ import {
   CheckCircle2,
   AlertTriangle,
   X,
+  Package,
+  Fuel,
+  Wind,
 } from 'lucide-react';
 
 const foodIcons: Record<string, typeof Candy> = {
@@ -56,6 +59,7 @@ export default function ShopTab() {
     sellAll,
     claimStarterGift,
     claimDailyReward,
+    purchaseCartStation,
     t,
     lang,
     activeLeaseMult,
@@ -65,11 +69,35 @@ export default function ShopTab() {
 
   const [leaseValue, setLeaseValue] = useState('100');
   const [leaseUnit, setLeaseUnit] = useState<TimeUnit>('seconds');
+  const [flashItem, setFlashItem] = useState<string | null>(null);
+  const [floatText, setFloatText] = useState<{ id: string; text: string } | null>(null);
+
+  const triggerBuyFlash = (id: string, text: string) => {
+    setFlashItem(id);
+    setFloatText({ id, text });
+    setTimeout(() => setFlashItem(null), 800);
+    setTimeout(() => setFloatText(null), 1200);
+  };
 
   const calendarRef = useRef<HTMLDivElement>(null);
   const leasesRef = useRef<HTMLDivElement>(null);
   const pickaxesRef = useRef<HTMLDivElement>(null);
   const foodRef = useRef<HTMLDivElement>(null);
+  const materialsRef = useRef<HTMLDivElement>(null);
+  const fuelRef = useRef<HTMLDivElement>(null);
+  const lifeSupportRef = useRef<HTMLDivElement>(null);
+  const marketRef = useRef<HTMLDivElement>(null);
+
+  const navSections = [
+    { ref: calendarRef, icon: Calendar, label: lang === 'ru' ? 'Календарь' : (lang === 'uk' ? 'Календар' : 'Calendar') },
+    { ref: leasesRef, icon: Clock, label: t('shopJumpLeases') },
+    { ref: pickaxesRef, icon: Hammer, label: t('shopJumpPickaxes') },
+    { ref: foodRef, icon: Battery, label: t('shopJumpFood') },
+    { ref: materialsRef, icon: Package, label: lang === 'ru' ? 'Материалы' : (lang === 'uk' ? 'Матеріали' : 'Materials') },
+    { ref: fuelRef, icon: Fuel, label: lang === 'ru' ? 'Топливо' : (lang === 'uk' ? 'Паливо' : 'Fuel') },
+    { ref: lifeSupportRef, icon: Wind, label: lang === 'ru' ? 'Жизнеобеспечение' : (lang === 'uk' ? 'Життєзабезпечення' : 'Life Support') },
+    { ref: marketRef, icon: TrendingUp, label: t('shopMarket') },
+  ];
 
   const currentMineId = state.currentMineId || 1;
   const currentMine = getMineById(currentMineId);
@@ -105,6 +133,8 @@ export default function ShopTab() {
   const scrollTo = (ref: React.RefObject<HTMLDivElement>) => {
     ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
+
+  const tr = (ru: string, uk: string, en: string) => lang === 'ru' ? ru : (lang === 'uk' ? uk : en);
 
   const dailyStreakDays = state.dailyCalendar?.lastClaimDay || 0;
   const cycleReset = dailyStreakDays >= 7;
@@ -168,24 +198,46 @@ export default function ShopTab() {
         </div>
       </div>
 
-      {/* Quick nav */}
-      <div className="card p-2 flex gap-1 overflow-x-auto">
-        <button onClick={() => scrollTo(calendarRef)} className="btn-ghost flex-1 py-2 text-xs whitespace-nowrap">
-          <Calendar className="w-3.5 h-3.5 inline mr-1" />
-          {lang === 'ru' ? 'Календарь' : (lang === 'uk' ? 'Календар' : 'Calendar')}
-        </button>
-        <button onClick={() => scrollTo(leasesRef)} className="btn-ghost flex-1 py-2 text-xs whitespace-nowrap">
-          <Clock className="w-3.5 h-3.5 inline mr-1" />
-          {t('shopJumpLeases')}
-        </button>
-        <button onClick={() => scrollTo(pickaxesRef)} className="btn-ghost flex-1 py-2 text-xs whitespace-nowrap">
-          <Hammer className="w-3.5 h-3.5 inline mr-1" />
-          {t('shopJumpPickaxes')}
-        </button>
-        <button onClick={() => scrollTo(foodRef)} className="btn-ghost flex-1 py-2 text-xs whitespace-nowrap">
-          <Battery className="w-3.5 h-3.5 inline mr-1" />
-          {t('shopJumpFood')}
-        </button>
+      {/* Cart Station one-time purchase */}
+      {!state.equipment.cartStationPurchased && (
+        <div className="card p-3 border-primary-500/20 bg-primary-500/5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-primary-500/20 flex items-center justify-center">
+                <Hammer className="w-5 h-5 text-primary-500" />
+              </div>
+              <div>
+                <div className="text-sm font-bold text-neutral-800 dark:text-neutral-100">
+                  {lang === 'ru' ? 'Станция вагонетки' : (lang === 'uk' ? 'Станція вагонетки' : 'Cart Station')}
+                </div>
+                <div className="text-xs text-neutral-400">
+                  {lang === 'ru' ? 'Одноразово · нужна для Шахты 4+' : (lang === 'uk' ? 'Одноразово · потрібна для Шахти 4+' : 'One-time · required for Mine 4+')}
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={purchaseCartStation}
+              disabled={state.balance < 2000}
+              className={state.balance >= 2000 ? 'btn-primary px-4 py-2 text-xs' : 'btn-ghost px-4 py-2 text-xs opacity-50 cursor-not-allowed'}
+            >
+              {formatMoney(2000)}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Sticky right-side quick nav */}
+      <div className="hidden sm:flex fixed right-0 top-1/2 -translate-y-1/2 z-30 flex-col gap-1.5 p-2 rounded-l-2xl bg-white/80 dark:bg-neutral-900/80 backdrop-blur-md shadow-lg border border-r-0 border-neutral-200 dark:border-neutral-800">
+        {navSections.map((sec) => (
+          <button
+            key={sec.label}
+            onClick={() => scrollTo(sec.ref)}
+            className="group flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all"
+            title={sec.label}
+          >
+            <sec.icon className="w-4 h-4 text-neutral-500 group-hover:text-primary-500 transition-colors" />
+          </button>
+        ))}
       </div>
 
       {/* Daily Calendar Card */}
@@ -390,10 +442,15 @@ export default function ShopTab() {
             return (
               <div
                 key={tier.id}
-                className={`rounded-xl p-3 border bg-neutral-50 dark:bg-neutral-850/50 border-neutral-200 dark:border-neutral-800 ${
+                className={`relative rounded-xl p-3 border bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-850/50 dark:to-neutral-900/50 border-neutral-200 dark:border-neutral-800 transition-all duration-300 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/5 ${
                   isEquipped ? 'ring-1 ring-primary-500/30' : ''
-                }`}
+                } ${flashItem === `px-${tier.id}` ? 'animate-buy-flash' : ''}`}
               >
+                {floatText?.id === `px-${tier.id}` && (
+                  <span className="absolute -top-6 right-8 text-xs font-bold text-success-500 animate-fade-scale pointer-events-none">
+                    {tr('Куплено!', 'Куплено!', '+1 Purchased')}
+                  </span>
+                )}
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2.5">
                     <div
@@ -423,7 +480,14 @@ export default function ShopTab() {
                     )}
                   </div>
                   <button
-                    onClick={() => (isOwned ? equipPickaxe(tier.id) : buyPickaxe(tier.id))}
+                    onClick={() => {
+                      if (isOwned) {
+                        equipPickaxe(tier.id);
+                      } else {
+                        buyPickaxe(tier.id);
+                        triggerBuyFlash(`px-${tier.id}`, tr('Куплено!', 'Куплено!', '+1 Purchased'));
+                      }
+                    }}
                     disabled={isEquipped || (!isOwned && (!meetsLevel || !canAfford))}
                     className={
                       isEquipped
@@ -487,11 +551,43 @@ export default function ShopTab() {
       </div>
 
       {/* Food shop */}
-      <div ref={foodRef} className="card p-4 scroll-mt-4">
-        <h2 className="text-lg font-bold text-neutral-800 dark:text-neutral-100 mb-3 flex items-center gap-2">
-          <Battery className="w-5 h-5 text-accent-500" />
-          {t('shopFood')}
-        </h2>
+      <div ref={foodRef} className="card p-4 scroll-mt-4 border-accent-500/20">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-bold text-neutral-800 dark:text-neutral-100 flex items-center gap-2">
+            <Battery className="w-5 h-5 text-accent-500" />
+            {t('shopFood')}
+          </h2>
+          {(() => {
+            const hasCabinet = (state.craftInventory?.food_cabinet ?? 0) > 0;
+            const foodLimit = hasCabinet ? 100 : 5;
+            const totalFood = Object.values(state.foodInventory ?? {}).reduce((sum, n) => sum + n, 0);
+            const pct = foodLimit > 0 ? Math.min(100, (totalFood / foodLimit) * 100) : 0;
+            return (
+              <div className="flex flex-col items-end gap-0.5">
+                <span className={`text-xs font-bold ${totalFood >= foodLimit ? 'text-error-500' : 'text-neutral-500'}`}>
+                  {totalFood} / {foodLimit} {tr('шт.', 'шт.', 'pcs.')}
+                </span>
+                <div className="w-24 h-1.5 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      totalFood >= foodLimit ? 'bg-error-500' : pct >= 80 ? 'bg-warning-500' : 'bg-accent-500'
+                    }`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+        {!((state.craftInventory?.food_cabinet ?? 0) > 0) && (
+          <div className="mb-3 rounded-lg px-3 py-2 text-xs text-orange-400 font-medium" style={{ background: 'rgba(251,146,60,0.08)', border: '1px solid rgba(251,146,60,0.15)' }}>
+            {tr(
+              'Без шафи ліміт їжі — 5 шт. Скрафтіть шафу для збільшення до 100 шт.',
+              'Без шафи ліміт їжі — 5 шт. Скрафтіть шафу для збільшення до 100 шт.',
+              'Without a cabinet, food limit is 5 items. Craft a cabinet to increase to 100.'
+            )}
+          </div>
+        )}
         <div className="space-y-2">
           {FOOD_ITEMS.map((food) => {
             const Icon = foodIcons[food.id] || Candy;
@@ -499,15 +595,21 @@ export default function ShopTab() {
             const activeBuff = state.buffs.find((b) => b.id === food.id && b.expiresAt > Date.now());
             const buffRemaining = activeBuff ? Math.ceil((activeBuff.expiresAt - Date.now()) / 1000) : 0;
             const foodPrice = getFoodPrice(food, currentMineId);
+            const owned = state.foodInventory?.[food.id] ?? 0;
 
             return (
               <div
                 key={food.id}
-                className="flex items-center justify-between rounded-xl p-3 bg-neutral-50 dark:bg-neutral-850/50 border border-neutral-200 dark:border-neutral-800"
+                className={`relative flex items-center justify-between rounded-xl p-3 bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-850/50 dark:to-neutral-900/50 border border-neutral-200 dark:border-neutral-800 transition-all duration-300 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/5 ${flashItem === food.id ? 'animate-buy-flash' : ''}`}
               >
+                {floatText?.id === food.id && (
+                  <span className="absolute -top-6 right-8 text-xs font-bold text-success-500 animate-fade-scale pointer-events-none">
+                    {tr('Куплено!', 'Куплено!', '+1 Purchased')}
+                  </span>
+                )}
                 <div className="flex items-center gap-3">
                   <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center"
+                    className="w-10 h-10 rounded-xl flex items-center justify-center transition-transform duration-300 hover:scale-110"
                     style={{ backgroundColor: food.color + '20' }}
                   >
                     <Icon className="w-5 h-5" style={{ color: food.color }} />
@@ -527,13 +629,20 @@ export default function ShopTab() {
                     )}
                   </div>
                 </div>
-                <button
-                  onClick={() => buyFood(food.id)}
-                  disabled={state.balance < foodPrice}
-                  className="btn-primary px-3 py-1.5 text-xs whitespace-nowrap"
-                >
-                  {formatMoney(foodPrice)}
-                </button>
+                <div className="flex items-center gap-2">
+                  {owned > 0 && (
+                    <span className="text-xs font-bold text-accent-500 bg-accent-500/10 px-2 py-0.5 rounded-md">
+                      ×{owned}
+                    </span>
+                  )}
+                  <button
+                    onClick={() => { buyFood(food.id); triggerBuyFlash(food.id, tr('Куплено!', 'Куплено!', '+1 Purchased')); }}
+                    disabled={state.balance < foodPrice}
+                    className="btn-primary px-3 py-1.5 text-xs whitespace-nowrap transition-all duration-200 hover:shadow-md hover:shadow-amber-500/20 active:scale-95"
+                  >
+                    {formatMoney(foodPrice)}
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -541,16 +650,22 @@ export default function ShopTab() {
       </div>
 
       {/* Materials Shop */}
-      <MaterialsShopSection />
+      <div ref={materialsRef} className="scroll-mt-4">
+        <MaterialsShopSection />
+      </div>
 
       {/* Fuel Station */}
-      <FuelStationSection />
+      <div ref={fuelRef} className="scroll-mt-4">
+        <FuelStationSection />
+      </div>
 
       {/* Life Support Equipment */}
-      <LifeSupportSection />
+      <div ref={lifeSupportRef} className="scroll-mt-4">
+        <LifeSupportSection />
+      </div>
 
       {/* Market */}
-      <div className="card p-4">
+      <div ref={marketRef} className="card p-4 scroll-mt-4">
         <h2 className="text-lg font-bold text-neutral-800 dark:text-neutral-100 mb-3 flex items-center gap-2">
           <TrendingUp className="w-5 h-5 text-success-500" />
           {t('shopMarket')}

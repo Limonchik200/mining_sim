@@ -101,6 +101,7 @@ export interface GameState {
   slot6Unlocked: boolean;
 
   craftInventory: Record<string, number>;
+  foodInventory: Record<string, number>;
   fuel: FuelState;
   materialsShop: MaterialsShopState;
   lifeSupport: LifeSupportState;

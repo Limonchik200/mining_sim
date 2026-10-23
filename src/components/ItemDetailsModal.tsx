@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   X,
   Timer,
@@ -63,8 +64,10 @@ function getEffectLines(type: ItemType, level: ItemLevel, nextLevel: ItemLevel, 
   compare('sellMultBonus', lang === 'ru' ? 'Множитель продажи' : (lang === 'uk' ? 'Множник продажу' : 'Sell mult'), (v) => `+${v}x`);
   compare('expeditionTimeReductionPct', lang === 'ru' ? 'Время экспедиций' : (lang === 'uk' ? 'Час експедицій' : 'Expedition time'), (v) => `-${v}%`);
   compare('expeditionRefreshReductionPct', lang === 'ru' ? 'Обновление эксп.' : (lang === 'uk' ? 'Оновлення експ.' : 'Expedition refresh'), (v) => `-${v}%`);
-  compare('expeditionLootChance', lang === 'ru' ? 'Шанс лута' : (lang === 'uk' ? 'Шанс луту' : 'Loot chance'), (v) => `${Math.round(v * 100)}%`);
-  compare('expeditionLootMult', lang === 'ru' ? 'Множитель лута' : (lang === 'uk' ? 'Множник луту' : 'Loot mult'), (v) => `x${v}`);
+  if (type === 'basket') {
+    compare('expeditionLootChance', lang === 'ru' ? 'Шанс лута' : (lang === 'uk' ? 'Шанс луту' : 'Loot chance'), (v) => `${Math.round(v * 100)}%`);
+    compare('expeditionLootMult', lang === 'ru' ? 'Множитель лута' : (lang === 'uk' ? 'Множник луту' : 'Loot mult'), (v) => `x${v}`);
+  }
 
   return lines;
 }
@@ -115,9 +118,16 @@ export default function ItemDetailsModal({
   const isMaxLevel = item.level >= 7;
   const cost = UPGRADE_COSTS[item.level];
   const hasCost = cost && Object.keys(cost).length > 0;
+  const [burst, setBurst] = useState(false);
 
   const nextLevel = Math.min(item.level + 1, 7) as ItemLevel;
   const effectLines = getEffectLines(item.type, item.level, nextLevel, lang);
+
+  const handleUpgrade = () => {
+    onUpgrade(item.uid);
+    setBurst(true);
+    setTimeout(() => setBurst(false), 600);
+  };
 
   const desc = lang === 'ru' ? info.descRu : (lang === 'uk' ? info.descUk : info.descEn);
 
@@ -140,9 +150,14 @@ export default function ItemDetailsModal({
       onClick={onClose}
     >
       <div
-        className="card w-full max-w-sm max-h-[92vh] overflow-y-auto p-5 animate-drop-in"
+        className={`card w-full max-w-sm max-h-[92vh] overflow-y-auto p-5 animate-drop-in ${burst ? 'animate-upgrade-burst' : ''}`}
         onClick={(e) => e.stopPropagation()}
       >
+        {burst && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
+            <Sparkles className="w-10 h-10 text-amber-400 animate-fade-scale" />
+          </div>
+        )}
         {/* Header */}
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
@@ -170,7 +185,8 @@ export default function ItemDetailsModal({
                   {getItemRarityName(item.rarity, lang)}
                 </span>
                 {isEquipped && (
-                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-success-500/20 text-success-500">
+                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-success-500/20 text-success-500 flex items-center gap-0.5">
+                    <CheckCircle2 className="w-2.5 h-2.5" />
                     {t('itemsSlot')} {equipSlot !== null ? equipSlot + 1 : ''}
                   </span>
                 )}
@@ -186,7 +202,7 @@ export default function ItemDetailsModal({
         </div>
 
         {/* Description */}
-        <div className="rounded-xl p-3 bg-neutral-50 dark:bg-neutral-850/50 border border-neutral-200 dark:border-neutral-800 mb-4">
+        <div className="rounded-xl p-3 bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-850/50 dark:to-neutral-900/50 border border-neutral-200 dark:border-neutral-800 mb-4">
           <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">{desc}</p>
         </div>
 
@@ -207,7 +223,7 @@ export default function ItemDetailsModal({
                   {!isMaxLevel ? (
                     <span className="flex items-center gap-1.5 text-xs font-semibold">
                       <span className="text-neutral-700 dark:text-neutral-300">{line.current}</span>
-                      <ChevronRight className="w-3 h-3 text-neutral-400" />
+                      <ChevronRight className="w-3 h-3 text-amber-400" />
                       <span className="text-success-500">{line.next}</span>
                     </span>
                   ) : (
@@ -307,11 +323,11 @@ export default function ItemDetailsModal({
           )}
           {!isMaxLevel && hasCost && (
             <button
-              onClick={() => onUpgrade(item.uid)}
+              onClick={handleUpgrade}
               disabled={!canUpgrade}
-              className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 ${
+              className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-all duration-200 flex items-center justify-center gap-1.5 ${
                 canUpgrade
-                  ? 'bg-warning-500 text-white hover:bg-warning-600'
+                  ? 'bg-warning-500 text-white hover:bg-warning-600 hover:shadow-md hover:shadow-amber-500/20 active:scale-95'
                   : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-400 cursor-not-allowed'
               }`}
             >

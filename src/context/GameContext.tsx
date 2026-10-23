@@ -79,6 +79,7 @@ import {
   WOODEN_BRACING_UNIT_PRICE,
   equipmentUpgradeCost,
   equipmentMaxLevelForMine,
+  mineRequiredForNextEquipmentLevel,
   type EquipmentType,
 } from '@/config/upgradesConfig';
 import { MINES, getMineById } from '@/config/minesConfig';
@@ -158,6 +159,7 @@ interface GameContextValue {
   cancelLeasePurchase: () => void;
   pendingLeasePurchase: { type: 'active' | 'auto'; value: number; unit: TimeUnit } | null;
   buyFood: (foodId: string) => void;
+  eatFood: (foodId: string) => void;
   buyPickaxe: (tierId: string) => void;
   switchPickaxe: (pickaxeId: string) => void;
   equipPickaxe: (tierId: string) => void;
@@ -203,7 +205,7 @@ interface GameContextValue {
   refreshExpeditions: () => void;
   itemsOpen: boolean;
   setItemsOpen: (open: boolean) => void;
-  openItemBag: () => void;
+  openItemBag: () => OwnedItem | null;
   equipItem: (uid: string, slot: number) => void;
   unequipItem: (slot: number) => void;
   upgradeItem: (uid: string) => void;
@@ -231,6 +233,7 @@ interface GameContextValue {
   buyCooler: (type: CoolerType) => void;
   toggleCooler: (coolerId: string) => void;
   setCoolerMode: (coolerId: string, mode: CoolerMode) => void;
+  switchCooler: (coolerId: string) => void;
   repairCooler: (coolerId: string) => void;
   buyGenerator: () => void;
   toggleGenerator: () => void;
@@ -418,6 +421,34 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const tier = getPickaxeTier(current.activePickaxeTierId);
       const mineId = current.currentMineId ?? 0;
       const dumpMine = isDumpMine(mineId);
+
+      // Oxygen check: mine 3+ requires active oxygen tank
+      if (!dumpMine && mineId >= 3) {
+        const ls = current.lifeSupport;
+        const activeTank = ls.activeOxygenTankId
+          ? ls.oxygenTanks.find((t) => t.id === ls.activeOxygenTankId)
+          : ls.oxygenTanks.find((t) => t.currentOxygen > 0);
+        if (!activeTank || activeTank.currentOxygen <= 0) {
+          pushNotification({ message: lang === 'ru' ? 'Нет кислорода! Нужен кислородный балон.' : (lang === 'uk' ? 'Немає кисню! Потрібен кисневий балон.' : 'No oxygen! Need an oxygen tank.'), type: 'error' });
+          return;
+        }
+      }
+
+      // Temperature check: must be between 8°C and 18°C
+      if (!dumpMine) {
+        const mine = getMineById(mineId);
+        const baseTemp = mine.environment?.baseTemperature ?? 15;
+        const activeCoolers = current.lifeSupport.coolers.filter((c) => c.active && c.durability > 0);
+        const tempReduction = activeCoolers.reduce((sum, c) => {
+          const cfg = COOLER_CONFIGS[c.type];
+          return sum + (cfg.modeConfigs[c.mode]?.tempReduction ?? 0);
+        }, 0);
+        const currentTemp = baseTemp - tempReduction;
+        if (currentTemp < 8 || currentTemp > 18) {
+          pushNotification({ message: lang === 'ru' ? `Температура ${currentTemp.toFixed(0)}°C вне нормы (8–18°C)!` : (lang === 'uk' ? `Температура ${currentTemp.toFixed(0)}°C поза нормою (8–18°C)!` : `Temperature ${currentTemp.toFixed(0)}°C out of range (8–18°C)!`), type: 'error' });
+          return;
+        }
+      }
 
       if (current.activePickaxeTierId === 'shovel' && !dumpMine) {
         pushNotification({ message: lang === 'ru' ? 'Лопату можно использовать только на Свалке!' : (lang === 'uk' ? 'Лопату можна використовувати лише на Звалищі!' : 'Shovel can only be used at The Dump!'), type: 'error' });
@@ -716,15 +747,43 @@ export function GameProvider({ children }: { children: ReactNode }) {
         pushNotification({ message: tr('notifNoMoney'), type: 'error' });
         return;
       }
+      const hasCabinet = (stateRef.current.craftInventory?.food_cabinet ?? 0) > 0;
+      const foodLimit = hasCabinet ? 100 : 5;
+      const currentFoodCount = Object.values(stateRef.current.foodInventory ?? {}).reduce((sum, n) => sum + n, 0);
+      if (currentFoodCount >= foodLimit) {
+        pushNotification({ message: lang === 'ru' ? `Шкаф полон! Лимит: ${foodLimit} шт.` : (lang === 'uk' ? `Шафа повна! Ліміт: ${foodLimit} шт.` : `Cabinet full! Limit: ${foodLimit} items`), type: 'error' });
+        return;
+      }
+      setState((prev) => ({
+        ...prev,
+        balance: Math.round((prev.balance - price) * 100) / 100,
+        foodInventory: {
+          ...prev.foodInventory,
+          [foodId]: (prev.foodInventory?.[foodId] ?? 0) + 1,
+        },
+      }));
+      pushNotification({ message: `${tr('notifBought')} ${food.name}`, type: 'success' });
+    },
+    [pushNotification, tr, lang]
+  );
+
+  const eatFood = useCallback(
+    (foodId: string) => {
+      const food = FOOD_ITEMS.find((f) => f.id === foodId);
+      if (!food) return;
+      const current = stateRef.current;
+      const count = current.foodInventory?.[foodId] ?? 0;
+      if (count <= 0) {
+        pushNotification({ message: lang === 'ru' ? 'Нет еды в шкафу!' : (lang === 'uk' ? 'Немає їжі в шафі!' : 'No food in cabinet!'), type: 'error' });
+        return;
+      }
+
       setState((prev) => {
         let next = { ...prev };
-        next.balance = Math.round((prev.balance - price) * 100) / 100;
+        next.foodInventory = { ...prev.foodInventory, [foodId]: prev.foodInventory[foodId] - 1 };
 
         if (food.energyBoost > 0) {
           const effectiveMax = prev.maxEnergy + totalItemEffects.energyMaxBonus;
-          if (prev.energy >= effectiveMax) {
-            pushNotification({ message: tr('notifEnergyFull'), type: 'info' });
-          }
           const boost = food.energyBoost * (1 + totalItemEffects.foodBonusPct);
           next.energy = Math.min(effectiveMax, prev.energy + boost);
         }
@@ -754,9 +813,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
         return next;
       });
-      pushNotification({ message: `${tr('notifBought')} ${food.name}`, type: 'success' });
+      pushNotification({ message: lang === 'ru' ? `Съедено: ${food.nameRu}` : (lang === 'uk' ? `З'їдено: ${food.nameUk}` : `Eaten: ${food.nameEn}`), type: 'success' });
     },
-    [pushNotification, tr, totalItemEffects]
+    [pushNotification, tr, lang, totalItemEffects]
   );
 
   const equipPickaxe = useCallback(
@@ -1565,11 +1624,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
     pushNotification({ message: tr('expeditionsRefreshed'), type: 'info' });
   }, [pushNotification, tr, totalItemEffects]);
 
-  const openItemBag = useCallback(() => {
+  const openItemBag = useCallback((): OwnedItem | null => {
     const current = stateRef.current;
     if ((current.itemBags || 0) <= 0) {
       pushNotification({ message: tr('noItemBags'), type: 'error' });
-      return;
+      return null;
     }
     const { type, rarity } = rollItemFromBag();
     const newItem: OwnedItem = {
@@ -1583,9 +1642,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       itemBags: (prev.itemBags || 0) - 1,
       ownedItems: [...prev.ownedItems, newItem],
     }));
-    const name = getItemName(type, lang);
-    const levelName = getItemLevelName(rarity as ItemLevel, lang);
-    pushNotification({ message: `${tr('itemReceived')}: ${name} (${levelName})`, type: 'drop', color: ITEM_TYPES[type].color });
+    return newItem;
   }, [pushNotification, tr, lang]);
 
   const isSlotUnlocked = useCallback((slot: number): boolean => {
@@ -1803,30 +1860,44 @@ export function GameProvider({ children }: { children: ReactNode }) {
       required: `${req.lightingLevel} р.`,
       met: eq.lightingLevel >= req.lightingLevel,
     });
-    if (req.railsCount) requirements.push({
-      label: lang === 'ru' ? 'Рельсы' : (lang === 'uk' ? 'Рейки' : 'Rails'),
-      current: `${eq.railsCount} шт.`,
-      required: `${req.railsCount} шт.`,
-      met: eq.railsCount >= req.railsCount,
-    });
+    if (req.railsCount) {
+      const totalRails = eq.railsCount + (state.craftInventory?.rails ?? 0);
+      requirements.push({
+        label: lang === 'ru' ? 'Рельсы' : (lang === 'uk' ? 'Рейки' : 'Rails'),
+        current: `${totalRails} шт.`,
+        required: `${req.railsCount} шт.`,
+        met: totalRails >= req.railsCount,
+      });
+    }
     if (req.cartStation) requirements.push({
       label: lang === 'ru' ? 'Станция вагонетки' : (lang === 'uk' ? 'Станція вагонетки' : 'Cart Station'),
       current: eq.cartStationPurchased ? '✓' : '✗',
       required: '✓',
       met: eq.cartStationPurchased,
     });
-    if (req.woodenBracingCount) requirements.push({
-      label: lang === 'ru' ? 'Дерев. крепление' : (lang === 'uk' ? 'Дерев. кріплення' : 'Wooden Bracing'),
-      current: `${eq.woodenBracingCount} шт.`,
-      required: `${req.woodenBracingCount} шт.`,
-      met: eq.woodenBracingCount >= req.woodenBracingCount,
-    });
+    if (req.woodenBracingCount) {
+      const totalBracing = eq.woodenBracingCount + (state.craftInventory?.wooden_bracing ?? 0);
+      requirements.push({
+        label: lang === 'ru' ? 'Дерев. крепление' : (lang === 'uk' ? 'Дерев. кріплення' : 'Wooden Bracing'),
+        current: `${totalBracing} шт.`,
+        required: `${req.woodenBracingCount} шт.`,
+        met: totalBracing >= req.woodenBracingCount,
+      });
+    }
 
     const met = requirements.every((r) => r.met);
     return { met, requirements };
   }, [state.level, state.balance, state.equipment, lang]);
 
   const startMineUnlock = useCallback((mineId: number) => {
+    // Sequential unlock: can't unlock mine N without mine N-1
+    const unlocked = stateRef.current.unlockedMines || [0, 1];
+    if (mineId > 1 && !unlocked.includes(mineId - 1)) {
+      const prevMine = getMineById(mineId - 1);
+      const prevName = lang === 'ru' ? prevMine.nameRu : (lang === 'uk' ? prevMine.nameUk : prevMine.nameEn);
+      pushNotification({ message: lang === 'ru' ? `Сначала разблокируйте: ${prevName}` : (lang === 'uk' ? `Спочатку розблокуйте: ${prevName}` : `Unlock first: ${prevName}`), type: 'error' });
+      return;
+    }
     const check = checkMineUnlockRequirements(mineId);
     if (!check.met) {
       pushNotification({ message: lang === 'ru' ? 'Не выполнены условия разблокировки' : (lang === 'uk' ? 'Не виконані умови розблокування' : 'Unlock requirements not met'), type: 'error' });
@@ -1875,11 +1946,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const reduceMs = minutes * 60 * 1000;
       const newRemaining = timer.startedAt + timer.durationMs - Date.now() - reduceMs;
       if (newRemaining <= 0) {
+        pushNotification({ message: lang === 'ru' ? 'Шахта открыта!' : (lang === 'uk' ? 'Шахту відкрито!' : 'Mine opened!'), type: 'success' });
         return {
           ...prev,
           gems: prev.gems - gemCost,
           mineUnlockTimers: timers.filter((t) => t.mineId !== mineId),
-          unlockedMines: [...(prev.unlockedMines || []), mineId],
+          unlockedMines: [...new Set([...(prev.unlockedMines || []), mineId])],
         };
       }
       return {
@@ -1903,6 +1975,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
         const completed = timers.filter((t) => now >= t.startedAt + t.durationMs);
         if (completed.length === 0) return prev;
         const completedIds = completed.map((t) => t.mineId);
+        const completedNames = completedIds.map(id => {
+          const m = getMineById(id);
+          return lang === 'ru' ? m.nameRu : (lang === 'uk' ? m.nameUk : m.nameEn);
+        }).join(', ');
+        pushNotification({ message: lang === 'ru' ? `Шахта открыта: ${completedNames}!` : (lang === 'uk' ? `Шахту відкрито: ${completedNames}!` : `Mine opened: ${completedNames}!`), type: 'success' });
         return {
           ...prev,
           mineUnlockTimers: timers.filter((t) => now < t.startedAt + t.durationMs),
@@ -1911,7 +1988,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [pushNotification, lang]);
 
   const upgradeEquipment = useCallback((type: EquipmentType) => {
     const current = stateRef.current;
@@ -1924,7 +2001,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       type === 'lighting' ? eq.lightingLevel :
       eq.ventilationLevel;
     const maxForMine = equipmentMaxLevelForMine(type, highestUnlockedMine);
-    const maxLevel = Math.min(EQUIPMENT_CONFIG[type].maxLevel, maxForMine || EQUIPMENT_CONFIG[type].maxLevel);
+    const maxLevel = Math.min(EQUIPMENT_CONFIG[type].maxLevel, maxForMine);
     if (currentLevel >= maxLevel) {
       pushNotification({ message: lang === 'ru' ? 'Максимальный уровень' : (lang === 'uk' ? 'Максимальний рівень' : 'Max level reached'), type: 'error' });
       return;
@@ -1956,17 +2033,34 @@ export function GameProvider({ children }: { children: ReactNode }) {
       pushNotification({ message: lang === 'ru' ? 'Уже куплено' : (lang === 'uk' ? 'Вже куплено' : 'Already owned'), type: 'info' });
       return;
     }
-    if (current.balance < cfg.purchasePrice) {
+    const maxForMine = equipmentMaxLevelForMine(type, highestUnlockedMine);
+    if (maxForMine < 1) {
+      const nextMine = mineRequiredForNextEquipmentLevel(type, highestUnlockedMine);
+      const mineMsg = nextMine ? (lang === 'ru' ? `Откройте шахту ${nextMine.mineId}` : (lang === 'uk' ? `Відкрийте шахту ${nextMine.mineId}` : `Unlock Mine ${nextMine.mineId}`)) : '';
+      pushNotification({ message: lang === 'ru' ? `Недоступно. ${mineMsg}` : (lang === 'uk' ? `Недоступно. ${mineMsg}` : `Not available. ${mineMsg}`), type: 'error' });
+      return;
+    }
+    const price = cfg.purchasePrice;
+    if (current.balance < price) {
       pushNotification({ message: tr('notifNoMoney'), type: 'error' });
       return;
     }
     setState((prev) => ({
       ...prev,
-      balance: Math.round((prev.balance - cfg.purchasePrice) * 100) / 100,
+      balance: Math.round((prev.balance - price) * 100) / 100,
       ownedEquipment: [...(prev.ownedEquipment || []), type],
+      equipment: {
+        ...prev.equipment,
+        [type === 'helmet' ? 'helmetLevel' :
+         type === 'flashlight' ? 'flashlightLevel' :
+         type === 'gloves' ? 'glovesLevel' :
+         type === 'respirator' ? 'respiratorLevel' :
+         type === 'lighting' ? 'lightingLevel' :
+         'ventilationLevel']: 1,
+      },
     }));
     pushNotification({ message: lang === 'ru' ? 'Куплено!' : (lang === 'uk' ? 'Куплено!' : 'Куплено!'), type: 'success' });
-  }, [pushNotification, lang, tr]);
+  }, [highestUnlockedMine, pushNotification, lang, tr]);
 
   const purchaseRespiratorFilter = useCallback(() => {
     const current = stateRef.current;
@@ -2217,8 +2311,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       pushNotification({ message: lang === 'ru' ? 'Купите стеллаж на складе!' : (lang === 'uk' ? 'Купіть стелаж на складі!' : 'Buy a shelf for the warehouse!'), type: 'error' });
       return;
     }
-    if (current.lifeSupport.coolers.length >= 1) {
-      pushNotification({ message: lang === 'ru' ? 'Можно иметь только 1 охладитель!' : (lang === 'uk' ? 'Можна мати лише 1 охолоджувач!' : 'You can only have 1 cooler!'), type: 'error' });
+    if (current.lifeSupport.coolers.some((c) => c.type === type)) {
+      pushNotification({ message: lang === 'ru' ? 'Этот тип уже куплен!' : (lang === 'uk' ? 'Цей тип вже куплено!' : 'This type already owned!'), type: 'error' });
       return;
     }
     const cooler = createCooler(type);
@@ -2231,6 +2325,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         ownedCoolerTypes: prev.lifeSupport.ownedCoolerTypes.includes(type)
           ? prev.lifeSupport.ownedCoolerTypes
           : [...prev.lifeSupport.ownedCoolerTypes, type],
+        activeCoolerId: prev.lifeSupport.activeCoolerId ?? cooler.id,
       },
     }));
     pushNotification({ message: lang === 'ru' ? 'Охладитель куплен!' : (lang === 'uk' ? 'Охолоджувач куплено!' : 'Cooler purchased!'), type: 'success' });
@@ -2261,6 +2356,25 @@ export function GameProvider({ children }: { children: ReactNode }) {
       },
     }));
   }, []);
+
+  const switchCooler = useCallback((coolerId: string) => {
+    setState((prev) => {
+      const cooler = prev.lifeSupport.coolers.find((c) => c.id === coolerId);
+      if (!cooler || cooler.durability <= 0) return prev;
+      return {
+        ...prev,
+        lifeSupport: {
+          ...prev.lifeSupport,
+          activeCoolerId: coolerId,
+          coolers: prev.lifeSupport.coolers.map((c) => ({
+            ...c,
+            active: c.id === coolerId,
+          })),
+        },
+      };
+    });
+    pushNotification({ message: lang === 'ru' ? 'Охладитель переключён!' : (lang === 'uk' ? 'Охолоджувач перемкнено!' : 'Cooler switched!'), type: 'success' });
+  }, [pushNotification, lang]);
 
   const repairCooler = useCallback((coolerId: string) => {
     const current = stateRef.current;
@@ -2469,8 +2583,21 @@ export function GameProvider({ children }: { children: ReactNode }) {
         const mineId = prev.currentMineId ?? 0;
         const needsOxygen = mineId >= 2;
 
+        const hasActiveLease = !!(prev.activeLeaseEndsAt && prev.activeLeaseEndsAt > now);
+
         let newLifeSupport = prev.lifeSupport;
         let changed = false;
+
+        if (!hasActiveLease) {
+          if (activeCoolers.length > 0) {
+            const newCoolers = newLifeSupport.coolers.map((c) =>
+              c.active ? { ...c, active: false } : c
+            );
+            newLifeSupport = { ...newLifeSupport, coolers: newCoolers };
+            changed = true;
+          }
+          return changed ? { ...prev, lifeSupport: newLifeSupport } : prev;
+        }
 
         if (activeCoolers.length > 0 && !hasChargedBattery) {
           const newCoolers = newLifeSupport.coolers.map((c) =>
@@ -2634,6 +2761,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     cancelLeasePurchase,
     pendingLeasePurchase,
     buyFood,
+    eatFood,
     buyPickaxe,
     switchPickaxe,
     equipPickaxe,
@@ -2707,6 +2835,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     buyCooler,
     toggleCooler,
     setCoolerMode,
+    switchCooler,
     repairCooler,
     buyGenerator,
     toggleGenerator,

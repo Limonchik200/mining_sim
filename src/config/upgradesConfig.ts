@@ -142,15 +142,39 @@ export function equipmentUpgradeCost(type: EquipmentType, currentLevel: number):
 }
 
 export function equipmentMaxLevelForMine(type: EquipmentType, highestUnlockedMine: number): number {
-  const mine = MINES.find((m) => m.id === highestUnlockedMine);
-  if (!mine?.unlockRequirements) return EQUIPMENT_CONFIG[type].maxLevel;
-  const req = mine.unlockRequirements;
-  switch (type) {
-    case 'helmet':      return req.helmetLevel ?? 0;
-    case 'flashlight':  return req.flashlightLevel ?? 0;
-    case 'gloves':      return req.glovesLevel ?? 0;
-    case 'respirator':  return req.respiratorLevel ?? 0;
-    case 'lighting':    return req.lightingLevel ?? 0;
-    case 'ventilation': return req.ventilationLevel ?? 0;
+  let best = 0;
+  for (const mine of MINES) {
+    if (mine.id > highestUnlockedMine) break;
+    const req = mine.unlockRequirements;
+    if (!req) continue;
+    const val =
+      type === 'helmet' ? req.helmetLevel :
+      type === 'flashlight' ? req.flashlightLevel :
+      type === 'gloves' ? req.glovesLevel :
+      type === 'respirator' ? req.respiratorLevel :
+      type === 'lighting' ? req.lightingLevel :
+      req.ventilationLevel;
+    if (val !== undefined && val > best) best = val;
   }
+  return best;
+}
+
+export function mineRequiredForNextEquipmentLevel(type: EquipmentType, highestUnlockedMine: number): { mineId: number; neededLevel: number } | null {
+  const currentCap = equipmentMaxLevelForMine(type, highestUnlockedMine);
+  for (const mine of MINES) {
+    if (mine.id <= highestUnlockedMine) continue;
+    const req = mine.unlockRequirements;
+    if (!req) continue;
+    const val =
+      type === 'helmet' ? req.helmetLevel :
+      type === 'flashlight' ? req.flashlightLevel :
+      type === 'gloves' ? req.glovesLevel :
+      type === 'respirator' ? req.respiratorLevel :
+      type === 'lighting' ? req.lightingLevel :
+      req.ventilationLevel;
+    if (val !== undefined && val > currentCap) {
+      return { mineId: mine.id, neededLevel: val };
+    }
+  }
+  return null;
 }

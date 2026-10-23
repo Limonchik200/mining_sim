@@ -114,4 +114,5 @@ export interface LifeSupportState {
   shelfCount: number;
   activeBatteryId: string | null;
   activeOxygenTankId: string | null;
+  activeCoolerId: string | null;
 }

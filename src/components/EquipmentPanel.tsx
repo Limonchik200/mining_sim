@@ -4,10 +4,11 @@ import {
   EQUIPMENT_CONFIG,
   equipmentUpgradeCost,
   equipmentMaxLevelForMine,
+  mineRequiredForNextEquipmentLevel,
   RESPIRATOR_FILTER_PRICE,
   type EquipmentType,
 } from '@/config/upgradesConfig';
-import { HardHat, Flashlight, Hand, Wind, Lightbulb, Fan, Coins, Lock, ChevronUp, Package, Filter } from 'lucide-react';
+import { HardHat, Flashlight, Hand, Wind, Lightbulb, Fan, Coins, Lock, ChevronUp, Package, Filter, Mountain, Sparkles } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 const EQUIP_META: Record<EquipmentType, { icon: LucideIcon; color: string; nameRu: string; nameUk: string; nameEn: string; descRu: string; descUk: string; descEn: string }> = {
@@ -34,12 +35,14 @@ export default function EquipmentPanel() {
     type === 'lighting' ? eq.lightingLevel :
     eq.ventilationLevel;
 
+  const tr = (ru: string, uk: string, en: string) => lang === 'ru' ? ru : (lang === 'uk' ? uk : en);
+
   return (
     <div className="space-y-4">
       <div className="card p-4 flex items-center justify-between">
         <h2 className="text-lg font-bold text-neutral-800 dark:text-neutral-100 flex items-center gap-2">
           <HardHat className="w-5 h-5 text-warning-500" />
-          {lang === 'ru' ? 'Спорядження' : (lang === 'uk' ? 'Спорядження' : 'Equipment')}
+          {tr('Спорядження', 'Спорядження', 'Equipment')}
         </h2>
         <div className="flex items-center gap-1.5">
           <Coins className="w-4 h-4 text-success-500" />
@@ -51,7 +54,7 @@ export default function EquipmentPanel() {
         <div className="flex items-center gap-2 mb-2">
           <Package className="w-4 h-4 text-warning-500" />
           <h3 className="text-sm font-bold uppercase tracking-wide text-neutral-600 dark:text-neutral-400">
-            {lang === 'ru' ? 'Оборудование шахты' : (lang === 'uk' ? 'Обладнання шахти' : 'Mine Equipment')}
+            {tr('Обладнання шахти', 'Обладнання шахти', 'Mine Equipment')}
           </h3>
           <div className="flex-1 h-px bg-neutral-200 dark:bg-neutral-800" />
         </div>
@@ -63,19 +66,30 @@ export default function EquipmentPanel() {
           const isOwned = owned.includes(type) || cfg.purchasePrice === 0;
           const level = getLevel(type);
           const maxForMine = equipmentMaxLevelForMine(type, highestUnlockedMine);
-          const effectiveMax = Math.min(cfg.maxLevel, maxForMine || cfg.maxLevel);
-          const isMaxed = level >= effectiveMax;
+          const effectiveMax = Math.min(cfg.maxLevel, maxForMine);
+          const isAbsoluteMax = level >= cfg.maxLevel;
+          const isMineLocked = !isAbsoluteMax && level >= effectiveMax;
+          const isMaxed = isAbsoluteMax || isMineLocked;
           const upgradeCost = equipmentUpgradeCost(type, level);
           const canAffordUpgrade = state.balance >= upgradeCost;
           const canAffordBuy = state.balance >= cfg.purchasePrice;
-          const name = lang === 'ru' ? meta.nameRu : (lang === 'uk' ? meta.nameUk : meta.nameEn);
-          const desc = lang === 'ru' ? meta.descRu : (lang === 'uk' ? meta.descUk : meta.descEn);
+          const nextMineReq = mineRequiredForNextEquipmentLevel(type, highestUnlockedMine);
+          const name = tr(meta.nameRu, meta.nameUk, meta.nameEn);
+          const desc = tr(meta.descRu, meta.descUk, meta.descEn);
+
+          const levelPct = effectiveMax > 0 ? Math.min(100, (level / effectiveMax) * 100) : 0;
 
           return (
-            <div key={type} className="rounded-xl p-3 bg-neutral-50 dark:bg-neutral-850/50 border border-neutral-200 dark:border-neutral-800">
-              <div className="flex items-start justify-between mb-2">
+            <div
+              key={type}
+              className="group rounded-xl p-3 bg-neutral-50 dark:bg-neutral-850/50 border border-neutral-200 dark:border-neutral-800 transition-all duration-300 hover:border-neutral-300 dark:hover:border-neutral-700 hover:shadow-sm"
+            >
+              <div className="flex items-start justify-between mb-2.5">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: meta.color + '20' }}>
+                  <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:scale-110"
+                    style={{ backgroundColor: meta.color + '20' }}
+                  >
                     <Icon className="w-5 h-5" style={{ color: meta.color }} />
                   </div>
                   <div>
@@ -86,36 +100,84 @@ export default function EquipmentPanel() {
                 {isOwned && (
                   <div className="text-right">
                     <div className="text-[10px] text-neutral-400 uppercase">{t('level_')}</div>
-                    <div className="text-sm font-bold text-primary-500">{level}/{effectiveMax}</div>
+                    <div className={`text-sm font-bold ${isMineLocked ? 'text-neutral-400' : 'text-primary-500'}`}>
+                      {level}/{effectiveMax}
+                    </div>
                   </div>
                 )}
               </div>
 
+              {isOwned && effectiveMax > 0 && (
+                <div className="mb-2.5 h-1.5 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500 ease-out"
+                    style={{
+                      width: `${levelPct}%`,
+                      background: isMineLocked
+                        ? 'linear-gradient(90deg, #94a3b8, #64748b)'
+                        : `linear-gradient(90deg, ${meta.color}, ${meta.color}dd)`,
+                    }}
+                  />
+                </div>
+              )}
+
               {!isOwned ? (
-                <button
-                  onClick={() => purchaseEquipment(type)}
-                  disabled={!canAffordBuy}
-                  className={`btn w-full py-2 text-sm rounded-lg flex items-center justify-center gap-1.5 ${
-                    canAffordBuy
-                      ? 'bg-warning-500 text-white hover:bg-warning-600'
-                      : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-400 cursor-not-allowed'
-                  }`}
-                >
-                  <Coins className="w-4 h-4" />
-                  {lang === 'ru' ? 'Купить' : (lang === 'uk' ? 'Купити' : 'Buy')} · {formatMoney(cfg.purchasePrice)}
-                </button>
-              ) : isMaxed ? (
+                maxForMine < 1 ? (
+                  <div className="w-full py-2 text-sm font-semibold text-center rounded-lg bg-neutral-100 dark:bg-neutral-800/50 text-neutral-400 flex flex-col items-center gap-1">
+                    <span className="flex items-center gap-1.5">
+                      <Lock className="w-4 h-4" />
+                      {tr('Заблоковано', 'Заблоковано', 'Locked')}
+                    </span>
+                    {nextMineReq && (
+                      <span className="text-[10px] text-neutral-400 flex items-center gap-1">
+                        <Mountain className="w-3 h-3" />
+                        {tr(`Потрібна шахта ${nextMineReq.mineId}`, `Потрібна шахта ${nextMineReq.mineId}`, `Requires Mine ${nextMineReq.mineId}`)}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => purchaseEquipment(type)}
+                    disabled={!canAffordBuy}
+                    className={`btn w-full py-2 text-sm rounded-lg flex items-center justify-center gap-1.5 transition-all duration-200 ${
+                      canAffordBuy
+                        ? 'bg-warning-500 text-white hover:bg-warning-600 hover:shadow-md active:scale-[0.98]'
+                        : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-400 cursor-not-allowed'
+                    }`}
+                  >
+                    <Coins className="w-4 h-4" />
+                    {tr('Купити', 'Купити', 'Buy')} · {formatMoney(cfg.purchasePrice)}
+                  </button>
+                )
+              ) : isAbsoluteMax ? (
                 <div className="w-full py-2 text-sm font-semibold text-center rounded-lg bg-success-500/10 text-success-500 flex items-center justify-center gap-1.5">
-                  <Lock className="w-4 h-4" />
+                  <Sparkles className="w-4 h-4" />
                   {t('maxLevelReached')}
+                </div>
+              ) : isMineLocked ? (
+                <div className="w-full py-2 text-sm font-semibold text-center rounded-lg bg-neutral-100 dark:bg-neutral-800/50 text-neutral-500 flex flex-col items-center gap-1">
+                  <span className="flex items-center gap-1.5">
+                    <Lock className="w-4 h-4" />
+                    {tr('Потрібна шахта для підвищення', 'Потрібна шахта для підвищення', 'Mine required to upgrade')}
+                  </span>
+                  {nextMineReq && (
+                    <span className="text-[10px] text-neutral-400 flex items-center gap-1">
+                      <Mountain className="w-3 h-3" />
+                      {tr(
+                        `Відкрийте шахту ${nextMineReq.mineId} для рівня ${nextMineReq.neededLevel}`,
+                        `Відкрийте шахту ${nextMineReq.mineId} для рівня ${nextMineReq.neededLevel}`,
+                        `Unlock Mine ${nextMineReq.mineId} for level ${nextMineReq.neededLevel}`
+                      )}
+                    </span>
+                  )}
                 </div>
               ) : (
                 <button
                   onClick={() => upgradeEquipment(type)}
                   disabled={!canAffordUpgrade}
-                  className={`btn w-full py-2 text-sm rounded-lg flex items-center justify-center gap-1.5 ${
+                  className={`btn w-full py-2 text-sm rounded-lg flex items-center justify-center gap-1.5 transition-all duration-200 ${
                     canAffordUpgrade
-                      ? 'bg-primary-500 text-white hover:bg-primary-600'
+                      ? 'bg-primary-500 text-white hover:bg-primary-600 hover:shadow-md active:scale-[0.98]'
                       : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-400 cursor-not-allowed'
                   }`}
                 >
@@ -138,16 +200,16 @@ export default function EquipmentPanel() {
               </div>
               <div>
                 <div className="text-sm font-bold text-neutral-800 dark:text-neutral-200">
-                  {lang === 'ru' ? 'Дымовой фильтр' : (lang === 'uk' ? 'Димовий фільтр' : 'Smoke Filter')}
+                  {tr('Димовий фільтр', 'Димовий фільтр', 'Smoke Filter')}
                 </div>
                 <div className="text-xs text-neutral-400">
-                  {lang === 'ru' ? 'Для генератора' : (lang === 'uk' ? 'Для генератора' : 'Required for generator')}
+                  {tr('Для генератора', 'Для генератора', 'Required for generator')}
                 </div>
               </div>
             </div>
             {eq.respiratorFilterPurchased && (
               <span className="text-xs font-bold text-success-500 bg-success-500/10 px-2 py-0.5 rounded-md">
-                {lang === 'ru' ? 'Куплено' : (lang === 'uk' ? 'Куплено' : 'Owned')}
+                {tr('Куплено', 'Куплено', 'Owned')}
               </span>
             )}
           </div>
@@ -155,14 +217,14 @@ export default function EquipmentPanel() {
             <button
               onClick={purchaseRespiratorFilter}
               disabled={state.balance < RESPIRATOR_FILTER_PRICE}
-              className={`btn w-full py-2 text-sm rounded-lg flex items-center justify-center gap-1.5 ${
+              className={`btn w-full py-2 text-sm rounded-lg flex items-center justify-center gap-1.5 transition-all duration-200 ${
                 state.balance >= RESPIRATOR_FILTER_PRICE
-                  ? 'bg-accent-500 text-white hover:bg-accent-600'
+                  ? 'bg-accent-500 text-white hover:bg-accent-600 hover:shadow-md active:scale-[0.98]'
                   : 'bg-neutral-200 dark:bg-neutral-800 text-neutral-400 cursor-not-allowed'
               }`}
             >
               <Coins className="w-4 h-4" />
-              {lang === 'ru' ? 'Купить' : (lang === 'uk' ? 'Купити' : 'Buy')} · {formatMoney(RESPIRATOR_FILTER_PRICE)}
+              {tr('Купити', 'Купити', 'Buy')} · {formatMoney(RESPIRATOR_FILTER_PRICE)}
             </button>
           )}
         </div>

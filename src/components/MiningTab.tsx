@@ -4,6 +4,7 @@ import { formatTime, formatMoney } from '@/config';
 import { getPickaxeTier, getRepairCost, isUnlimitedDurability } from '@/config/pickaxesConfig';
 import { getMineById, MINES, RESOURCES, isDumpMine } from '@/config/minesConfig';
 import { CASE_RARITIES } from '@/config/casesConfig';
+import { COOLER_CONFIGS } from '@/config/coolerConfig';
 import type { ResourceType, CaseRarity } from '@/types';
 import MineRoomView from '@/components/MineRoomView';
 import {
@@ -22,22 +23,34 @@ import {
   Gem,
   CheckCircle2,
   Timer,
+  ShoppingBag,
+  ChevronRight,
 } from 'lucide-react';
 
 export default function MiningTab() {
-  const { state, dig, collectBasket, t, lang, currentAutoCooldownMs, currentBasketCap, currentMineId, setCurrentMineId, repairActivePickaxe, currentEnergyRegenSeconds, currentEnergyRegenAmount, totalItemEffects, currentEnergyMax, isMineUnlocked, startMineUnlock, speedUpMineUnlock, checkMineUnlockRequirements } = useGame();
+  const { state, dig, collectBasket, t, lang, currentAutoCooldownMs, currentBasketCap, currentMineId, setCurrentMineId, repairActivePickaxe, currentEnergyRegenSeconds, currentEnergyRegenAmount, totalItemEffects, currentEnergyMax, isMineUnlocked, startMineUnlock, speedUpMineUnlock, checkMineUnlockRequirements, setItemsOpen } = useGame();
   const [, force] = useState(0);
-  const digBtnRef = useRef<HTMLButtonElement>(null);
-  const [digShake, setDigShake] = useState(false);
-
   const [showMineSelector, setShowMineSelector] = useState(false);
-  const [showMineInfo, setShowMineInfo] = useState(false);
+  const [showMiningWindow, setShowMiningWindow] = useState(false);
+  const [showRepairPlaque, setShowRepairPlaque] = useState(false);
   const [unlockTargetMineId, setUnlockTargetMineId] = useState<number | null>(null);
+  const [mineOpenedNotice, setMineOpenedNotice] = useState<number | null>(null);
 
   useEffect(() => {
     const interval = setInterval(() => force((n) => n + 1), 250);
     return () => clearInterval(interval);
   }, []);
+
+  // Track mine unlock completion for "Mine opened" notice
+  const prevUnlockedRef = useRef<number[]>(state.unlockedMines || [0, 1]);
+  useEffect(() => {
+    const currentUnlocked = state.unlockedMines || [0, 1];
+    const newlyOpened = currentUnlocked.filter(id => !prevUnlockedRef.current.includes(id) && id > 1);
+    if (newlyOpened.length > 0) {
+      setMineOpenedNotice(newlyOpened[0]);
+    }
+    prevUnlockedRef.current = [...currentUnlocked];
+  }, [state.unlockedMines]);
 
   const now = Date.now();
   const autoMiningRemaining = state.autoMiningEndsAt
@@ -52,9 +65,29 @@ export default function MiningTab() {
   const dumpMine = isDumpMine(currentMineId);
   const hasActiveLease = state.activeLeaseEndsAt && activeLeaseRemaining > 0;
   const hasLeaseOrDump = dumpMine || hasActiveLease;
-  const canDig = state.energy >= tier.energyCost && state.activePickaxe && (isShovel || state.activePickaxe.durability >= tier.durabilityCost) && hasLeaseOrDump;
-  const autoMiningActive = !!state.autoMiningEndsAt && autoMiningRemaining > 0 && state.autoBasket.length < currentBasketCap;
-  const basketFull = state.autoBasket.length >= currentBasketCap;
+
+  // Temperature for current mine
+  const currentMineData = getMineById(currentMineId);
+  const baseTemp = currentMineData.environment?.baseTemperature ?? 15;
+  const activeCoolers = state.lifeSupport.coolers.filter((c) => c.active && c.durability > 0);
+  const tempReduction = activeCoolers.reduce((sum, c) => {
+    const cfg = COOLER_CONFIGS[c.type];
+    return sum + (cfg.modeConfigs[c.mode]?.tempReduction ?? 0);
+  }, 0);
+  const currentTemp = baseTemp - tempReduction;
+  const needsOxygen = currentMineId >= 3;
+  const activeTank = state.lifeSupport.activeOxygenTankId
+    ? state.lifeSupport.oxygenTanks.find((t) => t.id === state.lifeSupport.activeOxygenTankId)
+    : state.lifeSupport.oxygenTanks.find((t) => t.currentOxygen > 0);
+
+  const basketTotalMass = state.autoBasket.reduce((sum, item) => sum + item.mass, 0);
+
+  const canDig = state.energy >= tier.energyCost && state.activePickaxe && (isShovel || state.activePickaxe.durability >= tier.durabilityCost) && hasLeaseOrDump
+    && (!needsOxygen || (activeTank && activeTank.currentOxygen > 0))
+    && (dumpMine || (currentTemp >= 8 && currentTemp <= 18));
+
+  const autoMiningActive = !!state.autoMiningEndsAt && autoMiningRemaining > 0 && basketTotalMass < currentBasketCap;
+  const basketFull = basketTotalMass >= currentBasketCap;
 
   const energyDeficit = currentEnergyMax - state.energy;
   const activeBuffs = state.buffs.filter((b) => b.expiresAt > now);
@@ -69,15 +102,9 @@ export default function MiningTab() {
   const needsRepair = !isShovel && state.activePickaxe && state.activePickaxe.durability < state.activePickaxe.maxDurability;
   const canAffordRepair = state.balance >= repairCost;
 
-  const handleDig = (e: React.MouseEvent<HTMLButtonElement>) => {
-    const rect = digBtnRef.current?.getBoundingClientRect();
-    const x = rect ? rect.left + rect.width / 2 : e.clientX;
-    const y = rect ? rect.top + rect.height / 2 - 20 : e.clientY;
+  const handleDig = (x?: number, y?: number) => {
+    if (!canDig) return;
     dig(x, y);
-    if (!canDig) {
-      setDigShake(true);
-      setTimeout(() => setDigShake(false), 300);
-    }
   };
 
   const basketSummary = state.autoBasket.reduce(
@@ -94,7 +121,7 @@ export default function MiningTab() {
   const durabilityPct = state.activePickaxe && !isShovel
     ? (state.activePickaxe.durability / state.activePickaxe.maxDurability) * 100
     : 100;
-  const basketPct = currentBasketCap > 0 ? (state.autoBasket.length / currentBasketCap) * 100 : 0;
+  const basketPct = currentBasketCap > 0 ? (basketTotalMass / currentBasketCap) * 100 : 0;
 
   const currentMine = getMineById(currentMineId);
   const mineName = lang === 'ru' ? currentMine.nameRu : (lang === 'uk' ? currentMine.nameUk : currentMine.nameEn);
@@ -108,10 +135,22 @@ export default function MiningTab() {
     ['gold', currentMine.drops.gold ?? 0],
   ] as Array<[ResourceType, number]>).filter(([, chance]) => Number(chance) > 0);
 
+  // Check if previous mine is unlocked for sequential unlock display
+  const unlockedSet = new Set(state.unlockedMines || [0, 1]);
+
   return (
     <div className="space-y-4 relative">
-      {/* Mine selector button */}
-      <div className="flex justify-end items-center mb-2">
+      {/* Top bar: Mine selector + Items button */}
+      <div className="flex justify-between items-center mb-2 gap-2">
+        <button
+          onClick={() => setItemsOpen(true)}
+          className="bg-neutral-200 dark:bg-neutral-800 hover:bg-neutral-300 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-200 px-3 py-2 rounded-xl shadow-md flex items-center gap-1.5 font-bold text-sm border border-neutral-300/30 dark:border-neutral-700/30 transition-all"
+        >
+          <ShoppingBag className="w-4 h-4 text-warning-500" />
+          {state.itemBags > 0 && (
+            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-warning-500 text-white">{state.itemBags}</span>
+          )}
+        </button>
         <button
           onClick={() => setShowMineSelector(true)}
           className="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-xl shadow-lg flex items-center gap-2 font-bold text-sm border border-amber-400/30 transition-all"
@@ -121,217 +160,7 @@ export default function MiningTab() {
       </div>
 
       {/* Mine Room Visual */}
-      <MineRoomView onDigActivate={() => handleDig({} as React.MouseEvent<HTMLButtonElement>)} />
-
-      {/* Mine info + status */}
-      <div className="card p-4 sm:p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-bold text-neutral-800 dark:text-neutral-100 flex items-center gap-2">
-            <Pickaxe className="w-5 h-5 text-primary-500" />
-            {mineName}
-          </h2>
-          <button
-            onClick={() => setShowMineInfo(true)}
-            className="w-9 h-9 rounded-full bg-neutral-200 dark:bg-neutral-800 hover:bg-neutral-300 dark:hover:bg-neutral-700 flex items-center justify-center text-neutral-700 dark:text-neutral-300 transition-all font-bold"
-            title={t('mineChances')}
-          >
-            <Info className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Status indicators */}
-        <div className="space-y-3 mb-4">
-          {/* Energy bar */}
-          <div className="rounded-xl bg-neutral-50 dark:bg-neutral-850/50 p-3">
-            <div className="flex items-center justify-between mb-1.5">
-              <div className="flex items-center gap-1.5">
-                <Battery className="w-4 h-4 text-accent-500" />
-                <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">{t('energy')}</span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                {totalItemEffects.energyMaxBonus > 0 && (
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-success-500/20 text-success-500">
-                    +{totalItemEffects.energyMaxBonus}
-                  </span>
-                )}
-                <span className="text-sm font-bold text-neutral-700 dark:text-neutral-300">
-                  {Math.floor(state.energy)} / {currentEnergyMax}
-                </span>
-              </div>
-            </div>
-            <div className="h-3 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden mb-2">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-accent-400 to-accent-500 transition-all duration-300"
-                style={{ width: `${energyPct}%` }}
-              />
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              {state.energy >= currentEnergyMax ? (
-                <span className="text-success-500 font-semibold">{t('energyFull')}</span>
-              ) : (
-                <>
-                  <span className="text-neutral-400">
-                    +{regenPerTick % 1 === 0 ? regenPerTick.toFixed(0) : regenPerTick.toFixed(1)} {t('energyRegenIn')} {secondsUntilNextEnergy}{t('secs')}
-                  </span>
-                  <span className="text-neutral-400">
-                    {t('fullRegenIn')} {Math.floor(secondsUntilFullRegen / 60)}{t('min')} {secondsUntilFullRegen % 60}{t('secs')}
-                  </span>
-                </>
-              )}
-            </div>
-            {activeBuffs.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {activeBuffs.map((buff) => {
-                  const remaining = Math.ceil((buff.expiresAt - now) / 1000);
-                  return (
-                    <span key={buff.id} className="text-xs px-2 py-0.5 rounded-lg bg-accent-500/10 text-accent-500 font-medium flex items-center gap-1">
-                      <Zap className="w-3 h-3" />
-                      {buff.name} ×{buff.regenMultiplier} ({formatTime(remaining)})
-                    </span>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Pickaxe durability + repair */}
-          <div className="rounded-xl bg-neutral-50 dark:bg-neutral-850/50 p-3">
-            <div className="flex items-center justify-between mb-1.5">
-              <div className="flex items-center gap-1.5">
-                <Pickaxe className="w-4 h-4 text-primary-500" />
-                <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">{t('pickaxe')}</span>
-              </div>
-              <span className="text-xs text-neutral-400">
-                {lang === 'ru' ? tier.nameRu : (lang === 'uk' ? tier.nameUk : tier.nameEn)}
-                {state.sparePickaxes.length > 0 && <span className="ml-1.5 text-neutral-400">(+{state.sparePickaxes.length})</span>}
-              </span>
-            </div>
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-neutral-500 dark:text-neutral-400">{t('durability')}</span>
-              <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
-                {state.activePickaxe
-                  ? isShovel
-                    ? '∞'
-                    : `${state.activePickaxe.durability} / ${state.activePickaxe.maxDurability}`
-                  : t('noDurability')}
-              </span>
-            </div>
-            {!isShovel && (
-              <>
-                <div className="h-3 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden mb-2">
-                  <div
-                    className={`h-full rounded-full transition-all duration-300 ${
-                      durabilityPct > 50
-                        ? 'bg-gradient-to-r from-success-400 to-success-500'
-                        : durabilityPct > 20
-                        ? 'bg-gradient-to-r from-warning-400 to-warning-500'
-                        : 'bg-gradient-to-r from-error-400 to-error-500'
-                    }`}
-                    style={{ width: `${durabilityPct}%` }}
-                  />
-                </div>
-                <button
-                  onClick={repairActivePickaxe}
-                  disabled={!needsRepair || !canAffordRepair}
-                  className={`btn w-full py-1.5 text-xs flex items-center justify-center gap-1.5 rounded-lg transition-all ${
-                    !needsRepair
-                      ? 'bg-neutral-200 dark:bg-neutral-800 text-neutral-400 cursor-not-allowed'
-                      : canAffordRepair
-                      ? 'bg-primary-500 text-white hover:bg-primary-600'
-                      : 'bg-neutral-300 dark:bg-neutral-800 text-neutral-500 cursor-not-allowed'
-                  }`}
-                >
-                  <Wrench className="w-3.5 h-3.5" />
-                  {needsRepair ? `${t('repairBtn')} · ${repairCost.toFixed(2)}` : t('repairBtn')}
-                </button>
-              </>
-            )}
-          </div>
-
-          {/* Lease timers */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className={`rounded-xl p-3 bg-neutral-50 dark:bg-neutral-850/50 ${hasActiveLease ? 'border border-primary-500/30' : 'border border-neutral-200 dark:border-neutral-800'}`}>
-              <div className="flex items-center gap-1.5 mb-1">
-                <Zap className="w-4 h-4 text-primary-500" />
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-                  {t('activeLease')}
-                </span>
-                {totalItemEffects.activeLeaseMultBonus > 0 && (
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-success-500/20 text-success-500 ml-auto">
-                    {lang === 'ru' ? `Оренда +${totalItemEffects.activeLeaseMultBonus}х` : (lang === 'uk' ? `Оренда +${totalItemEffects.activeLeaseMultBonus}х` : `Lease +${totalItemEffects.activeLeaseMultBonus}x`)}
-                  </span>
-                )}
-              </div>
-              {hasActiveLease ? (
-                <span className="text-lg font-bold text-primary-500 tabular-nums">
-                  {formatTime(activeLeaseRemaining)}
-                </span>
-              ) : (
-                <span className="text-xs text-neutral-400">{t('inactive')}</span>
-              )}
-            </div>
-            <div className={`rounded-xl p-3 bg-neutral-50 dark:bg-neutral-850/50 ${state.autoMiningEndsAt && autoMiningRemaining > 0 ? 'border border-accent-500/30' : 'border border-neutral-200 dark:border-neutral-800'}`}>
-              <div className="flex items-center gap-1.5 mb-1">
-                <Clock className="w-4 h-4 text-accent-500" />
-                <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-                  {t('autoMining')}
-                </span>
-              </div>
-              {state.autoMiningEndsAt && autoMiningRemaining > 0 ? (
-                <span className="text-lg font-bold text-accent-500 tabular-nums">
-                  {formatTime(autoMiningRemaining)}
-                </span>
-              ) : (
-                <span className="text-xs text-neutral-400">{t('inactive')}</span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-col items-center gap-3 py-2">
-          <button
-            ref={digBtnRef}
-            onClick={handleDig}
-            className={`
-              relative w-28 h-28 sm:w-36 sm:h-36 rounded-full
-              flex items-center justify-center
-              font-bold text-base sm:text-lg uppercase tracking-wide
-              transition-all duration-200
-              ${canDig
-                ? 'bg-gradient-to-br from-primary-400 to-primary-600 text-white shadow-xl shadow-primary-500/30 hover:shadow-2xl hover:shadow-primary-500/40 active:scale-95 animate-pulse-glow'
-                : 'bg-neutral-300 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-600 cursor-not-allowed'
-              }
-              ${digShake ? 'animate-shake' : ''}
-            `}
-          >
-            <div className="flex flex-col items-center gap-2">
-              <Pickaxe className="w-7 h-7 sm:w-9 sm:h-9" />
-              <span>{t('dig')}</span>
-            </div>
-          </button>
-
-          <div className="flex flex-wrap gap-2 justify-center">
-            {!hasLeaseOrDump && (
-              <span className="inline-flex items-center gap-1 text-xs text-error-500 bg-error-500/10 px-2 py-1 rounded-lg">
-                <AlertCircle className="w-3.5 h-3.5" />
-                {t('noLease')}
-              </span>
-            )}
-            {state.energy < tier.energyCost && (
-              <span className="inline-flex items-center gap-1 text-xs text-error-500 bg-error-500/10 px-2 py-1 rounded-lg">
-                <AlertCircle className="w-3.5 h-3.5" />
-                {t('noEnergy')}
-              </span>
-            )}
-            {(!state.activePickaxe || (!isShovel && state.activePickaxe.durability < tier.durabilityCost)) && (
-              <span className="inline-flex items-center gap-1 text-xs text-error-500 bg-error-500/10 px-2 py-1 rounded-lg">
-                <AlertCircle className="w-3.5 h-3.5" />
-                {t('noDurability')}
-              </span>
-            )}
-          </div>
-        </div>
-      </div>
+      <MineRoomView onOreVeinClick={() => setShowMiningWindow(true)} />
 
       {/* Auto mining basket */}
       <div className={`card p-4 ${autoMiningActive ? 'border-accent-500/30' : ''}`}>
@@ -359,7 +188,7 @@ export default function MiningTab() {
         <div className="flex items-center justify-between mb-1">
           <span className="text-xs text-neutral-500 dark:text-neutral-400">{t('autoBasket')}</span>
           <span className="text-sm font-bold text-neutral-700 dark:text-neutral-300">
-            {state.autoBasket.length} / {currentBasketCap}
+            {basketTotalMass.toFixed(1)} / {currentBasketCap} {lang === 'ru' ? 'кг' : (lang === 'uk' ? 'кг' : 'kg')}
           </span>
         </div>
         <div className="h-2.5 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden mb-3">
@@ -412,6 +241,45 @@ export default function MiningTab() {
           </div>
         )}
 
+        {/* Lease timers */}
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <div className={`rounded-xl p-3 bg-neutral-50 dark:bg-neutral-850/50 ${hasActiveLease ? 'border border-primary-500/30' : 'border border-neutral-200 dark:border-neutral-800'}`}>
+            <div className="flex items-center gap-1.5 mb-1">
+              <Zap className="w-4 h-4 text-primary-500" />
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                {t('activeLease')}
+              </span>
+              {totalItemEffects.activeLeaseMultBonus > 0 && (
+                <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-success-500/20 text-success-500 ml-auto">
+                  {lang === 'ru' ? `Оренда +${totalItemEffects.activeLeaseMultBonus}х` : (lang === 'uk' ? `Оренда +${totalItemEffects.activeLeaseMultBonus}х` : `Lease +${totalItemEffects.activeLeaseMultBonus}x`)}
+                </span>
+              )}
+            </div>
+            {hasActiveLease ? (
+              <span className="text-lg font-bold text-primary-500 tabular-nums">
+                {formatTime(activeLeaseRemaining)}
+              </span>
+            ) : (
+              <span className="text-xs text-neutral-400">{t('inactive')}</span>
+            )}
+          </div>
+          <div className={`rounded-xl p-3 bg-neutral-50 dark:bg-neutral-850/50 ${state.autoMiningEndsAt && autoMiningRemaining > 0 ? 'border border-accent-500/30' : 'border border-neutral-200 dark:border-neutral-800'}`}>
+            <div className="flex items-center gap-1.5 mb-1">
+              <Clock className="w-4 h-4 text-accent-500" />
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+                {t('autoMining')}
+              </span>
+            </div>
+            {state.autoMiningEndsAt && autoMiningRemaining > 0 ? (
+              <span className="text-lg font-bold text-accent-500 tabular-nums">
+                {formatTime(autoMiningRemaining)}
+              </span>
+            ) : (
+              <span className="text-xs text-neutral-400">{t('inactive')}</span>
+            )}
+          </div>
+        </div>
+
         <button
           onClick={collectBasket}
           disabled={state.autoBasket.length === 0}
@@ -422,7 +290,7 @@ export default function MiningTab() {
         </button>
       </div>
 
-      {/* Mine selector modal */}
+      {/* Mine selector modal — scrollable */}
       {showMineSelector && (
         <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setShowMineSelector(false)}>
           <div className="card p-6 max-w-sm w-full space-y-4" onClick={(e) => e.stopPropagation()}>
@@ -434,7 +302,7 @@ export default function MiningTab() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-2" style={{ scrollbarWidth: 'thin', scrollbarColor: '#f59e0b transparent' }}>
               {MINES.map((mine) => {
                 const mineUnlocked = isMineUnlocked(mine.id);
                 const levelMet = state.level >= mine.reqLevel;
@@ -444,15 +312,17 @@ export default function MiningTab() {
                 const timerRemaining = unlockTimer
                   ? Math.max(0, Math.ceil((unlockTimer.startedAt + unlockTimer.durationMs - now) / 1000))
                   : 0;
+                const prevUnlocked = mine.id <= 1 || unlockedSet.has(mine.id - 1);
+                const canTryUnlock = levelMet && prevUnlocked;
                 return (
                   <button
                     key={mine.id}
-                    disabled={!levelMet && !mineUnlocked && !unlockTimer}
+                    disabled={!levelMet && !mineUnlocked && !unlockTimer || (!prevUnlocked && !mineUnlocked && !unlockTimer)}
                     onClick={() => {
                       if (mineUnlocked) {
                         setCurrentMineId(mine.id);
                         setShowMineSelector(false);
-                      } else if (levelMet) {
+                      } else if (canTryUnlock) {
                         setUnlockTargetMineId(mine.id);
                         setShowMineSelector(false);
                       }
@@ -464,7 +334,7 @@ export default function MiningTab() {
                         ? 'bg-neutral-100 dark:bg-neutral-800 hover:bg-neutral-200 dark:hover:bg-neutral-700 text-neutral-800 dark:text-neutral-100'
                         : unlockTimer
                         ? 'bg-accent-500/20 text-accent-500 border border-accent-500/30'
-                        : levelMet
+                        : canTryUnlock
                         ? 'bg-neutral-100 dark:bg-neutral-800 hover:bg-amber-500/20 text-neutral-800 dark:text-neutral-100 border border-amber-500/30'
                         : 'bg-neutral-100/50 dark:bg-neutral-800/40 text-neutral-400 cursor-not-allowed'
                     }`}
@@ -474,6 +344,8 @@ export default function MiningTab() {
                       <span className="text-xs">{isSelected ? (lang === 'ru' ? 'Выбрано' : (lang === 'uk' ? 'Вибрано' : 'Selected')) : (lang === 'ru' ? 'Выбрать' : (lang === 'uk' ? 'Обрати' : 'Select'))}</span>
                     ) : unlockTimer ? (
                       <span className="text-xs flex items-center gap-1"><Timer className="w-3.5 h-3.5" /> {formatTime(timerRemaining)}</span>
+                    ) : !prevUnlocked && mine.id > 1 ? (
+                      <span className="text-xs flex items-center gap-1"><Lock className="w-3.5 h-3.5" /> {lang === 'ru' ? 'Пред. шахта' : (lang === 'uk' ? 'Попер. шахта' : 'Prev. mine')}</span>
                     ) : levelMet ? (
                       <span className="text-xs flex items-center gap-1"><Lock className="w-3.5 h-3.5" /> {lang === 'ru' ? 'Разблок.' : (lang === 'uk' ? 'Розбл.' : 'Unlock')}</span>
                     ) : (
@@ -487,44 +359,267 @@ export default function MiningTab() {
         </div>
       )}
 
-      {/* Mine info modal with actual drop rates */}
-      {showMineInfo && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setShowMineInfo(false)}>
-          <div className="card p-6 max-w-sm w-full space-y-4" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between">
+      {/* Mining window — opened by clicking ore vein */}
+      {showMiningWindow && (() => {
+        const mine = getMineById(currentMineId);
+        const mName = lang === 'ru' ? mine.nameRu : (lang === 'uk' ? mine.nameUk : mine.nameEn);
+        return (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowMiningWindow(false)}>
+            <div className="card w-full max-w-md p-5 space-y-4 animate-drop-in" onClick={(e) => e.stopPropagation()}>
+              {/* Header with mine name and number */}
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold text-neutral-800 dark:text-neutral-100 flex items-center gap-2">
+                  <Pickaxe className="w-5 h-5 text-primary-500" />
+                  {mName}
+                  <span className="text-xs text-neutral-400">#{currentMineId}</span>
+                </h3>
+                <button onClick={() => setShowMiningWindow(false)} className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200">
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Oxygen/temperature warnings */}
+              {needsOxygen && (!activeTank || activeTank.currentOxygen <= 0) && (
+                <div className="flex items-center gap-1.5 text-xs text-error-500 bg-error-500/10 px-3 py-2 rounded-lg">
+                  <AlertCircle className="w-4 h-4" />
+                  {lang === 'ru' ? 'Нет кислорода! Нужен балон.' : (lang === 'uk' ? 'Немає кисню! Потрібен балон.' : 'No oxygen! Need a tank.')}
+                </div>
+              )}
+              {!dumpMine && (currentTemp < 8 || currentTemp > 18) && (
+                <div className="flex items-center gap-1.5 text-xs text-error-500 bg-error-500/10 px-3 py-2 rounded-lg">
+                  <AlertCircle className="w-4 h-4" />
+                  {lang === 'ru' ? `Температура ${currentTemp.toFixed(0)}°C вне нормы (8–18°C)!` : (lang === 'uk' ? `Температура ${currentTemp.toFixed(0)}°C поза нормою (8–18°C)!` : `Temperature ${currentTemp.toFixed(0)}°C out of range (8–18°C)!`)}
+                </div>
+              )}
+
+              {/* Energy bar */}
+              <div className="rounded-xl bg-neutral-50 dark:bg-neutral-850/50 p-3">
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <Battery className="w-4 h-4 text-accent-500" />
+                    <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">{t('energy')}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    {totalItemEffects.energyMaxBonus > 0 && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-success-500/20 text-success-500">
+                        +{totalItemEffects.energyMaxBonus}
+                      </span>
+                    )}
+                    <span className="text-sm font-bold text-neutral-700 dark:text-neutral-300">
+                      {Math.floor(state.energy)} / {currentEnergyMax}
+                    </span>
+                  </div>
+                </div>
+                <div className="h-3 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden mb-2">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-accent-400 to-accent-500 transition-all duration-300"
+                    style={{ width: `${energyPct}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  {state.energy >= currentEnergyMax ? (
+                    <span className="text-success-500 font-semibold">{t('energyFull')}</span>
+                  ) : (
+                    <>
+                      <span className="text-neutral-400">
+                        +{regenPerTick % 1 === 0 ? regenPerTick.toFixed(0) : regenPerTick.toFixed(1)} {t('energyRegenIn')} {secondsUntilNextEnergy}{t('secs')}
+                      </span>
+                      <span className="text-neutral-400">
+                        {t('fullRegenIn')} {Math.floor(secondsUntilFullRegen / 60)}{t('min')} {secondsUntilFullRegen % 60}{t('secs')}
+                      </span>
+                    </>
+                  )}
+                </div>
+                {activeBuffs.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {activeBuffs.map((buff) => {
+                      const remaining = Math.ceil((buff.expiresAt - now) / 1000);
+                      return (
+                        <span key={buff.id} className="text-xs px-2 py-0.5 rounded-lg bg-accent-500/10 text-accent-500 font-medium flex items-center gap-1">
+                          <Zap className="w-3 h-3" />
+                          {buff.name} ×{buff.regenMultiplier} ({formatTime(remaining)})
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Pickaxe durability bar — clickable for repair */}
+              <div className="rounded-xl bg-neutral-50 dark:bg-neutral-850/50 p-3">
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <Pickaxe className="w-4 h-4 text-primary-500" />
+                    <span className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">{t('pickaxe')}</span>
+                  </div>
+                  <span className="text-xs text-neutral-400">
+                    {lang === 'ru' ? tier.nameRu : (lang === 'uk' ? tier.nameUk : tier.nameEn)}
+                    {state.sparePickaxes.length > 0 && <span className="ml-1.5 text-neutral-400">(+{state.sparePickaxes.length})</span>}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-neutral-500 dark:text-neutral-400">{t('durability')}</span>
+                  <span className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">
+                    {state.activePickaxe
+                      ? isShovel
+                        ? '∞'
+                        : `${state.activePickaxe.durability} / ${state.activePickaxe.maxDurability}`
+                      : t('noDurability')}
+                  </span>
+                </div>
+                {!isShovel && (
+                  <>
+                    <button
+                      onClick={() => setShowRepairPlaque(!showRepairPlaque)}
+                      className="w-full text-left"
+                    >
+                      <div className="h-3 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden mb-2 cursor-pointer hover:opacity-80 transition-opacity">
+                        <div
+                          className={`h-full rounded-full transition-all duration-300 ${
+                            durabilityPct > 50
+                              ? 'bg-gradient-to-r from-success-400 to-success-500'
+                              : durabilityPct > 20
+                              ? 'bg-gradient-to-r from-warning-400 to-warning-500'
+                              : 'bg-gradient-to-r from-error-400 to-error-500'
+                          }`}
+                          style={{ width: `${durabilityPct}%` }}
+                        />
+                      </div>
+                    </button>
+                    {showRepairPlaque && (
+                      <div className="rounded-lg bg-primary-500/10 border border-primary-500/20 p-3 flex items-center justify-between gap-2">
+                        <div className="text-xs">
+                          <div className="font-bold text-neutral-700 dark:text-neutral-300 flex items-center gap-1">
+                            <Wrench className="w-3.5 h-3.5 text-primary-500" />
+                            {t('repairBtn')}
+                          </div>
+                          <div className="text-neutral-500 mt-0.5">{formatMoney(repairCost)}</div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            repairActivePickaxe();
+                            setShowRepairPlaque(false);
+                          }}
+                          disabled={!needsRepair || !canAffordRepair}
+                          className={`btn py-1.5 px-3 text-xs rounded-lg transition-all ${
+                            !needsRepair
+                              ? 'bg-neutral-200 dark:bg-neutral-800 text-neutral-400 cursor-not-allowed'
+                              : canAffordRepair
+                              ? 'bg-primary-500 text-white hover:bg-primary-600'
+                              : 'bg-neutral-300 dark:bg-neutral-800 text-neutral-500 cursor-not-allowed'
+                          }`}
+                        >
+                          <Wrench className="w-3.5 h-3.5 inline mr-1" />
+                          {needsRepair ? `${t('repairBtn')}` : '✓'}
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Dig button */}
+              <button
+                onClick={() => handleDig()}
+                disabled={!canDig}
+                className={`
+                  relative w-full py-3 rounded-xl
+                  flex items-center justify-center gap-2
+                  font-bold text-sm uppercase tracking-wide
+                  transition-all duration-200
+                  ${canDig
+                    ? 'bg-gradient-to-br from-primary-400 to-primary-600 text-white shadow-xl shadow-primary-500/30 hover:shadow-2xl hover:shadow-primary-500/40 active:scale-95'
+                    : 'bg-neutral-300 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-600 cursor-not-allowed'
+                  }
+                `}
+              >
+                <Pickaxe className="w-5 h-5" />
+                {t('dig')}
+              </button>
+
+              {/* Block reasons */}
+              <div className="flex flex-wrap gap-2 justify-center">
+                {!hasLeaseOrDump && (
+                  <span className="inline-flex items-center gap-1 text-xs text-error-500 bg-error-500/10 px-2 py-1 rounded-lg">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    {t('noLease')}
+                  </span>
+                )}
+                {state.energy < tier.energyCost && (
+                  <span className="inline-flex items-center gap-1 text-xs text-error-500 bg-error-500/10 px-2 py-1 rounded-lg">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    {t('noEnergy')}
+                  </span>
+                )}
+                {(!state.activePickaxe || (!isShovel && state.activePickaxe.durability < tier.durabilityCost)) && (
+                  <span className="inline-flex items-center gap-1 text-xs text-error-500 bg-error-500/10 px-2 py-1 rounded-lg">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    {t('noDurability')}
+                  </span>
+                )}
+              </div>
+
+              {/* Drop chances inside mining window */}
+              <div className="border-t border-neutral-200 dark:border-neutral-800 pt-3">
+                <div className="text-xs font-bold text-neutral-500 dark:text-neutral-400 mb-2 flex items-center gap-1.5">
+                  <Info className="w-3.5 h-3.5" />
+                  {t('mineChances')}
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {dropEntries.map(([type, chance]) => {
+                    const res = RESOURCES[type];
+                    const name = lang === 'ru' ? res.nameRu : (lang === 'uk' ? res.nameUk : res.nameEn);
+                    return (
+                      <div key={type} className="flex items-center justify-between rounded-lg p-2 bg-neutral-50 dark:bg-neutral-850/50 border border-neutral-200 dark:border-neutral-800">
+                        <div className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ backgroundColor: res.bgColor }}>
+                            <div className="w-3 h-3 rounded" style={{ backgroundColor: res.color }} />
+                          </div>
+                          <span className="text-xs font-semibold text-neutral-800 dark:text-neutral-200">{name}</span>
+                        </div>
+                        <span className="text-xs font-bold text-primary-500">{chance}%</span>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="text-[10px] text-neutral-400 text-center mt-2">
+                  {lang === 'ru' ? 'Шанс алмаза: 0.001% за копание' : (lang === 'uk' ? 'Шанс діаманта: 0.001% за копання' : 'Diamond chance: 0.001% per dig')}
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Mine opened notice */}
+      {mineOpenedNotice !== null && (() => {
+        const mine = getMineById(mineOpenedNotice);
+        const mName = lang === 'ru' ? mine.nameRu : (lang === 'uk' ? mine.nameUk : mine.nameEn);
+        return (
+          <div className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4" onClick={() => setMineOpenedNotice(null)}>
+            <div className="card p-6 max-w-sm w-full text-center space-y-3 animate-drop-in" onClick={(e) => e.stopPropagation()}>
+              <CheckCircle2 className="w-12 h-12 text-success-500 mx-auto" />
               <h3 className="text-lg font-bold text-neutral-800 dark:text-neutral-100">
-                {t('mineChances')} — {mineName}
+                {lang === 'ru' ? 'Шахта открыта!' : (lang === 'uk' ? 'Шахту відкрито!' : 'Mine opened!')}
               </h3>
-              <button onClick={() => setShowMineInfo(false)} className="text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200">
-                <X className="w-5 h-5" />
+              <p className="text-sm text-neutral-500">{mName}</p>
+              <button
+                onClick={() => {
+                  setCurrentMineId(mineOpenedNotice);
+                  setMineOpenedNotice(null);
+                }}
+                className="btn-primary w-full py-2.5 text-sm"
+              >
+                {lang === 'ru' ? 'Перейти к шахте' : (lang === 'uk' ? 'Перейти до шахти' : 'Go to mine')}
+              </button>
+              <button onClick={() => setMineOpenedNotice(null)} className="btn-ghost w-full py-2 text-xs">
+                {t('close')}
               </button>
             </div>
-            <div className="space-y-2">
-              {dropEntries.map(([type, chance]) => {
-                const res = RESOURCES[type];
-                const name = lang === 'ru' ? res.nameRu : (lang === 'uk' ? res.nameUk : res.nameEn);
-                return (
-                  <div key={type} className="flex items-center justify-between rounded-xl p-2.5 bg-neutral-50 dark:bg-neutral-850/50 border border-neutral-200 dark:border-neutral-800">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: res.bgColor }}>
-                        <div className="w-4 h-4 rounded" style={{ backgroundColor: res.color }} />
-                      </div>
-                      <span className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">{name}</span>
-                    </div>
-                    <span className="text-sm font-bold text-primary-500">{chance}%</span>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="text-xs text-neutral-400 text-center pt-1">
-              {lang === 'ru' ? 'Шанс алмаза: 0.001% за копание' : (lang === 'uk' ? 'Шанс діаманта: 0.001% за копання' : 'Diamond chance: 0.001% per dig')}
-            </div>
-            <button onClick={() => setShowMineInfo(false)} className="btn-primary w-full py-2 text-sm">
-              {t('close')}
-            </button>
           </div>
-        </div>
-      )}
+        );
+      })()}
+
       {/* Mine unlock modal */}
       {unlockTargetMineId !== null && (() => {
         const mine = getMineById(unlockTargetMineId);
@@ -630,5 +725,3 @@ export default function MiningTab() {
     </div>
   );
 }
-
-// Keep import for energy regen constant — moved to top

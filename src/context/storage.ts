@@ -41,13 +41,13 @@ export function createInitialState(): GameState {
     energy: ENERGY_MAX,
     maxEnergy: ENERGY_MAX,
     activePickaxe: {
-      id: 'starter-shovel',
-      pickaxeTierId: 'shovel',
-      name: 'Shovel',
-      durability: 999999,
-      maxDurability: 999999,
+      id: 'starter-rusty',
+      pickaxeTierId: 'rusty',
+      name: 'Rusty Pickaxe',
+      durability: 600,
+      maxDurability: 600,
     },
-    activePickaxeTierId: 'shovel',
+    activePickaxeTierId: 'rusty',
     sparePickaxes: [],
     inventory: {
       stone: { mass: 0, count: 0 },
@@ -91,7 +91,7 @@ export function createInitialState(): GameState {
     starterGiftClaimed: false,
     redeemedPromoCodes: [],
     ownedPickaxes: ['shovel', 'rusty'],
-    currentMineId: 0,
+    currentMineId: 1,
     dailyCalendar: {
       lastClaimDay: 0,
       lastClaimTimestamp: null,
@@ -123,6 +123,7 @@ export function createInitialState(): GameState {
     mineUnlockTimers: [],
     ownedEquipment: [],
     craftInventory: {},
+    foodInventory: {},
     fuel: {
       canisters: [],
       diesel95Price: generateDiesel95Price(),
@@ -150,6 +151,7 @@ export function createInitialState(): GameState {
       shelfCount: 1,
       activeBatteryId: null,
       activeOxygenTankId: null,
+      activeCoolerId: null,
     },
     lastSavedAt: Date.now(),
   };
@@ -177,6 +179,7 @@ export function migrateState(saved: Partial<GameState>): GameState {
   merged.ownedEquipment = Array.isArray(saved.ownedEquipment) ? saved.ownedEquipment : [];
 
   merged.craftInventory = (saved.craftInventory && typeof saved.craftInventory === 'object') ? saved.craftInventory : {};
+  merged.foodInventory = (saved.foodInventory && typeof saved.foodInventory === 'object') ? saved.foodInventory : {};
   merged.fuel = saved.fuel
     ? {
         canisters: Array.isArray(saved.fuel.canisters) ? saved.fuel.canisters : [],
@@ -210,6 +213,7 @@ export function migrateState(saved: Partial<GameState>): GameState {
         shelfCount: typeof saved.lifeSupport.shelfCount === 'number' ? Math.min(Math.max(saved.lifeSupport.shelfCount, 1), 6) : 1,
         activeBatteryId: saved.lifeSupport.activeBatteryId ?? null,
         activeOxygenTankId: saved.lifeSupport.activeOxygenTankId ?? null,
+        activeCoolerId: saved.lifeSupport.activeCoolerId ?? null,
       }
     : base.lifeSupport;
 
@@ -252,10 +256,17 @@ export function migrateState(saved: Partial<GameState>): GameState {
   }
 
   if (merged.activePickaxe) {
+    if (merged.activePickaxeTierId === 'shovel') {
+      merged.activePickaxeTierId = 'rusty';
+    }
     const tier = getPickaxeTier(merged.activePickaxeTierId);
     merged.activePickaxe.maxDurability = tier.maxDurability;
     merged.activePickaxe.name = merged.settings.lang === 'ru' ? tier.nameRu : (merged.settings.lang === 'uk' ? tier.nameUk : tier.nameEn);
     if (merged.activePickaxe.durability > tier.maxDurability) {
+      merged.activePickaxe.durability = tier.maxDurability;
+    }
+    if (merged.activePickaxe.pickaxeTierId === 'shovel') {
+      merged.activePickaxe.pickaxeTierId = 'rusty';
       merged.activePickaxe.durability = tier.maxDurability;
     }
   }
