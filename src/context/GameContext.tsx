@@ -78,7 +78,7 @@ import {
   RAIL_UNIT_PRICE,
   WOODEN_BRACING_UNIT_PRICE,
   equipmentUpgradeCost,
-  equipmentMaxLevelForMine,
+  equipmentMaxLevelIncludingNextMine,
   mineRequiredForNextEquipmentLevel,
   type EquipmentType,
 } from '@/config/upgradesConfig';
@@ -2022,7 +2022,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       type === 'respirator' ? eq.respiratorLevel :
       type === 'lighting' ? eq.lightingLevel :
       eq.ventilationLevel;
-    const maxForMine = equipmentMaxLevelForMine(type, highestAccessibleMine);
+    const maxForMine = equipmentMaxLevelIncludingNextMine(type, highestUnlockedMine);
     const maxLevel = Math.min(EQUIPMENT_CONFIG[type].maxLevel, maxForMine);
     if (currentLevel >= maxLevel) {
       pushNotification({ message: lang === 'ru' ? 'Максимальный уровень' : (lang === 'uk' ? 'Максимальний рівень' : 'Max level reached'), type: 'error' });
@@ -2046,7 +2046,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
          'ventilationLevel']: currentLevel + 1,
       },
     }));
-  }, [highestAccessibleMine, pushNotification, lang, tr]);
+  }, [highestUnlockedMine, pushNotification, lang, tr]);
 
   const purchaseEquipment = useCallback((type: EquipmentType) => {
     const current = stateRef.current;
@@ -2055,9 +2055,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
       pushNotification({ message: lang === 'ru' ? 'Уже куплено' : (lang === 'uk' ? 'Вже куплено' : 'Already owned'), type: 'info' });
       return;
     }
-    const maxForMine = equipmentMaxLevelForMine(type, highestAccessibleMine);
+    const maxForMine = equipmentMaxLevelIncludingNextMine(type, highestUnlockedMine);
     if (maxForMine < 1) {
-      const nextMine = mineRequiredForNextEquipmentLevel(type, highestAccessibleMine);
+      const nextMine = mineRequiredForNextEquipmentLevel(type, highestUnlockedMine);
       const mineMsg = nextMine ? (lang === 'ru' ? `Откройте шахту ${nextMine.mineId}` : (lang === 'uk' ? `Відкрийте шахту ${nextMine.mineId}` : `Unlock Mine ${nextMine.mineId}`)) : '';
       pushNotification({ message: lang === 'ru' ? `Недоступно. ${mineMsg}` : (lang === 'uk' ? `Недоступно. ${mineMsg}` : `Not available. ${mineMsg}`), type: 'error' });
       return;
@@ -2082,7 +2082,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       },
     }));
     pushNotification({ message: lang === 'ru' ? 'Куплено!' : (lang === 'uk' ? 'Куплено!' : 'Куплено!'), type: 'success' });
-  }, [highestAccessibleMine, pushNotification, lang, tr]);
+  }, [highestUnlockedMine, pushNotification, lang, tr]);
 
   const purchaseRespiratorFilter = useCallback(() => {
     const current = stateRef.current;

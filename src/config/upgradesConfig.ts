@@ -159,10 +159,14 @@ export function equipmentMaxLevelForMine(type: EquipmentType, highestUnlockedMin
   return best;
 }
 
+export function equipmentMaxLevelIncludingNextMine(type: EquipmentType, highestUnlockedMine: number): number {
+  return equipmentMaxLevelForMine(type, highestUnlockedMine + 1);
+}
+
 export function mineRequiredForNextEquipmentLevel(type: EquipmentType, highestUnlockedMine: number): { mineId: number; neededLevel: number } | null {
-  const currentCap = equipmentMaxLevelForMine(type, highestUnlockedMine);
+  const currentCap = equipmentMaxLevelIncludingNextMine(type, highestUnlockedMine);
   for (const mine of MINES) {
-    if (mine.id <= highestUnlockedMine) continue;
+    if (mine.id <= highestUnlockedMine + 1) continue;
     const req = mine.unlockRequirements;
     if (!req) continue;
     const val =
