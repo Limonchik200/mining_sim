@@ -192,15 +192,17 @@ export function processOfflineProgress(
       prev.equippedItems, prev.ownedItems
     );
     const effectiveMax = next.maxEnergy + energyMaxBonus;
-    const activeBuffs = next.buffs.filter((b) => b.expiresAt > now);
-    let totalRegenMult = 1;
-    for (const buff of activeBuffs) totalRegenMult += buff.regenMultiplier;
-    next.buffs = activeBuffs;
-    const regenSeconds = getEnergyRegenValue(next.upgrades.energyRegenLvl);
-    const regenMult = getEnergyRegenAmountValue(next.upgrades.energyRegenAmountLvl ?? 0) + energyRegenBonus;
-    const regenAmount = (offlineSec / regenSeconds) * totalRegenMult * regenMult;
-    next.energy = Math.min(effectiveMax, next.energy + regenAmount);
-    changed = true;
+    if (next.energy < effectiveMax) {
+      const activeBuffs = next.buffs.filter((b) => b.expiresAt > now);
+      let totalRegenMult = 1;
+      for (const buff of activeBuffs) totalRegenMult += buff.regenMultiplier;
+      next.buffs = activeBuffs;
+      const regenSeconds = getEnergyRegenValue(next.upgrades.energyRegenLvl);
+      const regenMult = getEnergyRegenAmountValue(next.upgrades.energyRegenAmountLvl ?? 0) + energyRegenBonus;
+      const regenAmount = (offlineSec / regenSeconds) * totalRegenMult * regenMult;
+      next.energy = Math.min(effectiveMax, next.energy + regenAmount);
+      changed = true;
+    }
   }
 
   next.buffs = next.buffs.filter((b) => b.expiresAt > now);

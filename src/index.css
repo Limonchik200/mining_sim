@@ -19,7 +19,7 @@
 
 @layer components {
   .tab-btn {
-    @apply flex-1 flex flex-col items-center justify-center gap-1 py-2.5 px-2 rounded-xl transition-all duration-200;
+    @apply flex flex-col items-center justify-center gap-0.5 py-2 px-1 sm:py-2.5 sm:px-2 rounded-xl transition-all duration-200 min-w-0;
   }
   .tab-btn-active {
     @apply bg-primary-500/20 text-primary-500 dark:text-primary-400 scale-105;
