@@ -3,19 +3,12 @@ import { useGame } from '@/context/GameContext';
 import { formatMoney } from '@/config';
 import { getMineById, isDumpMine } from '@/config/minesConfig';
 import { getPickaxeTier, isUnlimitedDurability, FOOD_ITEMS } from '@/config/pickaxesConfig';
-import { COOLER_CONFIGS, getCoolerDurabilityPct, getCoolerRemainingSec } from '@/config/coolerConfig';
+import { COOLER_CONFIGS, getCoolerDurabilityPct } from '@/config/coolerConfig';
 import { BATTERY_CONFIGS } from '@/config/batteryConfig';
 import { OXYGEN_TANK_CONFIGS } from '@/config/oxygenConfig';
 import { GENERATOR_LITHIUM_SLOTS } from '@/config/generatorConfig';
 import type { CoolerMode, BatteryInstance, OxygenTank, FuelCanister } from '@/types/craft';
 import { Power, Wrench, X, Plus, Minus, Battery, Wind, Fuel, Candy, CupSoda, Cookie } from 'lucide-react';
-
-function formatRemaining(sec: number): string {
-  if (sec <= 0) return '0s';
-  const m = Math.floor(sec / 60);
-  const s = Math.round(sec % 60);
-  return m > 0 ? `${m}m ${s}s` : `${s}s`;
-}
 
 type ShelfItem =
   | { kind: 'generator'; color: string; w: number; h: number }
@@ -67,7 +60,7 @@ function buildShelfItems(ls: import('@/types/craft').LifeSupportState, canisters
 }
 
 export default function MineRoomView({ onOreVeinClick }: { onOreVeinClick: () => void }) {
-  const { state, lang, buyShelf, toggleCooler, setCoolerMode, repairCooler, toggleGenerator, refuelGenerator, insertLithiumBattery, removeLithiumBattery, sellCanister, usedWarehouseSpace, totalWarehouseSpace, currentMineId, eatFood } = useGame();
+  const { state, lang, buyShelf, toggleCooler, setCoolerMode, repairCooler, toggleGenerator, refuelGenerator, insertLithiumBattery, removeLithiumBattery, sellCanister, toggleOxygenValve, usedWarehouseSpace, totalWarehouseSpace, currentMineId, eatFood } = useGame();
   const ls = state.lifeSupport;
   const [showCoolerModal, setShowCoolerModal] = useState(false);
   const [showFoodModal, setShowFoodModal] = useState(false);
@@ -294,7 +287,7 @@ export default function MineRoomView({ onOreVeinClick }: { onOreVeinClick: () =>
             <button
               onClick={() => setShowCoolerModal(true)}
               className="relative transition-transform hover:scale-105"
-              style={{ width: '60px', height: '44px', marginTop: '12px', marginLeft: '8px' }}
+              style={{ width: '60px', height: '44px', marginTop: '72px', marginLeft: '20px', zIndex: 30 }}
             >
               <div className="absolute inset-0 rounded-md"
                 style={{
@@ -572,6 +565,52 @@ export default function MineRoomView({ onOreVeinClick }: { onOreVeinClick: () =>
           </div>
         </div>
 
+        {/* ===== Quick toggle controls: Cooler + Oxygen valve + Generator ===== */}
+        <div className="absolute top-40 left-2 z-20 flex flex-col gap-2 mt-2">
+          {ls.coolers.length > 0 && (
+            <button
+              onClick={() => toggleCooler((ls.activeCoolerId && ls.coolers.find((c) => c.id === ls.activeCoolerId) && ls.coolers.find((c) => c.id === ls.activeCoolerId)!.durability > 0) ? ls.activeCoolerId! : (ls.coolers.find((c) => c.durability > 0)?.id ?? ls.coolers[0].id))}
+              className={`flex items-center gap-1 rounded-lg px-2 py-1.5 text-[10px] font-bold transition-all active:scale-95 ${
+                coolerActive
+                  ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                  : 'bg-green-500/20 text-green-400 border border-green-500/30'
+              }`}
+              style={{ backdropFilter: 'blur(6px)' }}
+            >
+              <Power className="w-3 h-3 shrink-0" />
+              {coolerActive ? tr('Охол. ВИМК', 'Охол. ВИМК', 'Cooler OFF') : tr('Охол. УВІМК', 'Охол. УВІМК', 'Cooler ON')}
+            </button>
+          )}
+          {needsOxygen && ls.oxygenTanks.length > 0 && (
+            <button
+              onClick={toggleOxygenValve}
+              className={`flex items-center gap-1 rounded-lg px-2 py-1.5 text-[10px] font-bold transition-all active:scale-95 ${
+                ls.oxygenValveOpen
+                  ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30'
+                  : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+              }`}
+              style={{ backdropFilter: 'blur(6px)' }}
+            >
+              <Wind className="w-3 h-3 shrink-0" />
+              {ls.oxygenValveOpen ? tr('Відкритий', 'Відкритий', 'Valve open') : tr('Закритий', 'Закритий', 'Valve closed')}
+            </button>
+          )}
+          {ls.generator.purchased && (
+            <button
+              onClick={toggleGenerator}
+              className={`flex items-center gap-1 rounded-lg px-2 py-1.5 text-[10px] font-bold transition-all active:scale-95 ${
+                ls.generator.active
+                  ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                  : 'bg-green-500/20 text-green-400 border border-green-500/30'
+              }`}
+              style={{ backdropFilter: 'blur(6px)' }}
+            >
+              <Power className="w-3 h-3 shrink-0" />
+              {ls.generator.active ? tr('Генер. ВИМК', 'Генер. ВИМК', 'Gen. OFF') : tr('Генер. УВІМК', 'Генер. УВІМК', 'Gen. ON')}
+            </button>
+          )}
+        </div>
+
         {/* CSS keyframes */}
         <style>{`
           @keyframes flicker {
@@ -595,7 +634,7 @@ export default function MineRoomView({ onOreVeinClick }: { onOreVeinClick: () =>
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3"
           style={{ background: 'rgba(0,0,0,0.8)' }}
           onClick={() => setWarehouseOpen(false)}>
-          <div className="relative w-full max-w-md rounded-2xl overflow-hidden shadow-2xl"
+          <div className="relative w-full max-w-md rounded-2xl overflow-hidden shadow-2xl max-h-[85vh] flex flex-col"
             style={{
               background: 'linear-gradient(180deg, #1e1c18 0%, #2a2620 30%, #1e1c18 100%)',
               border: '1px solid rgba(255,255,255,0.05)',
@@ -609,7 +648,7 @@ export default function MineRoomView({ onOreVeinClick }: { onOreVeinClick: () =>
               }} />
 
             {/* Header */}
-            <div className="relative flex items-center justify-between p-4 border-b border-white/5">
+            <div className="relative flex items-center justify-between p-4 border-b border-white/5 shrink-0">
               <span className="text-sm font-bold text-neutral-300">{tr('Склад', 'Склад', 'Warehouse')} — {usedSpace}/{totalSpace}м²</span>
               <div className="flex items-center gap-2">
                 {shelfCount < 6 && (
@@ -625,7 +664,7 @@ export default function MineRoomView({ onOreVeinClick }: { onOreVeinClick: () =>
             </div>
 
             {/* Warehouse room with shelves */}
-            <div className="relative p-4 space-y-3" style={{ minHeight: '300px' }}>
+            <div className="relative p-4 space-y-3 overflow-y-auto" style={{ minHeight: '300px' }}>
               <div className="space-y-3">
                 {Array.from({ length: Math.min(shelfCount, 6) }).map((_, shelfIdx) => {
                   const items = shelfItems[shelfIdx] || [];
@@ -741,25 +780,24 @@ export default function MineRoomView({ onOreVeinClick }: { onOreVeinClick: () =>
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3"
           style={{ background: 'rgba(0,0,0,0.8)' }}
           onClick={() => setShowCoolerModal(false)}>
-          <div className="relative w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"
+          <div className="relative w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl max-h-[85vh] flex flex-col"
             style={{
               background: 'linear-gradient(180deg, #1e1c18 0%, #2a2620 50%, #1e1c18 100%)',
               border: '1px solid rgba(255,255,255,0.05)',
             }}
             onClick={(e) => e.stopPropagation()}>
 
-            <div className="flex items-center justify-between p-4 border-b border-white/5">
+            <div className="flex items-center justify-between p-4 border-b border-white/5 shrink-0">
               <span className="text-sm font-bold text-neutral-300">{tr('Охолодження', 'Охолодження', 'Cooling')}</span>
               <button onClick={() => setShowCoolerModal(false)} className="text-neutral-400 hover:text-white">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-4 space-y-3">
+            <div className="p-4 space-y-3 overflow-y-auto">
               {ls.coolers.map((cooler) => {
                 const cfg = COOLER_CONFIGS[cooler.type];
                 const pct = getCoolerDurabilityPct(cooler);
-                const remaining = getCoolerRemainingSec(cooler);
                 const isBroken = cooler.durability <= 0;
                 return (
                   <div key={cooler.id} className="rounded-lg p-3" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.04)' }}>
@@ -771,18 +809,18 @@ export default function MineRoomView({ onOreVeinClick }: { onOreVeinClick: () =>
                     </div>
 
                     <div className="flex items-center gap-2 mb-2">
-                      <span className="text-[9px] text-neutral-500 w-12">{tr('Міцність', 'Міцність', 'Durability')}</span>
+                      <span className="text-[9px] text-neutral-500 w-12">{tr('Залишилось', 'Залишилось', 'Remaining')}</span>
                       <div className="flex-1 h-1.5 rounded-full bg-black/40 overflow-hidden">
                         <div className={`h-full ${pct > 50 ? 'bg-green-500' : pct > 20 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${pct}%` }} />
                       </div>
-                      <span className="text-[9px] text-neutral-400 tabular-nums w-16 text-right">{pct}% · {formatRemaining(remaining)}</span>
+                      <span className="text-[9px] font-bold text-neutral-400 tabular-nums w-10 text-right">{pct}%</span>
                     </div>
 
                     <div className="flex gap-1.5">
                       {isBroken ? (
                         <button onClick={() => repairCooler(cooler.id)} disabled={state.balance < cfg.repairPrice}
                           className="flex-1 text-[10px] py-1.5 rounded-lg font-bold bg-amber-600/30 text-amber-400 disabled:opacity-40">
-                          <Wrench className="w-3 h-3 inline mr-0.5" />{tr('Ремонт', 'Ремонт', 'Repair')} {formatMoney(cfg.repairPrice)}
+                          <Wrench className="w-3 h-3 inline mr-0.5" />{tr('Потрібен ремонт', 'Потрібен ремонт', 'Repair needed')} {formatMoney(cfg.repairPrice)}
                         </button>
                       ) : (
                         <button onClick={() => toggleCooler(cooler.id)}
@@ -826,21 +864,21 @@ export default function MineRoomView({ onOreVeinClick }: { onOreVeinClick: () =>
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3"
           style={{ background: 'rgba(0,0,0,0.8)' }}
           onClick={() => setShowFoodModal(false)}>
-          <div className="relative w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl"
+          <div className="relative w-full max-w-sm rounded-2xl overflow-hidden shadow-2xl max-h-[85vh] flex flex-col"
             style={{
               background: 'linear-gradient(180deg, #1e1c18 0%, #2a2620 50%, #1e1c18 100%)',
               border: '1px solid rgba(255,255,255,0.05)',
             }}
             onClick={(e) => e.stopPropagation()}>
 
-            <div className="flex items-center justify-between p-4 border-b border-white/5">
+            <div className="flex items-center justify-between p-4 border-b border-white/5 shrink-0">
               <span className="text-sm font-bold text-neutral-300">{tr('Шафа з їжею', 'Шафа з їжею', 'Food Cabinet')}</span>
               <button onClick={() => setShowFoodModal(false)} className="text-neutral-400 hover:text-white">
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="p-4 space-y-2">
+            <div className="p-4 space-y-2 overflow-y-auto">
               {!hasFoodCabinet && (
                 <div className="text-center py-3 mb-2 rounded-lg" style={{ background: 'rgba(251,146,60,0.1)', border: '1px solid rgba(251,146,60,0.2)' }}>
                   <span className="text-xs text-orange-400 font-medium">

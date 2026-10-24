@@ -156,6 +156,7 @@ export function createInitialState(): GameState {
       activeBatteryId: null,
       activeOxygenTankId: null,
       activeCoolerId: null,
+      oxygenValveOpen: false,
     },
     specialOffers: (() => {
       const gen = generateSpecialOffers(Date.now());
@@ -228,6 +229,7 @@ export function migrateState(saved: Partial<GameState>): GameState {
         activeBatteryId: saved.lifeSupport.activeBatteryId ?? null,
         activeOxygenTankId: saved.lifeSupport.activeOxygenTankId ?? null,
         activeCoolerId: saved.lifeSupport.activeCoolerId ?? null,
+        oxygenValveOpen: saved.lifeSupport.oxygenValveOpen ?? false,
       }
     : base.lifeSupport;
 

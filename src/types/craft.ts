@@ -121,4 +121,5 @@ export interface LifeSupportState {
   activeBatteryId: string | null;
   activeOxygenTankId: string | null;
   activeCoolerId: string | null;
+  oxygenValveOpen: boolean;
 }

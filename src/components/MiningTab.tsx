@@ -653,7 +653,7 @@ export default function MiningTab() {
             className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
             onClick={() => setUnlockTargetMineId(null)}
           >
-            <div className="card p-6 max-w-sm w-full space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="card p-6 max-w-sm w-full space-y-4 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-bold text-neutral-800 dark:text-neutral-100 flex items-center gap-2">
                   <Lock className="w-5 h-5 text-warning-500" />
@@ -678,6 +678,7 @@ export default function MiningTab() {
                   <button
                     onClick={() => {
                       speedUpMineUnlock(unlockTargetMineId, speedUpMinutes);
+                      setUnlockTargetMineId(null);
                     }}
                     disabled={state.gems < speedUpMinutes || speedUpMinutes <= 0}
                     className={`btn w-full py-2.5 text-sm flex items-center justify-center gap-2 rounded-lg ${
@@ -719,6 +720,9 @@ export default function MiningTab() {
                   <button
                     onClick={() => {
                       startMineUnlock(unlockTargetMineId);
+                      if (!mine.unlockRequirements?.unlockTimeMinutes) {
+                        setUnlockTargetMineId(null);
+                      }
                     }}
                     disabled={!check.met}
                     className={`btn w-full py-2.5 text-sm rounded-lg ${

@@ -21,6 +21,7 @@ import { isFeatureUnlocked, isItemUnlocked } from '@/config/levelUnlocks';
 import { OXYGEN_TANK_CONFIGS } from '@/config/oxygenConfig';
 import { BATTERY_CONFIGS } from '@/config/batteryConfig';
 import { COOLER_CONFIGS } from '@/config/coolerConfig';
+import { GENERATOR_PRICE } from '@/config/generatorConfig';
 import type { OxygenTankType, BatteryType, CoolerType } from '@/types/craft';
 import {
   Clock,
@@ -728,7 +729,7 @@ export default function ShopTab() {
 }
 
 function FilteredLifeSupport() {
-  const { state, buyOxygenTank, buyBattery, buyCooler, lang } = useGame();
+  const { state, buyOxygenTank, buyBattery, buyCooler, buyGenerator, lang } = useGame();
 
   const tr = (ru: string, uk: string, en: string) => lang === 'ru' ? ru : (lang === 'uk' ? uk : en);
 
@@ -895,6 +896,7 @@ function FilteredLifeSupport() {
                     <div className="text-sm font-bold text-neutral-800 dark:text-neutral-200">{tr(cfg.nameRu, cfg.nameUk, cfg.nameEn)}</div>
                     <div className="text-xs text-neutral-400">
                       {cfg.modeConfigs.normal.tempReduction}°C · {cfg.modeConfigs.normal.powerPerMin}МВт/хв
+                      {typeOwned && <span className="ml-1.5 text-success-500">{tr('Куплено', 'Куплено', 'Owned')}</span>}
                     </div>
                   </div>
                 </div>
@@ -918,6 +920,38 @@ function FilteredLifeSupport() {
           'Full equipment assortment is available in the Equipment tab.'
         )}
       </p>
+
+      {/* Generator */}
+      <SectionHeader icon={Fuel} color="#f97316" label={tr('Генератор', 'Генератор', 'Generator')} />
+      <div className="space-y-2">
+        <div className="rounded-xl p-3 bg-neutral-50 dark:bg-neutral-850/50 border border-neutral-200 dark:border-neutral-800">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: '#f9731620' }}>
+                <Fuel className="w-5 h-5 text-orange-500" />
+              </div>
+              <div>
+                <div className="text-sm font-bold text-neutral-800 dark:text-neutral-200">{tr('Дизельный генератор', 'Дизельний генератор', 'Diesel Generator')}</div>
+                <div className="text-xs text-neutral-400">
+                  {tr('Заряжает литиевые АКБ', 'Заряджає літієві АКБ', 'Charges lithium batteries')}
+                  {state.lifeSupport.generator.purchased && <span className="ml-1.5 text-success-500">{tr('Куплено', 'Куплено', 'Owned')}</span>}
+                </div>
+              </div>
+            </div>
+            {state.lifeSupport.generator.purchased ? (
+              <span className="text-xs font-bold text-success-500">{tr('Куплено', 'Куплено', 'Owned')}</span>
+            ) : (
+              <button
+                onClick={() => buyGenerator()}
+                disabled={state.balance < GENERATOR_PRICE}
+                className={state.balance >= GENERATOR_PRICE ? 'btn-primary px-3 py-1.5 text-xs whitespace-nowrap' : 'btn-ghost px-3 py-1.5 text-xs opacity-50 cursor-not-allowed'}
+              >
+                {formatMoney(GENERATOR_PRICE)}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
