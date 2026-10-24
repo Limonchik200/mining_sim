@@ -159,7 +159,7 @@ export const MINES: Mine[] = [
     },
     environment: {
       baseTemperature: 17,
-      oxygenConsumptionPerMin: 4,
+      oxygenConsumptionPerMin: 0,
     },
   },
   {
@@ -180,7 +180,7 @@ export const MINES: Mine[] = [
     },
     environment: {
       baseTemperature: 18,
-      oxygenConsumptionPerMin: 5,
+      oxygenConsumptionPerMin: 4,
     },
   },
   {
@@ -201,7 +201,7 @@ export const MINES: Mine[] = [
     },
     environment: {
       baseTemperature: 19,
-      oxygenConsumptionPerMin: 6,
+      oxygenConsumptionPerMin: 5,
     },
   },
   {
@@ -223,7 +223,7 @@ export const MINES: Mine[] = [
     },
     environment: {
       baseTemperature: 20,
-      oxygenConsumptionPerMin: 7,
+      oxygenConsumptionPerMin: 6,
     },
   },
   {
@@ -246,7 +246,7 @@ export const MINES: Mine[] = [
     },
     environment: {
       baseTemperature: 21,
-      oxygenConsumptionPerMin: 8,
+      oxygenConsumptionPerMin: 7,
     },
   },
   {
@@ -269,7 +269,7 @@ export const MINES: Mine[] = [
     },
     environment: {
       baseTemperature: 22,
-      oxygenConsumptionPerMin: 9,
+      oxygenConsumptionPerMin: 8,
     },
   },
   {
@@ -294,7 +294,7 @@ export const MINES: Mine[] = [
     },
     environment: {
       baseTemperature: 23,
-      oxygenConsumptionPerMin: 10,
+      oxygenConsumptionPerMin: 9,
     },
   },
   {
@@ -319,7 +319,7 @@ export const MINES: Mine[] = [
     },
     environment: {
       baseTemperature: 24,
-      oxygenConsumptionPerMin: 11,
+      oxygenConsumptionPerMin: 10,
     },
   },
 ];
@@ -369,7 +369,7 @@ export const BASE_AUTO_DIG_INTERVAL_MS = 10000;
 export const BASE_AUTO_BASKET_MAX = 50;
 export const MIN_LEASE_SECONDS = 100;
 
-export const BASE_DIAMOND_DROP_CHANCE = 0.00001;
+export const BASE_DIAMOND_DROP_CHANCE = 0.0001;
 export const DIAMOND_DOUBLE_DROP_CHANCE = 0.15;
 export const DIAMOND_BASE_AMOUNT = 1;
 

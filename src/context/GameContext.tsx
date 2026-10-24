@@ -72,6 +72,10 @@ import {
   getEnergyUpgradeDiamondCost,
   getBackpackCost,
   getBackpackWeightLimit,
+  getLuckCost,
+  getLuckChance,
+  getDiamondChanceCost,
+  getDiamondChanceBonus,
   EQUIPMENT_CONFIG,
   RESPIRATOR_FILTER_PRICE,
   CART_STATION_PRICE,
@@ -87,6 +91,7 @@ import type { MineUnlockRequirements, MineUnlockTimer, EquipmentUpgradeState } f
 import type { CraftRecipe, OxygenTankType, BatteryType, CoolerType, CoolerMode } from '@/types/craft';
 import { CRAFT_RECIPES, canCraft as canCraftRecipe, craftRecipe as executeCraftRecipe, getCraftItemName } from '@/config/craftConfig';
 import { generateMaterialsShopSlots, getSlotPrice, MATERIALS_SHOP_REFRESH_MS } from '@/config/materialsShopConfig';
+import { generateSpecialOffers, getOfferPriceGems, SPECIAL_OFFER_BUNDLES, type SpecialOfferBundle } from '@/config/specialOffersConfig';
 import {
   CANISTER_PRICE,
   createCanister,
@@ -179,6 +184,8 @@ interface GameContextValue {
   upgradeBasketCap: () => void;
   upgradeCaseChance: () => void;
   upgradeBackpack: () => void;
+  upgradeLuck: () => void;
+  upgradeDiamondChance: () => void;
   openCase: (caseId: string) => CaseOpenResult | null;
   openAllCases: () => CaseOpenResult[];
   openCasesByRarity: (rarity: CaseRarity) => CaseOpenResult[];
@@ -209,6 +216,7 @@ interface GameContextValue {
   equipItem: (uid: string, slot: number) => void;
   unequipItem: (slot: number) => void;
   upgradeItem: (uid: string) => void;
+  recycleItem: (uid: string) => void;
   unlockSlot6: () => void;
   isSlotUnlocked: (slot: number) => boolean;
   totalItemEffects: ItemEffect;
@@ -227,6 +235,7 @@ interface GameContextValue {
   highestAccessibleMine: number;
   craftItem: (recipeIndex: number) => void;
   buyMaterialSlot: (slotId: string) => void;
+  buySpecialOffer: (offerIndex: number) => void;
   buyCanister: () => void;
   buyFuel: (liters: number) => void;
   buyOxygenTank: (type: OxygenTankType) => void;
@@ -245,6 +254,8 @@ interface GameContextValue {
   sellCanister: (canisterId: string) => void;
   usedWarehouseSpace: number;
   totalWarehouseSpace: number;
+  levelUpData: number | null;
+  setLevelUpData: (level: number | null) => void;
 }
 
 const GameContext = createContext<GameContextValue | null>(null);
@@ -489,15 +500,33 @@ export function GameProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      const itemEff = computeTotalItemEffects(current);
+      let yieldMult = 1;
+      let nozzleTriggered = false;
+      if (itemEff.oreYieldMultChance > 0 && Math.random() < itemEff.oreYieldMultChance) {
+        yieldMult = itemEff.oreYieldMult;
+        nozzleTriggered = true;
+      }
+
+      const baseRollCount = tier.yieldMultiplier;
+      const totalRollCount = baseRollCount * yieldMult;
       const rolls: { resource: Resource; mass: number }[] = [];
-      for (let i = 0; i < tier.yieldMultiplier; i++) {
+      for (let i = 0; i < totalRollCount; i++) {
         const r = getRandomResourceForMine(mineId);
         const m = Math.round(getRandomMass(r) * 100) / 100;
         rolls.push({ resource: r, mass: m });
       }
       const totalMass = rolls.reduce((sum, r) => sum + r.mass, 0);
-      const totalXp = rolls.reduce((sum, r) => sum + r.resource.xp, 0);
-      const diamondDrop = rollDiamondDrop(0, mineId);
+      const luckChance = getLuckChance(stateRef.current.upgrades.luckLvl ?? 0);
+      const luckTriggered = Math.random() < luckChance;
+      const totalXp = rolls.reduce((sum, r) => sum + r.resource.xp, 0) * (luckTriggered ? 2 : 1);
+
+      const diamondBonusFromUpgrades = getDiamondChanceBonus(stateRef.current.upgrades.diamondChanceLvl ?? 0);
+      const diamondBonusFromItems = itemEff.diamondDropBonus;
+      let diamondDrop = rollDiamondDrop(diamondBonusFromUpgrades + diamondBonusFromItems, mineId);
+      if (diamondDrop.dropped && itemEff.diamondMultChance > 0 && Math.random() < itemEff.diamondMultChance) {
+        diamondDrop = { dropped: true, amount: diamondDrop.amount * itemEff.diamondMult };
+      }
 
       setState((prev) => {
         let next = { ...prev };
@@ -505,7 +534,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
         next.energy = Math.max(0, prev.energy - pTier.energyCost);
         next.totalDigs = prev.totalDigs + 1;
 
-        const newDur = prev.activePickaxe!.durability - pTier.durabilityCost;
+        const durabilityCost = pTier.durabilityCost * yieldMult;
+        const newDur = prev.activePickaxe!.durability - durabilityCost;
         if (newDur <= 0) {
           if (prev.sparePickaxes.length > 0) {
             const spare = prev.sparePickaxes[0];
@@ -533,6 +563,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
         next = xpRes.state;
         if (xpRes.leveledUp) {
           pushNotification({ message: `${tr('notifLevelUp')} ${xpRes.newLevel}!`, type: 'success' });
+          setLevelUpData(xpRes.newLevel);
+          for (const newLvl of xpRes.newLevels) {
+            for (const tier of PICKAXE_TIERS) {
+              if (tier.requiredLevel === newLvl && tier.id !== 'shovel') {
+                const pxName = lang === 'ru' ? tier.nameRu : (lang === 'uk' ? tier.nameUk : tier.nameEn);
+                pushNotification({ message: lang === 'ru' ? `Открыта: ${pxName}!` : (lang === 'uk' ? `Відкрито: ${pxName}!` : `Unlocked: ${pxName}!`), type: 'success' });
+              }
+            }
+          }
         }
 
         if (rollCaseDrop(prev.upgrades.caseChanceLvl, mineId)) {
@@ -555,17 +594,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
         return next;
       });
 
-      const fx = x ?? window.innerWidth / 2;
-      const fy = y ?? window.innerHeight / 2;
-      for (const roll of rolls) {
-        const resName = lang === 'ru' ? roll.resource.nameRu : (lang === 'uk' ? roll.resource.nameUk : roll.resource.nameEn);
-        pushFloatText(`+${roll.mass.toFixed(2)} kg ${resName}`, fx, fy, roll.resource.color);
-      }
-      if (diamondDrop.dropped) {
-        pushFloatText(`+${diamondDrop.amount} 💎`, fx, fy - 30, '#06b6d4');
-      }
     },
-    [pushNotification, pushFloatText, tr, lang]
+    [pushNotification, tr, lang]
   );
 
   const collectBasket = useCallback(() => {
@@ -597,6 +627,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
       next = xpRes.state;
       if (xpRes.leveledUp) {
         pushNotification({ message: `${tr('notifLevelUp')} ${xpRes.newLevel}!`, type: 'success' });
+        setLevelUpData(xpRes.newLevel);
+        for (const newLvl of xpRes.newLevels) {
+          for (const tier of PICKAXE_TIERS) {
+            if (tier.requiredLevel === newLvl && tier.id !== 'shovel') {
+              const pxName = lang === 'ru' ? tier.nameRu : (lang === 'uk' ? tier.nameUk : tier.nameEn);
+              pushNotification({ message: lang === 'ru' ? `Открыта: ${pxName}!` : (lang === 'uk' ? `Відкрито: ${pxName}!` : `Unlocked: ${pxName}!`), type: 'success' });
+            }
+          }
+        }
       }
       if (transferredCases > 0) {
         pushNotification({ message: `${tr('notifBasketCollected')} (+${transferredCases} ${tr('cases')})`, type: 'success' });
@@ -1221,6 +1260,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           next = xpRes.state;
           if (xpRes.leveledUp) {
             pushNotification({ message: `${tr('notifLevelUp')} ${xpRes.newLevel}!`, type: 'success' });
+            setLevelUpData(xpRes.newLevel);
           }
           return next;
         });
@@ -1775,6 +1815,56 @@ export function GameProvider({ children }: { children: ReactNode }) {
     pushNotification({ message: `${name} → ${levelName}!`, type: 'success' });
   }, [pushNotification, tr, lang]);
 
+  const recycleItem = useCallback((uid: string) => {
+    const current = stateRef.current;
+    const item = current.ownedItems.find((o) => o.uid === uid);
+    if (!item) return;
+
+    if (item.level === 1) {
+      setState((prev) => ({
+        ...prev,
+        gems: prev.gems + 3,
+        materials: { ...prev.materials, scroll: (prev.materials.scroll || 0) + 2 },
+        ownedItems: prev.ownedItems.filter((o) => o.uid !== uid),
+        equippedItems: prev.equippedItems.map((eu) => (eu === uid ? null : eu)),
+      }));
+      pushNotification({ message: lang === 'ru' ? 'Предмет утилизирован! +3 💎 +2 📜' : (lang === 'uk' ? 'Предмет утилізовано! +3 💎 +2 📜' : 'Item recycled! +3 💎 +2 📜'), type: 'success' });
+      return;
+    }
+
+    const returnedMaterials: Record<string, number> = {};
+    let returnedGems = 0;
+    for (let lvl = 1; lvl < item.level; lvl++) {
+      const cost = UPGRADE_COSTS[lvl as ItemLevel];
+      if (!cost) continue;
+      for (const [matId, amount] of Object.entries(cost)) {
+        if (matId === 'gems') {
+          returnedGems += Math.floor((amount as number) * 0.4);
+        } else {
+          const val = Math.floor((amount as number) * 0.4);
+          if (val > 1) {
+            returnedMaterials[matId] = (returnedMaterials[matId] || 0) + val;
+          }
+        }
+      }
+    }
+
+    setState((prev) => {
+      const newMaterials = { ...prev.materials };
+      for (const [matId, amount] of Object.entries(returnedMaterials)) {
+        newMaterials[matId] = (newMaterials[matId] || 0) + amount;
+      }
+      return {
+        ...prev,
+        gems: prev.gems + returnedGems,
+        materials: newMaterials,
+        ownedItems: prev.ownedItems.filter((o) => o.uid !== uid),
+        equippedItems: prev.equippedItems.map((eu) => (eu === uid ? null : eu)),
+      };
+    });
+    pushNotification({ message: lang === 'ru' ? 'Предмет утилизирован!' : (lang === 'uk' ? 'Предмет утилізовано!' : 'Item recycled!'), type: 'success' });
+  }, [pushNotification, lang]);
+
   const upgradeBackpack = useCallback(() => {
     const lvl = stateRef.current.upgrades.backpackLvl ?? 0;
     if (lvl >= UPGRADE_CONFIG.backpack.maxLevel) {
@@ -1793,8 +1883,45 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }));
   }, [pushNotification, tr]);
 
+  const upgradeLuck = useCallback(() => {
+    const lvl = stateRef.current.upgrades.luckLvl ?? 0;
+    if (lvl >= UPGRADE_CONFIG.luck.maxLevel) {
+      pushNotification({ message: tr('notifUpgradeMaxed'), type: 'warning' });
+      return;
+    }
+    const cost = getLuckCost(lvl);
+    if (stateRef.current.gems < cost) {
+      pushNotification({ message: tr('notifNoGems'), type: 'error' });
+      return;
+    }
+    setState((prev) => ({
+      ...prev,
+      gems: prev.gems - cost,
+      upgrades: { ...prev.upgrades, luckLvl: (prev.upgrades.luckLvl ?? 0) + 1 },
+    }));
+  }, [pushNotification, tr]);
+
+  const upgradeDiamondChance = useCallback(() => {
+    const lvl = stateRef.current.upgrades.diamondChanceLvl ?? 0;
+    if (lvl >= UPGRADE_CONFIG.diamondChance.maxLevel) {
+      pushNotification({ message: tr('notifUpgradeMaxed'), type: 'warning' });
+      return;
+    }
+    const cost = getDiamondChanceCost(lvl);
+    if (stateRef.current.gems < cost) {
+      pushNotification({ message: tr('notifNoGems'), type: 'error' });
+      return;
+    }
+    setState((prev) => ({
+      ...prev,
+      gems: prev.gems - cost,
+      upgrades: { ...prev.upgrades, diamondChanceLvl: (prev.upgrades.diamondChanceLvl ?? 0) + 1 },
+    }));
+  }, [pushNotification, tr]);
+
   const [backpackOpen, setBackpackOpen] = useState(false);
   const [itemsOpen, setItemsOpen] = useState(false);
+  const [levelUpData, setLevelUpData] = useState<number | null>(null);
 
   const unlockedMines = state.unlockedMines || [0, 1];
   const isMineUnlocked = useCallback((mineId: number): boolean => {
@@ -2212,6 +2339,88 @@ export function GameProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setState((prev) => {
+        const now = Date.now();
+        if (!prev.specialOffers || now < prev.specialOffers.nextRefreshAt) return prev;
+        const gen = generateSpecialOffers(now);
+        return {
+          ...prev,
+          specialOffers: gen,
+        };
+      });
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const buySpecialOffer = useCallback((offerIndex: number) => {
+    const current = stateRef.current;
+    const offers = current.specialOffers?.offers ?? [];
+    const offer = offers[offerIndex];
+    if (!offer || offer.purchased) return;
+    const bundle = SPECIAL_OFFER_BUNDLES.find((b) => b.id === offer.bundleId);
+    if (!bundle) return;
+    const price = getOfferPriceGems(bundle, offer.discountPct);
+    if (current.gems < price) {
+      pushNotification({ message: tr('notifNoGems'), type: 'error' });
+      return;
+    }
+    setState((prev) => {
+      const newOffers = (prev.specialOffers?.offers ?? []).map((o, i) =>
+        i === offerIndex ? { ...o, purchased: true } : o
+      );
+      return {
+        ...prev,
+        gems: prev.gems - price,
+        itemBags: prev.itemBags + bundle.rewards.filter((r) => r.type === 'item_bag').reduce((s, r) => s + r.amount, 0),
+        materials: {
+          ...prev.materials,
+          scroll: (prev.materials.scroll ?? 0) + bundle.rewards.filter((r) => r.type === 'scroll').reduce((s, r) => s + r.amount, 0),
+          ruby_dust: (prev.materials.ruby_dust ?? 0) + bundle.rewards.filter((r) => r.type === 'ruby_dust').reduce((s, r) => s + r.amount, 0),
+          essence: (prev.materials.essence ?? 0) + bundle.rewards.filter((r) => r.type === 'essence').reduce((s, r) => s + r.amount, 0),
+        },
+        lifeSupport: {
+          ...prev.lifeSupport,
+          oxygenTanks: [
+            ...prev.lifeSupport.oxygenTanks,
+            ...bundle.rewards
+              .filter((r) => r.type === 'oxygen_tank_small')
+              .flatMap((r) => Array.from({ length: r.amount }, () => createOxygenTank('oxygen_tank_small'))),
+            ...bundle.rewards
+              .filter((r) => r.type === 'oxygen_tank_medium')
+              .flatMap((r) => Array.from({ length: r.amount }, () => createOxygenTank('oxygen_tank_medium'))),
+          ],
+          batteries: [
+            ...prev.lifeSupport.batteries,
+            ...bundle.rewards
+              .filter((r) => r.type === 'battery_weak')
+              .flatMap((r) => Array.from({ length: r.amount }, () => createBattery('battery_weak'))),
+          ],
+        },
+        cases: [
+          ...prev.cases,
+          ...bundle.rewards
+            .filter((r) => r.type === 'case_rare')
+            .flatMap((r) => Array.from({ length: r.amount }, () => ({
+              id: `case-${Date.now()}-${Math.random()}`,
+              rarity: 'rare' as const,
+              opened: false,
+            }))),
+          ...bundle.rewards
+            .filter((r) => r.type === 'case_epic')
+            .flatMap((r) => Array.from({ length: r.amount }, () => ({
+              id: `case-${Date.now()}-${Math.random()}`,
+              rarity: 'epic' as const,
+              opened: false,
+            }))),
+        ],
+        specialOffers: { ...prev.specialOffers, offers: newOffers },
+      };
+    });
+    pushNotification({ message: lang === 'ru' ? 'Предложение куплено!' : (lang === 'uk' ? 'Пропозицію куплено!' : 'Offer purchased!'), type: 'success' });
+  }, [pushNotification, tr, lang]);
+
   const buyCanister = useCallback(() => {
     const current = stateRef.current;
     if (current.balance < CANISTER_PRICE) {
@@ -2603,7 +2812,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
         const hasChargedBattery = prev.lifeSupport.batteries.some((b) => b.currentCharge > 0);
         const genActive = prev.lifeSupport.generator.active && prev.lifeSupport.generator.fuelLiters > 0;
         const mineId = prev.currentMineId ?? 0;
-        const needsOxygen = mineId >= 2;
+        const mineCfg = getMineById(mineId);
+        const oxygenPerMin = mineCfg.environment?.oxygenConsumptionPerMin ?? 0;
+        const needsOxygen = oxygenPerMin > 0;
 
         const hasActiveLease = !!(prev.activeLeaseEndsAt && prev.activeLeaseEndsAt > now);
 
@@ -2699,7 +2910,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           let oxygenTanks = [...newLifeSupport.oxygenTanks];
           let activeOxygenId = newLifeSupport.activeOxygenTankId;
 
-          const oxygenPerSec = 0.5;
+          const oxygenPerSec = oxygenPerMin / 60;
           let activeTank = activeOxygenId ? oxygenTanks.find((t) => t.id === activeOxygenId) : null;
 
           if (!activeTank || activeTank.currentOxygen <= 0) {
@@ -2812,6 +3023,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
     currentBackpackLimit,
     currentBackpackWeight,
     upgradeBackpack,
+    upgradeLuck,
+    upgradeDiamondChance,
     activeLeaseMult,
     autoLeaseMult,
     currentMineId: currentMineIdState,
@@ -2833,6 +3046,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     equipItem,
     unequipItem,
     upgradeItem,
+    recycleItem,
     unlockSlot6,
     isSlotUnlocked,
     totalItemEffects,
@@ -2851,6 +3065,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     highestAccessibleMine,
     craftItem,
     buyMaterialSlot,
+    buySpecialOffer,
     buyCanister,
     buyFuel,
     buyOxygenTank,
@@ -2869,6 +3084,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
     sellCanister,
     usedWarehouseSpace,
     totalWarehouseSpace,
+    levelUpData,
+    setLevelUpData,
   };
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

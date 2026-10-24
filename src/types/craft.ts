@@ -103,6 +103,12 @@ export interface GeneratorState {
   lithiumBatteryIds: string[];
 }
 
+export interface SpecialOffersState {
+  offers: { bundleId: string; discountPct: number; purchased: boolean }[];
+  refreshedAt: number;
+  nextRefreshAt: number;
+}
+
 export interface LifeSupportState {
   oxygenTanks: OxygenTank[];
   batteries: BatteryInstance[];

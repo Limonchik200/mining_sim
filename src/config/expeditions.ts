@@ -229,7 +229,7 @@ export const EXPEDITION_TIERS: Record<number, ExpeditionTierConfig> = {
   // --- TIER 5 ---
   5: {
     tier: 5,
-    requiredPlayerLevel: 27,
+    requiredPlayerLevel: 24,
     minDurationMinutes: 630, // 10h 30m
     maxDurationMinutes: 765, // 12h 45m
     minCash: 0, // Cash not primary, relies on diamonds + high materials

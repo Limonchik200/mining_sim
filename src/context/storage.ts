@@ -14,7 +14,9 @@ import {
 } from '@/config/expeditions';
 import { generateDiesel95Price } from '@/config/fuelConfig';
 import { generateMaterialsShopSlots } from '@/config/materialsShopConfig';
+import { generateSpecialOffers } from '@/config/specialOffersConfig';
 import { GENERATOR_TANK_CAPACITY } from '@/config/generatorConfig';
+import { gemsForLevel } from '@/config/levelUnlocks';
 
 export const STORAGE_KEY = 'mining-sim-v3-save';
 export const EXPEDITION_REFRESH_MS = 3 * 60 * 60 * 1000;
@@ -87,6 +89,8 @@ export function createInitialState(): GameState {
       energyRegenLvl: 0,
       energyRegenAmountLvl: 0,
       backpackLvl: 0,
+      luckLvl: 0,
+      diamondChanceLvl: 0,
     },
     starterGiftClaimed: false,
     redeemedPromoCodes: [],
@@ -153,6 +157,10 @@ export function createInitialState(): GameState {
       activeOxygenTankId: null,
       activeCoolerId: null,
     },
+    specialOffers: (() => {
+      const gen = generateSpecialOffers(Date.now());
+      return gen;
+    })(),
     lastSavedAt: Date.now(),
   };
 }
@@ -195,6 +203,12 @@ export function migrateState(saved: Partial<GameState>): GameState {
     merged.materialsShop = { slots: gen.slots, refreshedAt: Date.now(), nextRefreshAt: gen.nextRefreshAt };
   }
 
+  if (saved.specialOffers && Array.isArray(saved.specialOffers.offers)) {
+    merged.specialOffers = saved.specialOffers;
+  } else {
+    merged.specialOffers = generateSpecialOffers(Date.now());
+  }
+
   merged.lifeSupport = saved.lifeSupport
     ? {
         oxygenTanks: Array.isArray(saved.lifeSupport.oxygenTanks) ? saved.lifeSupport.oxygenTanks : [],
@@ -229,6 +243,8 @@ export function migrateState(saved: Partial<GameState>): GameState {
   merged.upgrades.energyRegenLvl = Math.min(merged.upgrades.energyRegenLvl, UPGRADE_CONFIG.energyRegen.maxLevel);
   merged.upgrades.energyRegenAmountLvl = Math.min(merged.upgrades.energyRegenAmountLvl ?? 0, UPGRADE_CONFIG.energyRegenAmount.maxLevel);
   merged.upgrades.backpackLvl = Math.min(merged.upgrades.backpackLvl ?? 0, UPGRADE_CONFIG.backpack.maxLevel);
+  merged.upgrades.luckLvl = Math.min(merged.upgrades.luckLvl ?? 0, UPGRADE_CONFIG.luck.maxLevel);
+  merged.upgrades.diamondChanceLvl = Math.min(merged.upgrades.diamondChanceLvl ?? 0, UPGRADE_CONFIG.diamondChance.maxLevel);
 
   merged.maxEnergy = getEnergyMaxValue(merged.upgrades.energyMaxLvl);
   if (merged.energy > merged.maxEnergy) merged.energy = merged.maxEnergy;
@@ -326,15 +342,26 @@ export interface XpResult {
   state: GameState;
   leveledUp: boolean;
   newLevel: number;
+  gemsEarned?: number;
+  newLevels?: number[];
 }
 
 export function applyXp(state: GameState, xpGain: number): XpResult {
   let next = { ...state, xp: state.xp + xpGain };
   let leveledUp = false;
+  let gemsEarned = 0;
+  const newLevels: number[] = [];
   while (next.xp >= xpForLevel(next.level)) {
     next.xp -= xpForLevel(next.level);
     next.level += 1;
     leveledUp = true;
+    newLevels.push(next.level);
+    const reward = gemsForLevel(next.level);
+    gemsEarned += reward;
   }
-  return { state: next, leveledUp, newLevel: next.level };
+  if (leveledUp) {
+    next.gems += gemsEarned;
+    next.totalGemsEarned = (next.totalGemsEarned || 0) + gemsEarned;
+  }
+  return { state: next, leveledUp, newLevel: next.level, gemsEarned, newLevels };
 }

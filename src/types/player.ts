@@ -4,7 +4,7 @@ export type Tab = 'mining' | 'shop' | 'upgrades' | 'expeditions' | 'settings';
 export type TimeUnit = 'seconds' | 'minutes' | 'hours';
 
 import type { OwnedItem, EquippedItems, ItemEffect } from './items';
-import type { FuelState, MaterialsShopState, LifeSupportState } from './craft';
+import type { FuelState, MaterialsShopState, LifeSupportState, SpecialOffersState } from './craft';
 
 export interface UpgradeState {
   activeLeaseMult: number;
@@ -16,6 +16,8 @@ export interface UpgradeState {
   energyRegenLvl: number;
   energyRegenAmountLvl?: number;
   backpackLvl?: number;
+  luckLvl?: number;
+  diamondChanceLvl?: number;
 }
 
 export interface EquipmentUpgradeState {
@@ -105,6 +107,7 @@ export interface GameState {
   fuel: FuelState;
   materialsShop: MaterialsShopState;
   lifeSupport: LifeSupportState;
+  specialOffers: SpecialOffersState;
 
   lastSavedAt: number;
 }

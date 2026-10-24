@@ -1,7 +1,8 @@
 import { useGame } from '@/context/GameContext';
 import { formatMoney } from '@/config';
 import { CRAFT_RECIPES, CRAFT_ITEMS, getCraftItemName, canCraft } from '@/config/craftConfig';
-import { Hammer, Coins, Gem, TreePine, Layers, Frame, Split, Grid2x2, Archive, Package } from 'lucide-react';
+import { isCraftItemUnlocked } from '@/config/levelUnlocks';
+import { Hammer, Coins, Gem, TreePine, Layers, Frame, Split, Grid2x2, Archive, Package, Lock } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -17,8 +18,12 @@ export default function CraftPanel() {
   const { state, lang, t, craftItem } = useGame();
   const inv = state.craftInventory || {};
 
-  const materialEntries = Object.entries(CRAFT_ITEMS).filter(([, item]) => item.category === 'raw');
-  const constructionEntries = Object.entries(CRAFT_ITEMS).filter(([, item]) => item.category === 'construction');
+  const materialEntries = Object.entries(CRAFT_ITEMS).filter(
+    ([key, item]) => item.category === 'raw' && isCraftItemUnlocked(key, state.level)
+  );
+  const constructionEntries = Object.entries(CRAFT_ITEMS).filter(
+    ([key, item]) => item.category === 'construction' && isCraftItemUnlocked(key, state.level)
+  );
 
   return (
     <div className="space-y-4">
@@ -74,7 +79,10 @@ export default function CraftPanel() {
           <div className="flex-1 h-px bg-neutral-200 dark:bg-neutral-800" />
         </div>
         <div className="space-y-3">
-          {CRAFT_RECIPES.filter((r) => !(r.result === 'food_cabinet' && (state.craftInventory?.food_cabinet ?? 0) > 0)).map((recipe, idx) => {
+          {CRAFT_RECIPES
+            .filter((r) => !(r.result === 'food_cabinet' && (state.craftInventory?.food_cabinet ?? 0) > 0))
+            .filter((r) => isCraftItemUnlocked(r.result, state.level))
+            .map((recipe, idx) => {
             const realIdx = CRAFT_RECIPES.indexOf(recipe);
             const Icon = ICON_MAP[recipe.icon] || Package;
             const recipeCanCraft = canCraft(recipe, inv);

@@ -17,6 +17,8 @@ export const UPGRADE_CONFIG = {
   energyRegen: { baseCost: 25, maxLevel: 30, reductionPerLevel: 1, minRegenSeconds: 10 },
   energyRegenAmount: { baseCost: 50, maxLevel: 20, bonusPerLevel: 0.5 },
   backpack: { baseCost: 50, maxLevel: 100, bonusPerLevel: 0.60 },
+  luck: { baseGemCost: 3, gemStepPerLevel: 1, maxLevel: 40, baseChance: 0.005, stepPerLevel: 0.005 },
+  diamondChance: { baseGemCost: 10, gemStepPerLevel: 5, maxLevel: 10, bonusPerLevel: 0.00001 },
 } as const;
 
 export function getLeaseMultCost(upgrade: 'activeLeaseMult' | 'autoLeaseMult', currentLevel: number): number {
@@ -105,6 +107,28 @@ export function isEnergyUpgradeDiamond(level: number): boolean {
 
 export function xpForLevel(level: number): number {
   return 50 * (level * level) + 50 * level - 50;
+}
+
+// === Luck Upgrade (x2 XP drop chance) ===
+export function getLuckCost(level: number): number {
+  const cfg = UPGRADE_CONFIG.luck;
+  return cfg.baseGemCost + level * cfg.gemStepPerLevel;
+}
+
+export function getLuckChance(level: number): number {
+  const cfg = UPGRADE_CONFIG.luck;
+  return cfg.baseChance + level * cfg.stepPerLevel;
+}
+
+// === Diamond Chance Upgrade ===
+export function getDiamondChanceCost(level: number): number {
+  const cfg = UPGRADE_CONFIG.diamondChance;
+  return cfg.baseGemCost + level * cfg.gemStepPerLevel;
+}
+
+export function getDiamondChanceBonus(level: number): number {
+  const cfg = UPGRADE_CONFIG.diamondChance;
+  return level * cfg.bonusPerLevel;
 }
 
 export type EquipmentType =

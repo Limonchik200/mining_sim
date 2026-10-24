@@ -70,6 +70,28 @@ export const ITEM_TYPES: Record<ItemType, ItemTypeInfo> = {
     descEn: 'Chance for more expedition loot',
     descRu: 'Шанс получить больше лута с экспедиций',
   },
+  obsidian_nozzle: {
+    type: 'obsidian_nozzle',
+    nameUk: 'Обсидіанова насадка',
+    nameEn: 'Obsidian Nozzle',
+    nameRu: 'Обсидиановая насадка',
+    icon: 'Gem',
+    color: '#64748b',
+    descUk: 'Збільшує множник виходу руди (витрата міцності масштабується)',
+    descEn: 'Increases ore yield multiplier (durability cost scales with it)',
+    descRu: 'Увеличивает множитель выхода руды (расход прочности масштабируется)',
+  },
+  diamond_ring: {
+    type: 'diamond_ring',
+    nameUk: 'Діамантове кільце',
+    nameEn: 'Diamond Ring',
+    nameRu: 'Алмазное кольцо',
+    icon: 'Diamond',
+    color: '#06b6d4',
+    descUk: 'Підвищує шанс та множник випадіння алмазів',
+    descEn: 'Boosts diamond drop rate and multipliers',
+    descRu: 'Повышает шанс и множитель выпадения алмазов',
+  },
 };
 
 export const ITEM_RARITIES: Record<ItemRarity, { nameUk: string; nameEn: string; nameRu: string; color: string; glow: string }> = {
@@ -108,7 +130,7 @@ export const UPGRADE_COSTS: Record<ItemLevel, MaterialCost> = {
   7: {},
 };
 
-export const ALL_ITEM_TYPES: ItemType[] = ['stopwatch', 'energizer', 'scales', 'boots', 'basket'];
+export const ALL_ITEM_TYPES: ItemType[] = ['stopwatch', 'energizer', 'scales', 'boots', 'basket', 'obsidian_nozzle', 'diamond_ring'];
 
 function rollBagRarity(): ItemRarity {
   const roll = Math.random();
@@ -136,6 +158,11 @@ const EMPTY_EFFECT: ItemEffect = {
   expeditionRefreshReductionPct: 0,
   expeditionLootChance: 0,
   expeditionLootMult: 1,
+  oreYieldMultChance: 0,
+  oreYieldMult: 1,
+  diamondDropBonus: 0,
+  diamondMultChance: 0,
+  diamondMult: 1,
 };
 
 type LevelEffectMap = Record<ItemLevel, Partial<ItemEffect>>;
@@ -190,12 +217,34 @@ const BASKET_EFFECTS: LevelEffectMap = {
   7: { expeditionLootChance: 0.50, expeditionLootMult: 2.00 },
 };
 
+const OBSIDIAN_NOZZLE_EFFECTS: LevelEffectMap = {
+  1: { oreYieldMultChance: 0.05, oreYieldMult: 2 },
+  2: { oreYieldMultChance: 0.10, oreYieldMult: 2 },
+  3: { oreYieldMultChance: 0.15, oreYieldMult: 2 },
+  4: { oreYieldMultChance: 0.15, oreYieldMult: 3 },
+  5: { oreYieldMultChance: 0.25, oreYieldMult: 3 },
+  6: { oreYieldMultChance: 0.35, oreYieldMult: 4 },
+  7: { oreYieldMultChance: 0.50, oreYieldMult: 5 },
+};
+
+const DIAMOND_RING_EFFECTS: LevelEffectMap = {
+  1: { diamondDropBonus: 0.00001 },
+  2: { diamondDropBonus: 0.00003 },
+  3: { diamondDropBonus: 0.00005 },
+  4: { diamondDropBonus: 0.00010 },
+  5: { diamondDropBonus: 0.00018, diamondMultChance: 0.20, diamondMult: 2 },
+  6: { diamondDropBonus: 0.00022, diamondMultChance: 0.30, diamondMult: 3 },
+  7: { diamondDropBonus: 0.00030, diamondMultChance: 0.40, diamondMult: 4 },
+};
+
 const EFFECT_MAPS: Record<ItemType, LevelEffectMap> = {
   stopwatch: STOPWATCH_EFFECTS,
   energizer: ENERGIZER_EFFECTS,
   scales: SCALES_EFFECTS,
   boots: BOOTS_EFFECTS,
   basket: BASKET_EFFECTS,
+  obsidian_nozzle: OBSIDIAN_NOZZLE_EFFECTS,
+  diamond_ring: DIAMOND_RING_EFFECTS,
 };
 
 export function getItemEffect(type: ItemType, level: ItemLevel): ItemEffect {

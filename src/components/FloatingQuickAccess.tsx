@@ -7,7 +7,8 @@ export default function FloatingQuickAccess() {
   const [expanded, setExpanded] = useState(false);
 
   const basketCount = state.autoBasket.length + state.autoBasketCases.length;
-  const hasItems = state.ownedItems.length > 0 || state.itemBags > 0;
+  const itemsUnlocked = state.level >= 5;
+  const hasItems = itemsUnlocked && (state.ownedItems.length > 0 || state.itemBags > 0);
 
   return (
     <div className="fixed left-3 z-50 flex flex-col items-start gap-2" style={{ bottom: 'calc(5.5rem + env(safe-area-inset-bottom, 0px))' }}>

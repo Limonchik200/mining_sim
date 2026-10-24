@@ -145,11 +145,21 @@ export default function MiningTab() {
       <div className="flex justify-between items-center mb-2 gap-2">
         <button
           onClick={() => setItemsOpen(true)}
-          className="bg-neutral-200 dark:bg-neutral-800 hover:bg-neutral-300 dark:hover:bg-neutral-700 text-neutral-700 dark:text-neutral-200 px-3 py-2 rounded-xl shadow-md flex items-center gap-1.5 font-bold text-sm border border-neutral-300/30 dark:border-neutral-700/30 transition-all"
+          disabled={state.level < 5}
+          className={`bg-neutral-200 dark:bg-neutral-800 ${state.level >= 5 ? 'hover:bg-neutral-300 dark:hover:bg-neutral-700' : 'opacity-40 cursor-not-allowed'} text-neutral-700 dark:text-neutral-200 px-3 py-2 rounded-xl shadow-md flex items-center gap-1.5 font-bold text-sm border border-neutral-300/30 dark:border-neutral-700/30 transition-all`}
         >
-          <ShoppingBag className="w-4 h-4 text-warning-500" />
-          {state.itemBags > 0 && (
-            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-warning-500 text-white">{state.itemBags}</span>
+          {state.level < 5 ? (
+            <>
+              <Lock className="w-4 h-4 text-neutral-400" />
+              <span className="text-[10px] font-bold text-neutral-400">Lvl 5</span>
+            </>
+          ) : (
+            <>
+              <ShoppingBag className="w-4 h-4 text-warning-500" />
+              {state.itemBags > 0 && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-warning-500 text-white">{state.itemBags}</span>
+              )}
+            </>
           )}
         </button>
         <button
@@ -373,7 +383,7 @@ export default function MiningTab() {
         const mName = lang === 'ru' ? mine.nameRu : (lang === 'uk' ? mine.nameUk : mine.nameEn);
         return (
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setShowMiningWindow(false)}>
-            <div className="card w-full max-w-md p-5 space-y-4 animate-drop-in" onClick={(e) => e.stopPropagation()}>
+            <div className="card w-full max-w-md max-h-[90vh] overflow-y-auto p-5 space-y-4 animate-drop-in" onClick={(e) => e.stopPropagation()}>
               {/* Header with mine name and number */}
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-bold text-neutral-800 dark:text-neutral-100 flex items-center gap-2">

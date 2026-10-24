@@ -1,5 +1,5 @@
 import type { GameState } from '@/types';
-import { getAutoCooldownMs, getBasketCapValue, getEnergyRegenValue, getEnergyRegenAmountValue } from '@/config/upgradesConfig';
+import { getAutoCooldownMs, getBasketCapValue, getEnergyRegenValue, getEnergyRegenAmountValue, getDiamondChanceBonus } from '@/config/upgradesConfig';
 import { getPickaxeTier } from '@/config/pickaxesConfig';
 import { getRandomResourceForMine, getRandomMass, rollDiamondDrop } from '@/config/minesConfig';
 import { rollAutoCaseDrop, rollCaseRarity } from '@/config/casesConfig';
@@ -155,7 +155,7 @@ export function processAutoDig(
       basketCases.push({ id: `case-${now}-${i}-${Math.random()}`, rarity, opened: false });
     }
 
-    const autoDiamond = rollDiamondDrop(0, next.autoLeaseMineId || 1);
+    const autoDiamond = rollDiamondDrop(getDiamondChanceBonus(next.upgrades.diamondChanceLvl ?? 0), next.autoLeaseMineId || 1);
     if (autoDiamond.dropped) {
       gems = gems + autoDiamond.amount;
       totalGemsEarned = (totalGemsEarned || 0) + autoDiamond.amount;
@@ -262,7 +262,7 @@ export function processOfflineProgress(
         basketCases.push({ id: `case-${now}-${i}-${Math.random()}`, rarity, opened: false });
       }
 
-      const offlineDiamond = rollDiamondDrop(0, next.autoLeaseMineId || 1);
+      const offlineDiamond = rollDiamondDrop(getDiamondChanceBonus(next.upgrades.diamondChanceLvl ?? 0), next.autoLeaseMineId || 1);
       if (offlineDiamond.dropped) {
         next.gems = next.gems + offlineDiamond.amount;
         next.totalGemsEarned = (next.totalGemsEarned || 0) + offlineDiamond.amount;

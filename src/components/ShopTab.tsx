@@ -4,11 +4,12 @@ import type { TimeUnit, ResourceType } from '@/types';
 import MaterialsShopSection from '@/components/MaterialsShopSection';
 import FuelStationSection from '@/components/FuelStationSection';
 import LifeSupportSection from '@/components/LifeSupportSection';
+import PickaxesSection from '@/components/shop/PickaxesSection';
+import LockedSection from '@/components/shop/LockedSection';
+import SpecialOffersSubTab from '@/components/shop/SpecialOffersSubTab';
 import {
   STARTER_GIFT_SECONDS,
   FOOD_ITEMS,
-  PICKAXE_TIERS,
-  getPickaxeTier,
   getActiveLeasePricePerSec,
   getAutoLeasePricePerSec,
   getFoodPrice,
@@ -16,6 +17,11 @@ import {
 import { RESOURCES, RESOURCE_LIST, MIN_LEASE_SECONDS, getMineById } from '@/config/minesConfig';
 import { DAILY_REWARDS, getDailyRewardScaled } from '@/config/rewardsConfig';
 import { convertToSeconds, formatMoney, formatTime } from '@/config';
+import { isFeatureUnlocked, isItemUnlocked } from '@/config/levelUnlocks';
+import { OXYGEN_TANK_CONFIGS } from '@/config/oxygenConfig';
+import { BATTERY_CONFIGS } from '@/config/batteryConfig';
+import { COOLER_CONFIGS } from '@/config/coolerConfig';
+import type { OxygenTankType, BatteryType, CoolerType } from '@/types/craft';
 import {
   Clock,
   Zap,
@@ -27,15 +33,15 @@ import {
   TrendingUp,
   Coins,
   Gift,
-  ArrowLeftRight,
   Calendar,
   CheckCircle2,
   AlertTriangle,
-  X,
   Package,
   Fuel,
   Wind,
+  Lock,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 const foodIcons: Record<string, typeof Candy> = {
   snickers: Candy,
@@ -52,9 +58,6 @@ export default function ShopTab() {
     cancelLeasePurchase,
     pendingLeasePurchase,
     buyFood,
-    buyPickaxe,
-    equipPickaxe,
-    switchPickaxe,
     sellResource,
     sellAll,
     claimStarterGift,
@@ -67,6 +70,7 @@ export default function ShopTab() {
     totalItemEffects,
   } = useGame();
 
+  const [shopSubTab, setShopSubTab] = useState<'main' | 'pickaxes' | 'special'>('main');
   const [leaseValue, setLeaseValue] = useState('100');
   const [leaseUnit, setLeaseUnit] = useState<TimeUnit>('seconds');
   const [flashItem, setFlashItem] = useState<string | null>(null);
@@ -81,23 +85,23 @@ export default function ShopTab() {
 
   const calendarRef = useRef<HTMLDivElement>(null);
   const leasesRef = useRef<HTMLDivElement>(null);
-  const pickaxesRef = useRef<HTMLDivElement>(null);
   const foodRef = useRef<HTMLDivElement>(null);
   const materialsRef = useRef<HTMLDivElement>(null);
   const fuelRef = useRef<HTMLDivElement>(null);
   const lifeSupportRef = useRef<HTMLDivElement>(null);
   const marketRef = useRef<HTMLDivElement>(null);
 
+  const tr = (ru: string, uk: string, en: string) => lang === 'ru' ? ru : (lang === 'uk' ? uk : en);
+
   const navSections = [
-    { ref: calendarRef, icon: Calendar, label: lang === 'ru' ? 'Календарь' : (lang === 'uk' ? 'Календар' : 'Calendar') },
-    { ref: leasesRef, icon: Clock, label: t('shopJumpLeases') },
-    { ref: pickaxesRef, icon: Hammer, label: t('shopJumpPickaxes') },
-    { ref: foodRef, icon: Battery, label: t('shopJumpFood') },
-    { ref: materialsRef, icon: Package, label: lang === 'ru' ? 'Материалы' : (lang === 'uk' ? 'Матеріали' : 'Materials') },
-    { ref: fuelRef, icon: Fuel, label: lang === 'ru' ? 'Топливо' : (lang === 'uk' ? 'Паливо' : 'Fuel') },
-    { ref: lifeSupportRef, icon: Wind, label: lang === 'ru' ? 'Жизнеобеспечение' : (lang === 'uk' ? 'Життєзабезпечення' : 'Life Support') },
-    { ref: marketRef, icon: TrendingUp, label: t('shopMarket') },
-  ];
+    { ref: calendarRef, icon: Calendar, label: tr('Календарь', 'Календар', 'Calendar'), show: isFeatureUnlocked('dailyCalendar', state.level) },
+    { ref: leasesRef, icon: Clock, label: t('shopJumpLeases'), show: true },
+    { ref: foodRef, icon: Battery, label: t('shopJumpFood'), show: true },
+    { ref: materialsRef, icon: Package, label: tr('Материалы', 'Матеріали', 'Materials'), show: false },
+    { ref: fuelRef, icon: Fuel, label: tr('Топливо', 'Паливо', 'Fuel'), show: isFeatureUnlocked('fuel', state.level) },
+    { ref: lifeSupportRef, icon: Wind, label: tr('Жизнеобеспечение', 'Життєзабезпечення', 'Life Support'), show: true },
+    { ref: marketRef, icon: TrendingUp, label: t('shopMarket'), show: true },
+  ].filter((s) => s.show);
 
   const currentMineId = state.currentMineId || 1;
   const currentMine = getMineById(currentMineId);
@@ -134,8 +138,6 @@ export default function ShopTab() {
     ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
 
-  const tr = (ru: string, uk: string, en: string) => lang === 'ru' ? ru : (lang === 'uk' ? uk : en);
-
   const dailyStreakDays = state.dailyCalendar?.lastClaimDay || 0;
   const cycleReset = dailyStreakDays >= 7;
   const displayDay = cycleReset ? 0 : dailyStreakDays;
@@ -146,6 +148,75 @@ export default function ShopTab() {
     const reward = DAILY_REWARDS[day - 1];
     return getDailyRewardScaled(reward, state.level);
   };
+
+  const subTabBtn = (tab: 'main' | 'pickaxes' | 'special', Icon: LucideIcon, label: string, locked?: boolean) => (
+    <button
+      onClick={() => !locked && setShopSubTab(tab)}
+      disabled={locked}
+      className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all relative ${
+        shopSubTab === tab
+          ? 'bg-primary-500 text-white shadow-md shadow-primary-500/20'
+          : locked
+          ? 'text-neutral-400 dark:text-neutral-600 cursor-not-allowed bg-neutral-100/50 dark:bg-neutral-850/50'
+          : 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800'
+      }`}
+    >
+      <Icon className="w-4 h-4 inline mr-1.5" />
+      {label}
+      {locked && <Lock className="w-3 h-3 inline ml-1" />}
+    </button>
+  );
+
+  const subTabSwitcher = (
+    <div className="flex gap-2 p-1 rounded-xl bg-neutral-100 dark:bg-neutral-850">
+      {subTabBtn('main', Package, tr('Магазин', 'Магазин', 'Shop'))}
+      {subTabBtn('pickaxes', Hammer, tr('Кирки', 'Кирки', 'Pickaxes'))}
+      {subTabBtn('special', Gift, tr('Спец.', 'Спец.', 'Special'), !isFeatureUnlocked('specialOffers', state.level))}
+    </div>
+  );
+
+  if (shopSubTab === 'special') {
+    return (
+      <div className="space-y-4">
+        <div className="card p-3 flex items-center justify-around">
+          <div className="flex items-center gap-2">
+            <Coins className="w-5 h-5 text-success-500" />
+            <span className="text-lg font-bold text-success-500">{formatMoney(state.balance)}</span>
+          </div>
+          <div className="w-px h-6 bg-neutral-300 dark:bg-neutral-700" />
+          <div className="flex items-center gap-2">
+            <span className="text-lg">💎</span>
+            <span className="text-lg font-bold text-accent-500">{state.gems}</span>
+          </div>
+        </div>
+        {subTabSwitcher}
+        <SpecialOffersSubTab />
+        <div ref={materialsRef} className="scroll-mt-4">
+          <MaterialsShopSection />
+        </div>
+      </div>
+    );
+  }
+
+  if (shopSubTab === 'pickaxes') {
+    return (
+      <div className="space-y-4">
+        <div className="card p-3 flex items-center justify-around">
+          <div className="flex items-center gap-2">
+            <Coins className="w-5 h-5 text-success-500" />
+            <span className="text-lg font-bold text-success-500">{formatMoney(state.balance)}</span>
+          </div>
+          <div className="w-px h-6 bg-neutral-300 dark:bg-neutral-700" />
+          <div className="flex items-center gap-2">
+            <span className="text-lg">💎</span>
+            <span className="text-lg font-bold text-accent-500">{state.gems}</span>
+          </div>
+        </div>
+        {subTabSwitcher}
+        <PickaxesSection />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -161,6 +232,8 @@ export default function ShopTab() {
           <span className="text-lg font-bold text-accent-500">{state.gems}</span>
         </div>
       </div>
+
+      {subTabSwitcher}
 
       {/* Lease timers */}
       <div className="grid grid-cols-2 gap-2">
@@ -208,10 +281,10 @@ export default function ShopTab() {
               </div>
               <div>
                 <div className="text-sm font-bold text-neutral-800 dark:text-neutral-100">
-                  {lang === 'ru' ? 'Станция вагонетки' : (lang === 'uk' ? 'Станція вагонетки' : 'Cart Station')}
+                  {tr('Станция вагонетки', 'Станція вагонетки', 'Cart Station')}
                 </div>
                 <div className="text-xs text-neutral-400">
-                  {lang === 'ru' ? 'Одноразово · нужна для Шахты 4+' : (lang === 'uk' ? 'Одноразово · потрібна для Шахти 4+' : 'One-time · required for Mine 4+')}
+                  {tr('Одноразово · нужна для Шахты 4+', 'Одноразово · потрібна для Шахти 4+', 'One-time · required for Mine 4+')}
                 </div>
               </div>
             </div>
@@ -240,72 +313,78 @@ export default function ShopTab() {
         ))}
       </div>
 
-      {/* Daily Calendar Card */}
-      <div ref={calendarRef} className="card p-4 scroll-mt-4 border-accent-500/30 bg-accent-500/5">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-accent-500/20 flex items-center justify-center">
-              <Calendar className="w-5 h-5 text-accent-500" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-neutral-800 dark:text-neutral-100">
-                {lang === 'ru' ? 'Ежедневный календарь' : (lang === 'uk' ? 'Щоденний календар' : 'Daily Calendar')}
-              </h2>
-              <div className="text-xs text-neutral-400">
-                {lang === 'ru' ? 'Серия:' : (lang === 'uk' ? 'Стрік:' : 'Streak:')} <span className="text-accent-500 font-bold">{cycleReset ? 7 : dailyStreakDays} {lang === 'ru' ? 'дней' : (lang === 'uk' ? 'день' : 'days')}</span>
+      {/* Daily Calendar Card - gated at level 4 */}
+      {isFeatureUnlocked('dailyCalendar', state.level) ? (
+        <div ref={calendarRef} className="card p-4 scroll-mt-4 border-accent-500/30 bg-accent-500/5">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-9 h-9 rounded-xl bg-accent-500/20 flex items-center justify-center">
+                <Calendar className="w-5 h-5 text-accent-500" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-neutral-800 dark:text-neutral-100">
+                  {tr('Ежедневный календарь', 'Щоденний календар', 'Daily Calendar')}
+                </h2>
+                <div className="text-xs text-neutral-400">
+                  {tr('Серия:', 'Стрік:', 'Streak:')} <span className="text-accent-500 font-bold">{cycleReset ? 7 : dailyStreakDays} {tr('дней', 'день', 'days')}</span>
+                </div>
               </div>
             </div>
+            <button
+              onClick={claimDailyReward}
+              disabled={!canClaimDaily}
+              className={canClaimDaily ? "btn-accent px-4 py-2 text-xs" : "btn-ghost px-4 py-2 text-xs opacity-50 cursor-not-allowed"}
+            >
+              {canClaimDaily
+                ? (cycleReset
+                  ? tr('Новый цикл', 'Новий цикл', 'New cycle')
+                  : tr('Забрать награду', 'Забрати нагороду', 'Claim Reward'))
+                : tr('Получено сегодня', 'Отримано сьогодні', 'Claimed today')}
+            </button>
           </div>
-          <button
-            onClick={claimDailyReward}
-            disabled={!canClaimDaily}
-            className={canClaimDaily ? "btn-accent px-4 py-2 text-xs" : "btn-ghost px-4 py-2 text-xs opacity-50 cursor-not-allowed"}
-          >
-            {canClaimDaily
-              ? (cycleReset
-                ? (lang === 'ru' ? 'Новый цикл' : (lang === 'uk' ? 'Новий цикл' : 'New cycle'))
-                : (lang === 'ru' ? 'Забрать награду' : (lang === 'uk' ? 'Забрати нагороду' : 'Claim Reward')))
-              : (lang === 'ru' ? 'Получено сегодня' : (lang === 'uk' ? 'Отримано сьогодні' : 'Claimed today'))}
-          </button>
-        </div>
 
-        <div className="grid grid-cols-7 gap-1.5 mt-3">
-          {[1, 2, 3, 4, 5, 6, 7].map((day) => {
-            const isPassed = cycleReset ? false : (day < displayDay || (day === displayDay && !canClaimDaily));
-            const isCurrent = cycleReset ? day === 1 : (day === displayDay && canClaimDaily);
-            const reward = calculateDailyReward(day);
-            const rewardLabel = reward.type === 'cash'
-              ? formatMoney(reward.amount)
-              : reward.type === 'gems'
-              ? `${reward.amount} 💎`
-              : reward.caseRarity === 'epic'
-              ? (lang === 'ru' ? 'Эпический' : (lang === 'uk' ? 'Епічний' : 'Epic'))
-              : (lang === 'ru' ? 'Обычный' : (lang === 'uk' ? 'Звичайний' : 'Common'));
+          <div className="grid grid-cols-7 gap-1.5 mt-3">
+            {[1, 2, 3, 4, 5, 6, 7].map((day) => {
+              const isPassed = cycleReset ? false : (day < displayDay || (day === displayDay && !canClaimDaily));
+              const isCurrent = cycleReset ? day === 1 : (day === displayDay && canClaimDaily);
+              const reward = calculateDailyReward(day);
+              const rewardLabel = reward.type === 'cash'
+                ? formatMoney(reward.amount)
+                : reward.type === 'gems'
+                ? `${reward.amount} 💎`
+                : reward.caseRarity === 'epic'
+                ? tr('Эпический', 'Епічний', 'Epic')
+                : tr('Обычный', 'Звичайний', 'Common');
 
-            return (
-              <div
-                key={day}
-                className={`flex flex-col items-center justify-center p-2 rounded-xl border text-center transition-all ${
-                  isPassed
-                    ? 'bg-success-500/10 border-success-500/30 text-success-600'
-                    : isCurrent
-                    ? 'bg-accent-500/20 border-accent-500 animate-pulse text-accent-500 font-bold'
-                    : 'bg-neutral-100 dark:bg-neutral-800/50 border-neutral-200 dark:border-neutral-700 text-neutral-400'
-                }`}
-              >
-                <span className="text-[10px] uppercase font-semibold">
-                  {lang === 'ru' ? `День ${day}` : (lang === 'uk' ? `День ${day}` : `Day ${day}`)}
-                </span>
-                {reward.type === 'case' ? (
-                  <Gift className="w-4 h-4 mt-1" />
-                ) : null}
-                <span className="text-[10px] font-bold mt-1">{rewardLabel}</span>
-                {isPassed && <CheckCircle2 className="w-3 h-3 mt-1 text-success-500" />}
-              </div>
-            );
-          })}
+              return (
+                <div
+                  key={day}
+                  className={`flex flex-col items-center justify-center p-2 rounded-xl border text-center transition-all ${
+                    isPassed
+                      ? 'bg-success-500/10 border-success-500/30 text-success-600'
+                      : isCurrent
+                      ? 'bg-accent-500/20 border-accent-500 animate-pulse text-accent-500 font-bold'
+                      : 'bg-neutral-100 dark:bg-neutral-800/50 border-neutral-200 dark:border-neutral-700 text-neutral-400'
+                  }`}
+                >
+                  <span className="text-[10px] uppercase font-semibold">
+                    {tr(`День ${day}`, `День ${day}`, `Day ${day}`)}
+                  </span>
+                  {reward.type === 'case' ? (
+                    <Gift className="w-4 h-4 mt-1" />
+                  ) : null}
+                  <span className="text-[10px] font-bold mt-1">{rewardLabel}</span>
+                  {isPassed && <CheckCircle2 className="w-3 h-3 mt-1 text-success-500" />}
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div ref={calendarRef}>
+          <LockedSection requiredLevel={4} lang={lang} />
+        </div>
+      )}
 
       {/* Starter gift */}
       {!state.starterGiftClaimed && (
@@ -425,243 +504,121 @@ export default function ShopTab() {
         </div>
       </div>
 
-      {/* Pickaxe shop */}
-      <div ref={pickaxesRef} className="card p-4 scroll-mt-4">
-        <h2 className="text-lg font-bold text-neutral-800 dark:text-neutral-100 mb-3 flex items-center gap-2">
-          <Hammer className="w-5 h-5 text-primary-500" />
-          {t('shopEquipment')}
-        </h2>
-        <div className="space-y-2">
-          {PICKAXE_TIERS.map((tier) => {
-            const name = lang === 'ru' ? tier.nameRu : (lang === 'uk' ? tier.nameUk : tier.nameEn);
-            const isEquipped = state.activePickaxeTierId === tier.id;
-            const meetsLevel = state.level >= tier.requiredLevel;
-            const canAfford = state.balance >= tier.price;
-            const isOwned = state.ownedPickaxes?.includes(tier.id);
-
-            return (
-              <div
-                key={tier.id}
-                className={`relative rounded-xl p-3 border bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-850/50 dark:to-neutral-900/50 border-neutral-200 dark:border-neutral-800 transition-all duration-300 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/5 ${
-                  isEquipped ? 'ring-1 ring-primary-500/30' : ''
-                } ${flashItem === `px-${tier.id}` ? 'animate-buy-flash' : ''}`}
-              >
-                {floatText?.id === `px-${tier.id}` && (
-                  <span className="absolute -top-6 right-8 text-xs font-bold text-success-500 animate-fade-scale pointer-events-none">
-                    {tr('Куплено!', 'Куплено!', '+1 Purchased')}
-                  </span>
-                )}
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      className="w-9 h-9 rounded-xl flex items-center justify-center"
-                      style={{ backgroundColor: tier.color + '20' }}
-                    >
-                      <Hammer className="w-4.5 h-4.5" style={{ color: tier.color }} />
-                    </div>
-                    <div>
-                      <div className="text-sm font-bold text-neutral-800 dark:text-neutral-200 flex items-center gap-1.5">
-                        {name}
-                        {isEquipped && <span className="text-[10px] text-primary-500 bg-primary-500/10 px-1.5 py-0.5 rounded">{t('equipped')}</span>}
-                        {isOwned && !isEquipped && <span className="text-[10px] text-success-500 bg-success-500/10 px-1.5 py-0.5 rounded">{t('owned')}</span>}
-                      </div>
-                      <div className="text-xs text-neutral-400">
-                        ×{tier.yieldMultiplier} {t('yield')} · {tier.energyCost} {t('energyCost')} · {tier.durabilityCost} {t('durabilityCost')} · {tier.maxDurability} {t('maxDurability')}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="text-xs">
-                    {tier.requiredLevel > 1 && !isOwned && (
-                      <span className={meetsLevel ? 'text-neutral-400' : 'text-error-500'}>
-                        {t('requiresLevel')} {tier.requiredLevel}
-                      </span>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => {
-                      if (isOwned) {
-                        equipPickaxe(tier.id);
-                      } else {
-                        buyPickaxe(tier.id);
-                        triggerBuyFlash(`px-${tier.id}`, tr('Куплено!', 'Куплено!', '+1 Purchased'));
-                      }
-                    }}
-                    disabled={isEquipped || (!isOwned && (!meetsLevel || !canAfford))}
-                    className={
-                      isEquipped
-                        ? 'btn-ghost px-4 py-1.5 text-xs'
-                        : isOwned
-                        ? 'btn-success px-4 py-1.5 text-xs'
-                        : !meetsLevel
-                        ? 'btn-error px-4 py-1.5 text-xs opacity-50'
-                        : 'btn-primary px-4 py-1.5 text-xs'
-                    }
-                  >
-                    {isEquipped
-                      ? t('equipped')
-                      : isOwned
-                      ? t('switchToPickaxe')
-                      : !meetsLevel
-                      ? `${t('requiresLevel')} ${tier.requiredLevel}`
-                      : formatMoney(tier.price)}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        {state.sparePickaxes.length > 0 && (
-          <div className="mt-3">
-            <div className="text-xs font-semibold text-neutral-500 dark:text-neutral-400 mb-1.5 flex items-center gap-1.5">
-              <ArrowLeftRight className="w-3.5 h-3.5" />
-              {t('sparePickaxes')} ({state.sparePickaxes.length})
-            </div>
-            <div className="space-y-1.5">
-              {state.sparePickaxes.map((px) => {
-                const pxTier = getPickaxeTier(px.pickaxeTierId);
-                const pxName = lang === 'ru' ? pxTier.nameRu : (lang === 'uk' ? pxTier.nameUk : pxTier.nameEn);
-                return (
-                  <div
-                    key={px.id}
-                    className="flex items-center justify-between rounded-lg p-2 bg-neutral-100 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Hammer className="w-3.5 h-3.5" style={{ color: pxTier.color }} />
-                      <div>
-                        <div className="text-xs font-semibold text-neutral-700 dark:text-neutral-300">{pxName}</div>
-                        <div className="text-[10px] text-neutral-400">{px.durability}/{px.maxDurability} {t('durability')}</div>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => switchPickaxe(px.id)}
-                      className="btn-ghost px-3 py-1 text-xs flex items-center gap-1"
-                    >
-                      <ArrowLeftRight className="w-3 h-3" />
-                      {t('switchToPickaxe')}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-
       {/* Food shop */}
       <div ref={foodRef} className="card p-4 scroll-mt-4 border-accent-500/20">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-bold text-neutral-800 dark:text-neutral-100 flex items-center gap-2">
-            <Battery className="w-5 h-5 text-accent-500" />
-            {t('shopFood')}
-          </h2>
-          {(() => {
-            const hasCabinet = (state.craftInventory?.food_cabinet ?? 0) > 0;
-            const foodLimit = hasCabinet ? 100 : 5;
-            const totalFood = Object.values(state.foodInventory ?? {}).reduce((sum, n) => sum + n, 0);
-            const pct = foodLimit > 0 ? Math.min(100, (totalFood / foodLimit) * 100) : 0;
-            return (
-              <div className="flex flex-col items-end gap-0.5">
-                <span className={`text-xs font-bold ${totalFood >= foodLimit ? 'text-error-500' : 'text-neutral-500'}`}>
-                  {totalFood} / {foodLimit} {tr('шт.', 'шт.', 'pcs.')}
-                </span>
-                <div className="w-24 h-1.5 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      totalFood >= foodLimit ? 'bg-error-500' : pct >= 80 ? 'bg-warning-500' : 'bg-accent-500'
-                    }`}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-        {!((state.craftInventory?.food_cabinet ?? 0) > 0) && (
-          <div className="mb-3 rounded-lg px-3 py-2 text-xs text-orange-400 font-medium" style={{ background: 'rgba(251,146,60,0.08)', border: '1px solid rgba(251,146,60,0.15)' }}>
-            {tr(
-              'Без шафи ліміт їжі — 5 шт. Скрафтіть шафу для збільшення до 100 шт.',
-              'Без шафи ліміт їжі — 5 шт. Скрафтіть шафу для збільшення до 100 шт.',
-              'Without a cabinet, food limit is 5 items. Craft a cabinet to increase to 100.'
-            )}
-          </div>
-        )}
-        <div className="space-y-2">
-          {FOOD_ITEMS.map((food) => {
-            const Icon = foodIcons[food.id] || Candy;
-            const name = lang === 'ru' ? food.nameRu : (lang === 'uk' ? food.nameUk : food.nameEn);
-            const activeBuff = state.buffs.find((b) => b.id === food.id && b.expiresAt > Date.now());
-            const buffRemaining = activeBuff ? Math.ceil((activeBuff.expiresAt - Date.now()) / 1000) : 0;
-            const foodPrice = getFoodPrice(food, currentMineId);
-            const owned = state.foodInventory?.[food.id] ?? 0;
-
-            return (
-              <div
-                key={food.id}
-                className={`relative flex items-center justify-between rounded-xl p-3 bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-850/50 dark:to-neutral-900/50 border border-neutral-200 dark:border-neutral-800 transition-all duration-300 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/5 ${flashItem === food.id ? 'animate-buy-flash' : ''}`}
-              >
-                {floatText?.id === food.id && (
-                  <span className="absolute -top-6 right-8 text-xs font-bold text-success-500 animate-fade-scale pointer-events-none">
-                    {tr('Куплено!', 'Куплено!', '+1 Purchased')}
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-bold text-neutral-800 dark:text-neutral-100 flex items-center gap-2">
+              <Battery className="w-5 h-5 text-accent-500" />
+              {t('shopFood')}
+            </h2>
+            {(() => {
+              const hasCabinet = (state.craftInventory?.food_cabinet ?? 0) > 0;
+              const foodLimit = hasCabinet ? 100 : 5;
+              const totalFood = Object.values(state.foodInventory ?? {}).reduce((sum, n) => sum + n, 0);
+              const pct = foodLimit > 0 ? Math.min(100, (totalFood / foodLimit) * 100) : 0;
+              return (
+                <div className="flex flex-col items-end gap-0.5">
+                  <span className={`text-xs font-bold ${totalFood >= foodLimit ? 'text-error-500' : 'text-neutral-500'}`}>
+                    {totalFood} / {foodLimit} {tr('шт.', 'шт.', 'pcs.')}
                   </span>
-                )}
-                <div className="flex items-center gap-3">
-                  <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center transition-transform duration-300 hover:scale-110"
-                    style={{ backgroundColor: food.color + '20' }}
-                  >
-                    <Icon className="w-5 h-5" style={{ color: food.color }} />
-                  </div>
-                  <div>
-                    <div className="text-sm font-bold text-neutral-800 dark:text-neutral-200">{name}</div>
-                    <div className="text-xs text-neutral-400">
-                      {food.energyBoost > 0 && <span>+{food.energyBoost} {t('energy')} </span>}
-                      {food.regenMultiplier > 1 && (
-                        <span>+{food.regenMultiplier}× {t('regenRate')} ({food.buffDuration}s)</span>
-                      )}
-                    </div>
-                    {activeBuff && (
-                      <div className="text-[10px] text-accent-500 font-semibold mt-0.5">
-                        {t('buffActive')}: {formatTime(buffRemaining)}
-                      </div>
-                    )}
+                  <div className="w-24 h-1.5 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        totalFood >= foodLimit ? 'bg-error-500' : pct >= 80 ? 'bg-warning-500' : 'bg-accent-500'
+                      }`}
+                      style={{ width: `${pct}%` }}
+                    />
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  {owned > 0 && (
-                    <span className="text-xs font-bold text-accent-500 bg-accent-500/10 px-2 py-0.5 rounded-md">
-                      ×{owned}
+              );
+            })()}
+          </div>
+          {!((state.craftInventory?.food_cabinet ?? 0) > 0) && (
+            <div className="mb-3 rounded-lg px-3 py-2 text-xs text-orange-400 font-medium" style={{ background: 'rgba(251,146,60,0.08)', border: '1px solid rgba(251,146,60,0.15)' }}>
+              {tr(
+                'Без шафи ліміт їжі — 5 шт. Скрафтіть шафу для збільшення до 100 шт.',
+                'Без шафи ліміт їжі — 5 шт. Скрафтіть шафу для збільшення до 100 шт.',
+                'Without a cabinet, food limit is 5 items. Craft a cabinet to increase to 100.'
+              )}
+            </div>
+          )}
+          <div className="space-y-2">
+            {FOOD_ITEMS.map((food) => {
+              const Icon = foodIcons[food.id] || Candy;
+              const name = lang === 'ru' ? food.nameRu : (lang === 'uk' ? food.nameUk : food.nameEn);
+              const activeBuff = state.buffs.find((b) => b.id === food.id && b.expiresAt > Date.now());
+              const buffRemaining = activeBuff ? Math.ceil((activeBuff.expiresAt - Date.now()) / 1000) : 0;
+              const foodPrice = getFoodPrice(food, currentMineId);
+              const owned = state.foodInventory?.[food.id] ?? 0;
+
+              return (
+                <div
+                  key={food.id}
+                  className={`relative flex items-center justify-between rounded-xl p-3 bg-gradient-to-br from-neutral-50 to-neutral-100 dark:from-neutral-850/50 dark:to-neutral-900/50 border border-neutral-200 dark:border-neutral-800 transition-all duration-300 hover:border-amber-500/50 hover:shadow-lg hover:shadow-amber-500/5 ${flashItem === food.id ? 'animate-buy-flash' : ''}`}
+                >
+                  {floatText?.id === food.id && (
+                    <span className="absolute -top-6 right-8 text-xs font-bold text-success-500 animate-fade-scale pointer-events-none">
+                      {tr('Куплено!', 'Куплено!', '+1 Purchased')}
                     </span>
                   )}
-                  <button
-                    onClick={() => { buyFood(food.id); triggerBuyFlash(food.id, tr('Куплено!', 'Куплено!', '+1 Purchased')); }}
-                    disabled={state.balance < foodPrice}
-                    className="btn-primary px-3 py-1.5 text-xs whitespace-nowrap transition-all duration-200 hover:shadow-md hover:shadow-amber-500/20 active:scale-95"
-                  >
-                    {formatMoney(foodPrice)}
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-10 h-10 rounded-xl flex items-center justify-center transition-transform duration-300 hover:scale-110"
+                      style={{ backgroundColor: food.color + '20' }}
+                    >
+                      <Icon className="w-5 h-5" style={{ color: food.color }} />
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-neutral-800 dark:text-neutral-200">{name}</div>
+                      <div className="text-xs text-neutral-400">
+                        {food.energyBoost > 0 && <span>+{food.energyBoost} {t('energy')} </span>}
+                        {food.regenMultiplier > 1 && (
+                          <span>+{food.regenMultiplier}× {t('regenRate')} ({food.buffDuration}s)</span>
+                        )}
+                      </div>
+                      {activeBuff && (
+                        <div className="text-[10px] text-accent-500 font-semibold mt-0.5">
+                          {t('buffActive')}: {formatTime(buffRemaining)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {owned > 0 && (
+                      <span className="text-xs font-bold text-accent-500 bg-accent-500/10 px-2 py-0.5 rounded-md">
+                        ×{owned}
+                      </span>
+                    )}
+                    <button
+                      onClick={() => { buyFood(food.id); triggerBuyFlash(food.id, tr('Куплено!', 'Куплено!', '+1 Purchased')); }}
+                      disabled={state.balance < foodPrice}
+                      className="btn-primary px-3 py-1.5 text-xs whitespace-nowrap transition-all duration-200 hover:shadow-md hover:shadow-amber-500/20 active:scale-95"
+                    >
+                      {formatMoney(foodPrice)}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
-      </div>
 
-      {/* Materials Shop */}
-      <div ref={materialsRef} className="scroll-mt-4">
-        <MaterialsShopSection />
-      </div>
+      {/* Materials Shop moved to Special Offers sub-tab */}
 
-      {/* Fuel Station */}
-      <div ref={fuelRef} className="scroll-mt-4">
-        <FuelStationSection />
-      </div>
+      {/* Fuel Station - gated at level 50 */}
+      {isFeatureUnlocked('fuel', state.level) ? (
+        <div ref={fuelRef} className="scroll-mt-4">
+          <FuelStationSection />
+        </div>
+      ) : (
+        <div ref={fuelRef}>
+          <LockedSection requiredLevel={50} lang={lang} />
+        </div>
+      )}
 
-      {/* Life Support Equipment */}
+      {/* Life Support Equipment - individual items gated by level */}
       <div ref={lifeSupportRef} className="scroll-mt-4">
-        <LifeSupportSection />
+        <FilteredLifeSupport />
       </div>
 
       {/* Market */}
@@ -671,7 +628,7 @@ export default function ShopTab() {
           {t('shopMarket')}
           {totalItemEffects.sellMultBonus > 0 && (
             <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-success-500/20 text-success-500">
-              {lang === 'ru' ? `Множитель продажи: x${(1 + totalItemEffects.sellMultBonus).toFixed(2)}` : (lang === 'uk' ? `Множник продажу: x${(1 + totalItemEffects.sellMultBonus).toFixed(2)}` : `Sell multiplier: x${(1 + totalItemEffects.sellMultBonus).toFixed(2)}`)}
+              {tr(`Множитель продажи: x${(1 + totalItemEffects.sellMultBonus).toFixed(2)}`, `Множник продажу: x${(1 + totalItemEffects.sellMultBonus).toFixed(2)}`, `Sell multiplier: x${(1 + totalItemEffects.sellMultBonus).toFixed(2)}`)}
             </span>
           )}
         </h2>
@@ -766,6 +723,201 @@ export default function ShopTab() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function FilteredLifeSupport() {
+  const { state, buyOxygenTank, buyBattery, buyCooler, lang } = useGame();
+
+  const tr = (ru: string, uk: string, en: string) => lang === 'ru' ? ru : (lang === 'uk' ? uk : en);
+
+  const reqLevel: Record<string, number> = {
+    oxygen_tank_small: 7,
+    oxygen_tank_medium: 16,
+    oxygen_tank_large: 32,
+    battery_basic: 7,
+    battery_weak: 16,
+    battery_car: 28,
+    battery_lithium: 45,
+    cooler_weak: 7,
+    cooler_normal: 24,
+    cooler_industrial: 50,
+  };
+
+  const levelLabel = (id: string) => tr('Откроется на', 'Відкриється на', 'Unlocks at') + ` Lvl ${reqLevel[id] ?? '?'}`;
+
+  const SectionHeader = ({ icon: Icon, color, label }: { icon: typeof Wind; color: string; label: string }) => (
+    <div className="flex items-center gap-2 mb-2">
+      <Icon className="w-4 h-4" style={{ color }} />
+      <h3 className="text-sm font-bold uppercase tracking-wide text-neutral-600 dark:text-neutral-400">{label}</h3>
+      <div className="flex-1 h-px bg-neutral-200 dark:bg-neutral-800" />
+    </div>
+  );
+
+  return (
+    <div className="card p-4 scroll-mt-4">
+      <h2 className="text-lg font-bold text-neutral-800 dark:text-neutral-100 mb-4 flex items-center gap-2">
+        <Wind className="w-5 h-5 text-accent-500" />
+        {tr('Спорядження', 'Спорядження', 'Equipment')}
+      </h2>
+
+      {/* Oxygen Tanks */}
+      <SectionHeader icon={Wind} color="#06b6d4" label={tr('Кислородные баллоны', 'Кисневі балони', 'Oxygen Tanks')} />
+      <div className="space-y-2 mb-4">
+        {(Object.keys(OXYGEN_TANK_CONFIGS) as OxygenTankType[]).map((type) => {
+          const cfg = OXYGEN_TANK_CONFIGS[type];
+          const unlocked = isItemUnlocked(type, state.level);
+          const owned = state.lifeSupport.oxygenTanks.filter((t) => t.type === type);
+          const canAfford = state.balance >= cfg.price;
+          if (!unlocked) {
+            return (
+              <div key={type} className="flex items-center justify-between rounded-xl p-3 bg-neutral-50 dark:bg-neutral-850/30 border border-neutral-200 dark:border-neutral-800 opacity-60">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-neutral-200 dark:bg-neutral-800">
+                    <Lock className="w-4 h-4 text-neutral-400" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-neutral-500 dark:text-neutral-400">{tr(cfg.nameRu, cfg.nameUk, cfg.nameEn)}</div>
+                    <div className="text-[10px] text-neutral-400">{levelLabel(type)}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+          return (
+            <div key={type} className="flex items-center justify-between rounded-xl p-3 bg-neutral-50 dark:bg-neutral-850/50 border border-neutral-200 dark:border-neutral-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: cfg.color + '20' }}>
+                  <Wind className="w-5 h-5" style={{ color: cfg.color }} />
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-neutral-800 dark:text-neutral-200">{tr(cfg.nameRu, cfg.nameUk, cfg.nameEn)}</div>
+                  <div className="text-xs text-neutral-400">
+                    {cfg.capacity}Л · {cfg.space}м²
+                    {owned.length > 0 && <span className="ml-1.5 text-success-500">×{owned.length}</span>}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => buyOxygenTank(type)}
+                disabled={!canAfford}
+                className={canAfford ? 'btn-primary px-3 py-1.5 text-xs whitespace-nowrap' : 'btn-ghost px-3 py-1.5 text-xs opacity-50 cursor-not-allowed'}
+              >
+                {formatMoney(cfg.price)}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Batteries */}
+      <SectionHeader icon={Battery} color="#22c55e" label={tr('Аккумуляторы', 'Акумулятори', 'Batteries')} />
+      <div className="space-y-2 mb-4">
+        {(Object.keys(BATTERY_CONFIGS) as BatteryType[]).map((type) => {
+          const cfg = BATTERY_CONFIGS[type];
+          const unlocked = isItemUnlocked(type, state.level);
+          const owned = state.lifeSupport.batteries.filter((b) => b.type === type);
+          const canAfford = state.balance >= cfg.price;
+          if (!unlocked) {
+            return (
+              <div key={type} className="flex items-center justify-between rounded-xl p-3 bg-neutral-50 dark:bg-neutral-850/30 border border-neutral-200 dark:border-neutral-800 opacity-60">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-neutral-200 dark:bg-neutral-800">
+                    <Lock className="w-4 h-4 text-neutral-400" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-neutral-500 dark:text-neutral-400">{tr(cfg.nameRu, cfg.nameUk, cfg.nameEn)}</div>
+                    <div className="text-[10px] text-neutral-400">{levelLabel(type)}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+          return (
+            <div key={type} className="flex items-center justify-between rounded-xl p-3 bg-neutral-50 dark:bg-neutral-850/50 border border-neutral-200 dark:border-neutral-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: cfg.color + '20' }}>
+                  <Battery className="w-5 h-5" style={{ color: cfg.color }} />
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-neutral-800 dark:text-neutral-200">{tr(cfg.nameRu, cfg.nameUk, cfg.nameEn)}</div>
+                  <div className="text-xs text-neutral-400">
+                    {cfg.capacity}МВт · {cfg.space}м²
+                    {owned.length > 0 && <span className="ml-1.5 text-success-500">×{owned.length}</span>}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => buyBattery(type)}
+                disabled={!canAfford}
+                className={canAfford ? 'btn-primary px-3 py-1.5 text-xs whitespace-nowrap' : 'btn-ghost px-3 py-1.5 text-xs opacity-50 cursor-not-allowed'}
+              >
+                {formatMoney(cfg.price)}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Coolers */}
+      <SectionHeader icon={Wind} color="#0891b2" label={tr('Охладители', 'Охолоджувачі', 'Coolers')} />
+      <div className="space-y-2 mb-4">
+        {(Object.keys(COOLER_CONFIGS) as CoolerType[]).map((type) => {
+          const cfg = COOLER_CONFIGS[type];
+          const unlocked = isItemUnlocked(type, state.level);
+          const owned = state.lifeSupport.coolers.filter((c) => c.type === type);
+          const canAfford = state.balance >= cfg.price;
+          const typeOwned = owned.length > 0;
+          if (!unlocked) {
+            return (
+              <div key={type} className="flex items-center justify-between rounded-xl p-3 bg-neutral-50 dark:bg-neutral-850/30 border border-neutral-200 dark:border-neutral-800 opacity-60">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-neutral-200 dark:bg-neutral-800">
+                    <Lock className="w-4 h-4 text-neutral-400" />
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-neutral-500 dark:text-neutral-400">{tr(cfg.nameRu, cfg.nameUk, cfg.nameEn)}</div>
+                    <div className="text-[10px] text-neutral-400">{levelLabel(type)}</div>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+          return (
+            <div key={type} className="rounded-xl p-3 bg-neutral-50 dark:bg-neutral-850/50 border border-neutral-200 dark:border-neutral-800">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: cfg.color + '20' }}>
+                    <Wind className="w-5 h-5" style={{ color: cfg.color }} />
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-neutral-800 dark:text-neutral-200">{tr(cfg.nameRu, cfg.nameUk, cfg.nameEn)}</div>
+                    <div className="text-xs text-neutral-400">
+                      {cfg.modeConfigs.normal.tempReduction}°C · {cfg.modeConfigs.normal.powerPerMin}МВт/хв
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => buyCooler(type)}
+                  disabled={!canAfford || typeOwned}
+                  className={canAfford && !typeOwned ? 'btn-primary px-3 py-1.5 text-xs whitespace-nowrap' : 'btn-ghost px-3 py-1.5 text-xs opacity-50 cursor-not-allowed'}
+                >
+                  {typeOwned ? tr('Куплено', 'Куплено', 'Owned') : formatMoney(cfg.price)}
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="text-xs text-neutral-400">
+        {tr(
+          'Полный ассортимент снаряжения доступен на вкладке Спорядження.',
+          'Повний асортимент спорядження доступний на вкладці Спорядження.',
+          'Full equipment assortment is available in the Equipment tab.'
+        )}
+      </p>
     </div>
   );
 }

@@ -16,7 +16,7 @@ export const OXYGEN_TANK_CONFIGS: Record<OxygenTankType, OxygenTankConfig> = {
   oxygen_tank_small: {
     type: 'oxygen_tank_small',
     price: 2000,
-    capacity: 20,
+    capacity: 25,
     space: 0.125,
     nameRu: 'Малый балон',
     nameUk: 'Малий балон',
@@ -27,7 +27,7 @@ export const OXYGEN_TANK_CONFIGS: Record<OxygenTankType, OxygenTankConfig> = {
   oxygen_tank_medium: {
     type: 'oxygen_tank_medium',
     price: 5000,
-    capacity: 45,
+    capacity: 60,
     space: 0.25,
     nameRu: 'Обычный балон',
     nameUk: 'Звичайний балон',
@@ -38,7 +38,7 @@ export const OXYGEN_TANK_CONFIGS: Record<OxygenTankType, OxygenTankConfig> = {
   oxygen_tank_large: {
     type: 'oxygen_tank_large',
     price: 15000,
-    capacity: 135,
+    capacity: 165,
     space: 0.5,
     nameRu: 'Большой балон',
     nameUk: 'Великий балон',

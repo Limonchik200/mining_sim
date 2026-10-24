@@ -8,8 +8,8 @@ export default function TabNav() {
   const tabs: { id: Tab; icon: typeof Pickaxe; label: string; locked?: boolean }[] = [
     { id: 'mining', icon: Pickaxe, label: t('tabMining') },
     { id: 'shop', icon: ShoppingCart, label: t('tabShop') },
-    { id: 'upgrades', icon: TrendingUp, label: t('tabUpgrades') },
-    { id: 'equipment', icon: Backpack, label: t('tabEquipment') },
+    { id: 'upgrades', icon: TrendingUp, label: t('tabUpgrades'), locked: state.level < 2 },
+    { id: 'equipment', icon: Backpack, label: t('tabEquipment'), locked: state.level < 3 },
     { id: 'expeditions', icon: Compass, label: t('tabExpeditions'), locked: state.level < 3 },
     { id: 'settings', icon: Settings, label: t('tabSettings') },
   ];

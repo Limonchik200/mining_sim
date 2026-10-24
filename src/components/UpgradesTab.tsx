@@ -18,12 +18,18 @@ import {
   getEnergyUpgradeDiamondCost,
   getBackpackCost,
   getBackpackWeightLimit,
+  getLuckCost,
+  getLuckChance,
+  getDiamondChanceCost,
+  getDiamondChanceBonus,
   UPGRADE_CONFIG,
 } from '@/config/upgradesConfig';
 import { getCaseChanceValue } from '@/config/casesConfig';
 import { getCaseChanceCost } from '@/config/upgradesConfig';
 import CraftPanel from '@/components/CraftPanel';
 import EquipmentPanel from '@/components/EquipmentPanel';
+import { isFeatureUnlocked } from '@/config/levelUnlocks';
+import LockedSection from '@/components/shop/LockedSection';
 import {
   Zap,
   Clock,
@@ -41,6 +47,8 @@ import {
   Hammer,
   HardHat,
   Mountain,
+  Clover,
+  Diamond,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -176,6 +184,8 @@ export default function UpgradesTab() {
     upgradeEnergyRegen,
     upgradeEnergyRegenAmount,
     upgradeBackpack,
+    upgradeLuck,
+    upgradeDiamondChance,
     currentBackpackLimit,
     currentBackpackWeight,
     t,
@@ -184,29 +194,37 @@ export default function UpgradesTab() {
 
   const [subTab, setSubTab] = useState<'upgrades' | 'craft' | 'equipment'>('upgrades');
 
+  const upgradesUnlocked = isFeatureUnlocked('upgrades', state.level);
+  const craftUnlocked = isFeatureUnlocked('craft', state.level);
+  const gearUnlocked = isFeatureUnlocked('gear', state.level);
+
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [subTab]);
 
-  const subTabBtn = (tab: 'upgrades' | 'craft' | 'equipment', Icon: LucideIcon, label: string) => (
+  const subTabBtn = (tab: 'upgrades' | 'craft' | 'equipment', Icon: LucideIcon, label: string, locked?: boolean) => (
     <button
-      onClick={() => setSubTab(tab)}
-      className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
+      onClick={() => !locked && setSubTab(tab)}
+      disabled={locked}
+      className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all relative ${
         subTab === tab
           ? 'bg-primary-500 text-white shadow-md shadow-primary-500/20'
+          : locked
+          ? 'text-neutral-400 dark:text-neutral-600 cursor-not-allowed bg-neutral-100/50 dark:bg-neutral-850/50'
           : 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800'
       }`}
     >
       <Icon className="w-4 h-4 inline mr-1.5" />
       {label}
+      {locked && <Lock className="w-3 h-3 inline ml-1" />}
     </button>
   );
 
   const switcher = (
     <div className="flex gap-2 p-1 rounded-xl bg-neutral-100 dark:bg-neutral-850">
       {subTabBtn('upgrades', Zap, lang === 'ru' ? 'Прокачка' : (lang === 'uk' ? 'Прокачка' : 'Upgrades'))}
-      {subTabBtn('craft', Hammer, lang === 'ru' ? 'Крафт' : (lang === 'uk' ? 'Крафт' : 'Craft'))}
-      {subTabBtn('equipment', HardHat, lang === 'ru' ? 'Спорядження' : (lang === 'uk' ? 'Спорядження' : 'Equipment'))}
+      {subTabBtn('craft', Hammer, lang === 'ru' ? 'Крафт' : (lang === 'uk' ? 'Крафт' : 'Craft'), !craftUnlocked)}
+      {subTabBtn('equipment', HardHat, lang === 'ru' ? 'Спорядження' : (lang === 'uk' ? 'Спорядження' : 'Equipment'), !gearUnlocked)}
     </div>
   );
 
@@ -214,7 +232,7 @@ export default function UpgradesTab() {
     return (
       <div className="space-y-4">
         {switcher}
-        <CraftPanel />
+        {craftUnlocked ? <CraftPanel /> : <LockedSection requiredLevel={8} lang={lang} />}
       </div>
     );
   }
@@ -223,7 +241,16 @@ export default function UpgradesTab() {
     return (
       <div className="space-y-4">
         {switcher}
-        <EquipmentPanel />
+        {gearUnlocked ? <EquipmentPanel /> : <LockedSection requiredLevel={3} lang={lang} />}
+      </div>
+    );
+  }
+
+  if (!upgradesUnlocked) {
+    return (
+      <div className="space-y-4">
+        {switcher}
+        <LockedSection requiredLevel={2} lang={lang} />
       </div>
     );
   }
@@ -338,6 +365,36 @@ export default function UpgradesTab() {
           canAfford={state.balance >= getBackpackCost(u.backpackLvl ?? 0)}
           onUpgrade={upgradeBackpack}
           t={t}
+        />
+        <UpgradeCard
+          icon={Clover}
+          iconColor="#22c55e"
+          title={lang === 'ru' ? 'Удача' : (lang === 'uk' ? 'Удача' : 'Luck')}
+          desc={lang === 'ru' ? 'Шанс x2 XP · База: 0.5% (+0.5% за ур.)' : (lang === 'uk' ? 'Шанс x2 XP · База: 0.5% (+0.5% за рів.)' : 'x2 XP · Base: 0.5% (+0.5% per lvl)')}
+          level={u.luckLvl ?? 0}
+          maxLevel={UPGRADE_CONFIG.luck.maxLevel}
+          currentValue={`${(getLuckChance(u.luckLvl ?? 0) * 100).toFixed(1)}%`}
+          nextValue={`${(getLuckChance((u.luckLvl ?? 0) + 1) * 100).toFixed(1)}%`}
+          cost={getLuckCost(u.luckLvl ?? 0)}
+          canAfford={state.gems >= getLuckCost(u.luckLvl ?? 0)}
+          onUpgrade={upgradeLuck}
+          t={t}
+          useDiamonds
+        />
+        <UpgradeCard
+          icon={Diamond}
+          iconColor="#06b6d4"
+          title={lang === 'ru' ? 'Шанс алмаза' : (lang === 'uk' ? 'Шанс алмаза' : 'Diamond Chance')}
+          desc={lang === 'ru' ? 'Шанс дропа алмаза · База: 0.01% (+0.001% за ур.)' : (lang === 'uk' ? 'Шанс дропа алмаза · База: 0.01% (+0.001% за рів.)' : 'Diamond drop · Base: 0.01% (+0.001% per lvl)')}
+          level={u.diamondChanceLvl ?? 0}
+          maxLevel={UPGRADE_CONFIG.diamondChance.maxLevel}
+          currentValue={`${((0.0001 + getDiamondChanceBonus(u.diamondChanceLvl ?? 0)) * 100).toFixed(3)}%`}
+          nextValue={`${((0.0001 + getDiamondChanceBonus((u.diamondChanceLvl ?? 0) + 1)) * 100).toFixed(3)}%`}
+          cost={getDiamondChanceCost(u.diamondChanceLvl ?? 0)}
+          canAfford={state.gems >= getDiamondChanceCost(u.diamondChanceLvl ?? 0)}
+          onUpgrade={upgradeDiamondChance}
+          t={t}
+          useDiamonds
         />
       </div>
 

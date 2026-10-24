@@ -16,6 +16,8 @@ import {
   XCircle,
   Lock,
   Sparkles,
+  Recycle,
+  Diamond,
 } from 'lucide-react';
 import {
   ITEM_TYPES,
@@ -24,12 +26,12 @@ import {
   getItemEffect,
   getItemName,
   getItemLevelName,
-  getItemRarityName,
 } from '@/config/itemsConfig';
 import { MATERIALS_CONFIG } from '@/config/expeditions';
 import type { ItemType, OwnedItem, ItemLevel, ItemEffect } from '@/types/items';
 import type { Lang } from '@/types';
 import type { MaterialId } from '@/config/expeditions';
+import RecycleModal from '@/components/modals/RecycleModal';
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
   Timer,
@@ -37,6 +39,8 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string; style?:
   Scale,
   Footprints,
   ShoppingBasket,
+  Gem,
+  Diamond,
 };
 
 interface EffectLine {
@@ -68,6 +72,15 @@ function getEffectLines(type: ItemType, level: ItemLevel, nextLevel: ItemLevel, 
     compare('expeditionLootChance', lang === 'ru' ? 'Шанс лута' : (lang === 'uk' ? 'Шанс луту' : 'Loot chance'), (v) => `${Math.round(v * 100)}%`);
     compare('expeditionLootMult', lang === 'ru' ? 'Множитель лута' : (lang === 'uk' ? 'Множник луту' : 'Loot mult'), (v) => `x${v}`);
   }
+  if (type === 'obsidian_nozzle') {
+    compare('oreYieldMultChance', lang === 'ru' ? 'Шанс руды' : (lang === 'uk' ? 'Шанс руди' : 'Ore chance'), (v) => `${Math.round(v * 100)}%`);
+    compare('oreYieldMult', lang === 'ru' ? 'Множитель руды' : (lang === 'uk' ? 'Множник руди' : 'Ore mult'), (v) => `x${v}`);
+  }
+  if (type === 'diamond_ring') {
+    compare('diamondDropBonus', lang === 'ru' ? 'Шанс алмаза' : (lang === 'uk' ? 'Шанс алмазу' : 'Diamond chance'), (v) => `+${(v * 100).toFixed(3)}%`);
+    compare('diamondMultChance', lang === 'ru' ? 'Множ. алмаза шанс' : (lang === 'uk' ? 'Множ. алмазу шанс' : 'Diamond mult chance'), (v) => `${Math.round(v * 100)}%`);
+    compare('diamondMult', lang === 'ru' ? 'Множ. алмаза' : (lang === 'uk' ? 'Множ. алмазу' : 'Diamond mult'), (v) => `x${v}`);
+  }
 
   return lines;
 }
@@ -94,6 +107,7 @@ interface ItemDetailsModalProps {
   onEquip: (uid: string, slot: number) => void;
   onUnequip: (slot: number) => void;
   onUpgrade: (uid: string) => void;
+  onRecycle: (uid: string) => void;
   onClose: () => void;
   t: (k: any) => string;
 }
@@ -109,6 +123,7 @@ export default function ItemDetailsModal({
   onEquip,
   onUnequip,
   onUpgrade,
+  onRecycle,
   onClose,
   t,
 }: ItemDetailsModalProps) {
@@ -119,6 +134,7 @@ export default function ItemDetailsModal({
   const cost = UPGRADE_COSTS[item.level];
   const hasCost = cost && Object.keys(cost).length > 0;
   const [burst, setBurst] = useState(false);
+  const [showRecycle, setShowRecycle] = useState(false);
 
   const nextLevel = Math.min(item.level + 1, 7) as ItemLevel;
   const effectLines = getEffectLines(item.type, item.level, nextLevel, lang);
@@ -177,12 +193,6 @@ export default function ItemDetailsModal({
                   style={{ backgroundColor: levelInfo.color + '20', color: levelInfo.color }}
                 >
                   {getItemLevelName(item.level, lang)}
-                </span>
-                <span
-                  className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md"
-                  style={{ backgroundColor: ITEM_LEVEL_NAMES[1].color + '15', color: '#94a3b8' }}
-                >
-                  {getItemRarityName(item.rarity, lang)}
                 </span>
                 {isEquipped && (
                   <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-success-500/20 text-success-500 flex items-center gap-0.5">
@@ -335,7 +345,26 @@ export default function ItemDetailsModal({
               {t('itemsUpgrade')}
             </button>
           )}
+          <button
+            onClick={() => setShowRecycle(true)}
+            className="px-3 py-2.5 text-sm font-bold rounded-xl bg-neutral-200 dark:bg-neutral-800 text-neutral-500 dark:text-neutral-400 hover:bg-warning-500/10 hover:text-warning-500 transition-all duration-200 flex items-center justify-center gap-1.5 active:scale-95"
+            title={lang === 'ru' ? 'Утилизировать' : (lang === 'uk' ? 'Утилізувати' : 'Recycle')}
+          >
+            <Recycle className="w-4 h-4" />
+          </button>
         </div>
+
+        {showRecycle && (
+          <RecycleModal
+            item={item}
+            lang={lang}
+            onConfirm={() => {
+              setShowRecycle(false);
+              onRecycle(item.uid);
+            }}
+            onCancel={() => setShowRecycle(false)}
+          />
+        )}
       </div>
     </div>
   );

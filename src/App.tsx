@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { GameProvider, useGame } from '@/context/GameContext';
 import TabNav from '@/components/TabNav';
 import MiningTab from '@/components/MiningTab';
@@ -10,35 +11,52 @@ import Notifications from '@/components/Notifications';
 import FloatTexts from '@/components/FloatTexts';
 import ItemsModal from '@/components/ItemsModal';
 import FloatingQuickAccess from '@/components/FloatingQuickAccess';
+import LevelUpModal from '@/components/LevelUpModal';
+import LevelRoadmapModal from '@/components/LevelRoadmapModal';
 import { Pickaxe, Coins, Gem } from 'lucide-react';
 import { formatMoney } from '@/config';
 import { xpForLevel } from '@/config/upgradesConfig';
 
 function LevelXPBar() {
-  const { state, t } = useGame();
+  const { state, t, lang } = useGame();
+  const [roadmapOpen, setRoadmapOpen] = useState(false);
   const xpNeeded = xpForLevel(state.level);
   const xpPct = Math.min(100, (state.xp / xpNeeded) * 100);
 
   return (
-    <div className="flex items-center gap-2.5">
-      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center shadow-md shadow-primary-500/20 shrink-0">
-        <Pickaxe className="w-5 h-5 text-white" />
-      </div>
-      <div className="hidden sm:block">
-        <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">
-          {t('level')} {state.level}
+    <>
+      <button
+        onClick={() => setRoadmapOpen(true)}
+        className="flex items-center gap-2.5 cursor-pointer hover:opacity-80 transition-opacity"
+        title={lang === 'ru' ? 'Открыть карту уровней' : (lang === 'uk' ? 'Відкрити карту рівнів' : 'Open level roadmap')}
+      >
+        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center shadow-md shadow-primary-500/20 shrink-0">
+          <Pickaxe className="w-5 h-5 text-white" />
         </div>
-        <div className="text-xs font-bold text-neutral-700 dark:text-neutral-200">
-          {t('xp')}: {state.xp} / {xpNeeded}
+        <div className="hidden sm:block text-left">
+          <div className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">
+            {t('level')} {state.level}
+          </div>
+          <div className="text-xs font-bold text-neutral-700 dark:text-neutral-200">
+            {t('xp')}: {state.xp} / {xpNeeded}
+          </div>
         </div>
-      </div>
-      <div className="w-16 sm:w-24 h-1.5 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden">
-        <div
-          className="h-full bg-gradient-to-r from-primary-400 to-primary-500 transition-all duration-300"
-          style={{ width: `${xpPct}%` }}
+        <div className="w-16 sm:w-24 h-1.5 rounded-full bg-neutral-200 dark:bg-neutral-800 overflow-hidden">
+          <div
+            className="h-full bg-gradient-to-r from-primary-400 to-primary-500 transition-all duration-300"
+            style={{ width: `${xpPct}%` }}
+          />
+        </div>
+      </button>
+      {roadmapOpen && (
+        <LevelRoadmapModal
+          currentLevel={state.level}
+          xp={state.xp}
+          lang={lang}
+          onClose={() => setRoadmapOpen(false)}
         />
-      </div>
-    </div>
+      )}
+    </>
   );
 }
 
@@ -60,10 +78,10 @@ function Balances() {
 }
 
 function GameApp() {
-  const { activeTab, t, state } = useGame();
+  const { activeTab, t, state, levelUpData, setLevelUpData, lang } = useGame();
 
   return (
-    <div className="min-h-screen bg-neutral-100 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 transition-colors duration-300">
+    <div className="min-h-screen bg-neutral-100 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 transition-colors duration-300 overflow-y-auto">
       {/* Header */}
       <header className="sticky top-0 z-30 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-md border-b border-neutral-200 dark:border-neutral-800" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div className="max-w-2xl mx-auto px-4 py-2.5 flex items-center justify-between">
@@ -76,7 +94,7 @@ function GameApp() {
       </header>
 
       {/* Main content */}
-      <main className="max-w-2xl mx-auto px-3 sm:px-4 py-4 pb-28 space-y-4" style={{ paddingBottom: 'calc(7rem + env(safe-area-inset-bottom, 0px))' }}>
+      <main className="max-w-2xl mx-auto px-3 sm:px-4 py-4 pb-28 space-y-4 overflow-y-auto" style={{ paddingBottom: 'calc(7rem + env(safe-area-inset-bottom, 0px))' }}>
         {activeTab === 'mining' && <MiningTab />}
         {activeTab === 'shop' && <ShopTab />}
         {activeTab === 'upgrades' && <UpgradesTab />}
@@ -97,11 +115,18 @@ function GameApp() {
       <FloatTexts />
       <ItemsModal />
       <FloatingQuickAccess />
+      {levelUpData !== null && (
+        <LevelUpModal
+          level={levelUpData}
+          lang={lang}
+          onClose={() => setLevelUpData(null)}
+        />
+      )}
 
       {/* Version badge */}
       <div className="fixed bottom-16 right-3 z-50 pointer-events-none select-none">
         <span className="text-[10px] font-mono font-semibold text-neutral-400 dark:text-neutral-600 bg-neutral-100/70 dark:bg-neutral-900/70 px-2 py-0.5 rounded-md backdrop-blur-sm">
-          V7.5.3
+          V8.0.0 P3
         </span>
       </div>
     </div>

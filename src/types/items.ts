@@ -1,4 +1,4 @@
-export type ItemType = 'stopwatch' | 'energizer' | 'scales' | 'boots' | 'basket';
+export type ItemType = 'stopwatch' | 'energizer' | 'scales' | 'boots' | 'basket' | 'obsidian_nozzle' | 'diamond_ring';
 
 export type ItemRarity = 1 | 2 | 3 | 4;
 
@@ -25,4 +25,9 @@ export interface ItemEffect {
   expeditionRefreshReductionPct: number;
   expeditionLootChance: number;
   expeditionLootMult: number;
+  oreYieldMultChance: number;
+  oreYieldMult: number;
+  diamondDropBonus: number;
+  diamondMultChance: number;
+  diamondMult: number;
 }

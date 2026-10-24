@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useGame } from '@/context/GameContext';
-import { ITEM_TYPES, ITEM_LEVEL_NAMES, UPGRADE_COSTS, getItemEffect, getItemName, getItemLevelName, getItemRarityName } from '@/config/itemsConfig';
+import { ITEM_TYPES, ITEM_LEVEL_NAMES, UPGRADE_COSTS, getItemEffect, getItemName, getItemLevelName } from '@/config/itemsConfig';
 import { MATERIALS_CONFIG } from '@/config/expeditions';
 import type { ItemType, OwnedItem, ItemLevel } from '@/types/items';
 import type { Lang } from '@/types';
@@ -20,6 +20,7 @@ import {
   Plus,
   Lock,
   CheckCircle2,
+  Diamond,
 } from 'lucide-react';
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
@@ -28,6 +29,8 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string; style?:
   Scale,
   Footprints,
   ShoppingBasket,
+  Gem,
+  Diamond,
 };
 
 function EffectDescription({ type, level, lang }: { type: ItemType; level: ItemLevel; lang: Lang }) {
@@ -57,6 +60,15 @@ function EffectDescription({ type, level, lang }: { type: ItemType; level: ItemL
   }
   if (eff.expeditionLootChance > 0) {
     parts.push(lang === 'ru' ? `${Math.round(eff.expeditionLootChance * 100)}% x${eff.expeditionLootMult} лут` : (lang === 'uk' ? `${Math.round(eff.expeditionLootChance * 100)}% x${eff.expeditionLootMult} лут` : `${Math.round(eff.expeditionLootChance * 100)}% x${eff.expeditionLootMult} loot`));
+  }
+  if (eff.oreYieldMultChance > 0) {
+    parts.push(lang === 'ru' ? `${Math.round(eff.oreYieldMultChance * 100)}% x${eff.oreYieldMult} руда` : (lang === 'uk' ? `${Math.round(eff.oreYieldMultChance * 100)}% x${eff.oreYieldMult} руда` : `${Math.round(eff.oreYieldMultChance * 100)}% x${eff.oreYieldMult} ore`));
+  }
+  if (eff.diamondDropBonus > 0) {
+    parts.push(lang === 'ru' ? `+${(eff.diamondDropBonus * 100).toFixed(3)}% алмаз` : (lang === 'uk' ? `+${(eff.diamondDropBonus * 100).toFixed(3)}% алмаз` : `+${(eff.diamondDropBonus * 100).toFixed(3)}% diamond`));
+  }
+  if (eff.diamondMultChance > 0) {
+    parts.push(lang === 'ru' ? `${Math.round(eff.diamondMultChance * 100)}% x${eff.diamondMult} алмаз` : (lang === 'uk' ? `${Math.round(eff.diamondMultChance * 100)}% x${eff.diamondMult} алмаз` : `${Math.round(eff.diamondMultChance * 100)}% x${eff.diamondMult} diamond`));
   }
 
   return <span>{parts.join(' · ')}</span>;
@@ -188,12 +200,6 @@ function ItemRevealModal({
           >
             {getItemLevelName(item.level, lang)}
           </span>
-          <span
-            className="text-[10px] font-semibold px-2 py-0.5 rounded-md"
-            style={{ backgroundColor: ITEM_LEVEL_NAMES[1].color + '15', color: '#94a3b8' }}
-          >
-            {getItemRarityName(item.rarity, lang)}
-          </span>
         </div>
 
         <div className="text-[10px] text-neutral-500 dark:text-neutral-400 mb-4 leading-relaxed">
@@ -223,7 +229,7 @@ function ItemRevealModal({
 }
 
 export default function ItemsModal() {
-  const { state, itemsOpen, setItemsOpen, openItemBag, equipItem, unequipItem, upgradeItem, unlockSlot6, isSlotUnlocked, t, lang, totalItemEffects } = useGame();
+  const { state, itemsOpen, setItemsOpen, openItemBag, equipItem, unequipItem, upgradeItem, recycleItem, unlockSlot6, isSlotUnlocked, t, lang, totalItemEffects } = useGame();
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
   const [selectedItem, setSelectedItem] = useState<OwnedItem | null>(null);
   const [revealedItem, setRevealedItem] = useState<OwnedItem | null>(null);
@@ -471,6 +477,10 @@ export default function ItemsModal() {
           }}
           onUpgrade={(uid) => {
             upgradeItem(uid);
+            setSelectedItem(null);
+          }}
+          onRecycle={(uid) => {
+            recycleItem(uid);
             setSelectedItem(null);
           }}
           onClose={() => setSelectedItem(null)}
