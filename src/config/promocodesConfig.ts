@@ -120,6 +120,15 @@ export const PROMO_CODES: PromoCode[] = [
     messageEn: '+$1000 to balance!',
     messageRu: '+$1000 на баланс!',
   },
+  {
+    code: 'static',
+    type: 'mixed',
+    gems: 10,
+    cases: [{ rarity: 'epic', count: 1 }],
+    messageUk: '+10 алмазів та 1 Епічний кейс!',
+    messageEn: '+10 gems and 1 Epic case!',
+    messageRu: '+10 алмазов и 1 Эпический кейс!',
+  },
 ];
 
 export function findPromoCode(code: string): PromoCode | null {

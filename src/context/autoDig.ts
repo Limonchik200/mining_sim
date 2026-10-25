@@ -1,7 +1,7 @@
 import type { GameState } from '@/types';
 import { getAutoCooldownMs, getBasketCapValue, getEnergyRegenValue, getEnergyRegenAmountValue, getDiamondChanceBonus } from '@/config/upgradesConfig';
 import { getPickaxeTier } from '@/config/pickaxesConfig';
-import { getRandomResourceForMine, getRandomMass, rollDiamondDrop, getMineById, isDumpMine } from '@/config/minesConfig';
+import { getRandomResourceForMine, getRandomMass, rollDiamondDrop } from '@/config/minesConfig';
 import { rollAutoCaseDrop, rollCaseRarity } from '@/config/casesConfig';
 import { computeItemEffectsForRegen, computeTotalItemEffects } from './itemEffects';
 import { generateExpeditionSlots, EXPEDITION_REFRESH_MS } from './storage';
@@ -107,21 +107,6 @@ export function processAutoDig(
     next.activePickaxe.durability < tier.durabilityCost
   ) {
     return state;
-  }
-
-  const autoMineId = next.autoLeaseMineId || 1;
-  const autoMine = getMineById(autoMineId);
-  const autoDump = isDumpMine(autoMineId);
-  const autoOxygenPerMin = autoMine.environment?.oxygenConsumptionPerMin ?? 0;
-  const autoNeedsOxygen = !autoDump && autoOxygenPerMin > 0;
-  if (autoNeedsOxygen) {
-    const activeTank = next.lifeSupport.activeOxygenTankId
-      ? next.lifeSupport.oxygenTanks.find((t) => t.id === next.lifeSupport.activeOxygenTankId)
-      : next.lifeSupport.oxygenTanks.find((t) => t.currentOxygen > 0);
-    if (!activeTank || activeTank.currentOxygen <= 0) return state;
-    if (!next.lifeSupport.oxygenValveOpen) return state;
-    const activeCoolers = next.lifeSupport.coolers.filter((c) => c.active && c.durability > 0);
-    if (activeCoolers.length === 0) return state;
   }
 
   const missedDigs = Math.floor(elapsedSinceDig / autoCooldown);
@@ -258,25 +243,6 @@ export function processOfflineProgress(
     const effectiveAutoEnd = Math.min(autoLeaseEndAt, now);
     const autoActiveSec = Math.max(0, (effectiveAutoEnd - lastOnlineAt) / 1000);
     const cappedMaxDigs = Math.floor(autoActiveSec / autoCooldown);
-
-    const offMineId = next.autoLeaseMineId || 1;
-    const offMine = getMineById(offMineId);
-    const offDump = isDumpMine(offMineId);
-    const offOxygenPerMin = offMine.environment?.oxygenConsumptionPerMin ?? 0;
-    const offNeedsOxygen = !offDump && offOxygenPerMin > 0;
-    let oxygenBlocked = false;
-    if (offNeedsOxygen) {
-      const activeTank = next.lifeSupport.activeOxygenTankId
-        ? next.lifeSupport.oxygenTanks.find((t) => t.id === next.lifeSupport.activeOxygenTankId)
-        : next.lifeSupport.oxygenTanks.find((t) => t.currentOxygen > 0);
-      if (!activeTank || activeTank.currentOxygen <= 0) oxygenBlocked = true;
-      if (!next.lifeSupport.oxygenValveOpen) oxygenBlocked = true;
-      const activeCoolers = next.lifeSupport.coolers.filter((c) => c.active && c.durability > 0);
-      if (activeCoolers.length === 0) oxygenBlocked = true;
-    }
-    if (oxygenBlocked) {
-      return changed ? next : prev;
-    }
 
     for (let i = 0; i < cappedMaxDigs && basketMass < basketCap; i++) {
       if (!next.activePickaxe || next.activePickaxe.durability < tier.durabilityCost) break;
