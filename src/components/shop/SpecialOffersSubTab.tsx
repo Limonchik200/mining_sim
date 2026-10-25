@@ -6,7 +6,7 @@ import {
   getRewardDisplayName,
   type SpecialOfferBundle,
 } from '@/config/specialOffersConfig';
-import { Gem, Package, Layers, HardHat, Gift, Check, Clock } from 'lucide-react';
+import { Gem, Package, Layers, HardHat, Gift, Check, Clock, ShoppingBag } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -14,6 +14,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Layers,
   HardHat,
   Gift,
+  ShoppingBag,
 };
 
 export default function SpecialOffersSubTab() {

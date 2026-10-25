@@ -1,4 +1,5 @@
 import { Gem, Lock, Check, X, Pickaxe } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { gemsForLevel, LEVEL_MILESTONES, getMilestoneName } from '@/config/levelUnlocks';
 import { xpForLevel } from '@/config/upgradesConfig';
 import type { Lang } from '@/types';
@@ -13,7 +14,7 @@ interface LevelRoadmapModalProps {
 export default function LevelRoadmapModal({ currentLevel, xp, lang, onClose }: LevelRoadmapModalProps) {
   const tr = (ru: string, uk: string, en: string) => lang === 'ru' ? ru : (lang === 'uk' ? uk : en);
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fade-in"
       onClick={onClose}
@@ -105,6 +106,7 @@ export default function LevelRoadmapModal({ currentLevel, xp, lang, onClose }: L
           {xp.toLocaleString()} / {xpForLevel(currentLevel).toLocaleString()} XP
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

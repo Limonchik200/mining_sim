@@ -404,6 +404,23 @@ export function GameProvider({ children }: { children: ReactNode }) {
     lastTickRef.current = now;
   }, []);
 
+  useEffect(() => {
+    const todayKey = Math.floor(Date.now() / 86400000);
+    const lastKey = stateRef.current.stats?.lastDayKey ?? 0;
+    if (lastKey === 0) {
+      setState((prev) => ({ ...prev, stats: { ...prev.stats, lastDayKey: todayKey } }));
+    } else if (todayKey > lastKey) {
+      setState((prev) => ({
+        ...prev,
+        stats: {
+          ...prev.stats,
+          lastDayKey: todayKey,
+          daysPlayed: prev.stats.daysPlayed + 1,
+        },
+      }));
+    }
+  }, []);
+
   const dig = useCallback(
     (x?: number, y?: number) => {
       const now = Date.now();
@@ -435,31 +452,31 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const mineId = current.currentMineId ?? 0;
       const dumpMine = isDumpMine(mineId);
 
-      // Oxygen check: mine 3+ requires active oxygen tank
-      if (!dumpMine && mineId >= 3) {
-        const ls = current.lifeSupport;
-        const activeTank = ls.activeOxygenTankId
-          ? ls.oxygenTanks.find((t) => t.id === ls.activeOxygenTankId)
-          : ls.oxygenTanks.find((t) => t.currentOxygen > 0);
-        if (!activeTank || activeTank.currentOxygen <= 0) {
-          pushNotification({ message: lang === 'ru' ? 'Нет кислорода! Нужен кислородный балон.' : (lang === 'uk' ? 'Немає кисню! Потрібен кисневий балон.' : 'No oxygen! Need an oxygen tank.'), type: 'error' });
-          return;
-        }
-      }
-
-      // Temperature check: must be between 8°C and 18°C
+      // Hard oxygen & cooling check: mines that need oxygen (oxygenConsumptionPerMin > 0)
+      // require BOTH an active oxygen tank with oxygen AND an active cooler with durability.
       if (!dumpMine) {
         const mine = getMineById(mineId);
-        const baseTemp = mine.environment?.baseTemperature ?? 15;
-        const activeCoolers = current.lifeSupport.coolers.filter((c) => c.active && c.durability > 0);
-        const tempReduction = activeCoolers.reduce((sum, c) => {
-          const cfg = COOLER_CONFIGS[c.type];
-          return sum + (cfg.modeConfigs[c.mode]?.tempReduction ?? 0);
-        }, 0);
-        const currentTemp = baseTemp - tempReduction;
-        if (currentTemp < 8 || currentTemp > 18) {
-          pushNotification({ message: lang === 'ru' ? `Температура ${currentTemp.toFixed(0)}°C вне нормы (8–18°C)!` : (lang === 'uk' ? `Температура ${currentTemp.toFixed(0)}°C поза нормою (8–18°C)!` : `Temperature ${currentTemp.toFixed(0)}°C out of range (8–18°C)!`), type: 'error' });
-          return;
+        const oxygenPerMin = mine.environment?.oxygenConsumptionPerMin ?? 0;
+        const needsOxygen = oxygenPerMin > 0;
+        const ls = current.lifeSupport;
+
+        if (needsOxygen) {
+          const activeTank = ls.activeOxygenTankId
+            ? ls.oxygenTanks.find((t) => t.id === ls.activeOxygenTankId)
+            : ls.oxygenTanks.find((t) => t.currentOxygen > 0);
+          if (!activeTank || activeTank.currentOxygen <= 0) {
+            pushNotification({ message: lang === 'ru' ? 'Нет кислорода! Нужен активный кислородный балон с запасом кисню.' : (lang === 'uk' ? 'Немає кисню! Потрібен активний кисневий балон із запасом кисню.' : 'No oxygen! Need an active oxygen tank with oxygen.'), type: 'error' });
+            return;
+          }
+          if (!ls.oxygenValveOpen) {
+            pushNotification({ message: lang === 'ru' ? 'Кислородный вентиль закрыт! Откройте вентиль.' : (lang === 'uk' ? 'Кисневий вентиль закритий! Відкрийте вентиль.' : 'Oxygen valve is closed! Open the valve.'), type: 'error' });
+            return;
+          }
+          const activeCoolers = ls.coolers.filter((c) => c.active && c.durability > 0);
+          if (activeCoolers.length === 0) {
+            pushNotification({ message: lang === 'ru' ? 'Охладитель выключен или сломан! Включите активный охладитель.' : (lang === 'uk' ? 'Охолоджувач вимкнений або зламаний! Увімкніть активний охолоджувач.' : 'Cooler is off or broken! Enable an active cooler.'), type: 'error' });
+            return;
+          }
         }
       }
 
@@ -508,7 +525,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
         yieldMult = itemEff.oreYieldMult;
         nozzleTriggered = true;
       }
-
       const baseRollCount = tier.yieldMultiplier;
       const totalRollCount = baseRollCount * yieldMult;
       const rolls: { resource: Resource; mass: number }[] = [];
@@ -518,6 +534,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
         rolls.push({ resource: r, mass: m });
       }
       const totalMass = rolls.reduce((sum, r) => sum + r.mass, 0);
+      if (nozzleTriggered) {
+        const extraMass = totalMass * (yieldMult - 1) / yieldMult;
+        const fx = typeof x === 'number' ? x : window.innerWidth / 2;
+        const fy = typeof y === 'number' ? y : window.innerHeight / 2;
+        pushFloatText(`\u2728 +${extraMass.toFixed(2)}\u043a\u0433`, fx, fy - 20, '#FBBF24');
+      }
       const luckChance = getLuckChance(stateRef.current.upgrades.luckLvl ?? 0);
       const luckTriggered = Math.random() < luckChance;
       const totalXp = rolls.reduce((sum, r) => sum + r.resource.xp, 0) * (luckTriggered ? 2 : 1);
@@ -534,6 +556,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
         const pTier = getPickaxeTier(prev.activePickaxeTierId);
         next.energy = Math.max(0, prev.energy - pTier.energyCost);
         next.totalDigs = prev.totalDigs + 1;
+        next.stats = {
+          ...prev.stats,
+          totalClicks: prev.stats.totalClicks + 1,
+          energySpent: Math.round((prev.stats.energySpent + pTier.energyCost) * 100) / 100,
+          oreMinedKg: Math.round((prev.stats.oreMinedKg + totalMass) * 100) / 100,
+        };
 
         const durabilityCost = pTier.durabilityCost * yieldMult;
         const newDur = prev.activePickaxe!.durability - durabilityCost;
@@ -563,6 +591,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         const xpRes = applyXp(next, totalXp);
         next = xpRes.state;
         if (xpRes.leveledUp) {
+          next.stats = { ...next.stats, gemsEarned: next.stats.gemsEarned + (xpRes.gemsEarned || 0) };
           pushNotification({ message: `${tr('notifLevelUp')} ${xpRes.newLevel}!`, type: 'success' });
           setLevelUpData(xpRes.newLevel);
           for (const newLvl of xpRes.newLevels) {
@@ -578,6 +607,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
         if (rollCaseDrop(prev.upgrades.caseChanceLvl, mineId)) {
           const rarity = rollCaseRarity();
           next.cases = [...prev.cases, { id: `case-${Date.now()}-${Math.random()}`, rarity, opened: false }];
+          next.stats = {
+            ...next.stats,
+            casesDugCommon: next.stats.casesDugCommon + (rarity === 'common' ? 1 : 0),
+            casesDugRare: next.stats.casesDugRare + (rarity === 'rare' ? 1 : 0),
+            casesDugEpic: next.stats.casesDugEpic + (rarity === 'epic' ? 1 : 0),
+            casesDugLegendary: next.stats.casesDugLegendary + (rarity === 'legendary' ? 1 : 0),
+          };
           pushNotification({ message: tr('notifCaseDropped'), type: 'case', color: CASE_RARITIES[rarity].color });
         }
 
@@ -585,6 +621,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         if (diamondResult.dropped) {
           next.gems = prev.gems + diamondResult.amount;
           next.totalGemsEarned = (prev.totalGemsEarned || 0) + diamondResult.amount;
+          next.stats = { ...next.stats, gemsEarned: next.stats.gemsEarned + diamondResult.amount };
           pushNotification({
             message: `${lang === 'ru' ? 'Найден алмаз!' : (lang === 'uk' ? 'Знайдено алмаз!' : 'Diamond found!')} +${diamondResult.amount} 💎`,
             type: 'drop',
@@ -596,7 +633,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       });
 
     },
-    [pushNotification, tr, lang]
+    [pushNotification, pushFloatText, tr, lang]
   );
 
   const collectBasket = useCallback(() => {
@@ -605,19 +642,41 @@ export function GameProvider({ children }: { children: ReactNode }) {
         pushNotification({ message: tr('notifNothingToCollect'), type: 'info' });
         return prev;
       }
+      const backpackLvl = prev.upgrades.backpackLvl ?? 0;
+      const backpackLimit = getBackpackWeightLimit(backpackLvl);
+      const currentWeight = Math.round(
+        Object.entries(prev.inventory).reduce((sum, [type, entry]) => {
+          if (!entry || !Number.isFinite(entry.mass)) return sum;
+          const res = RESOURCES[type as ResourceType];
+          const w = res?.weight ?? 1;
+          return sum + entry.mass * w;
+        }, 0) * 100
+      ) / 100;
+      const remainingCap = Math.max(0, Math.round((backpackLimit - currentWeight) * 100) / 100);
+
       const inv = { ...prev.inventory };
       let totalXp = 0;
+      const leftover: typeof prev.autoBasket = [];
+      let transferredMass = 0;
       for (const item of prev.autoBasket) {
+        const res = RESOURCES[item.resource as ResourceType];
+        const w = res?.weight ?? 1;
+        const itemWeight = item.mass * w;
+        if (transferredMass + itemWeight > remainingCap) {
+          leftover.push(item);
+          continue;
+        }
         inv[item.resource] = {
           mass: Math.round((inv[item.resource].mass + item.mass) * 100) / 100,
           count: inv[item.resource].count + 1,
         };
         totalXp += item.xp;
+        transferredMass = Math.round((transferredMass + itemWeight) * 100) / 100;
       }
       const transferredCases = prev.autoBasketCases.length;
       let next: GameState = {
         ...prev,
-        autoBasket: [],
+        autoBasket: leftover,
         autoBasketCases: [],
         inventory: inv,
         cases: prev.autoBasketCases.length > 0
@@ -627,6 +686,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const xpRes = applyXp(next, totalXp);
       next = xpRes.state;
       if (xpRes.leveledUp) {
+        next.stats = { ...next.stats, gemsEarned: next.stats.gemsEarned + (xpRes.gemsEarned || 0) };
         pushNotification({ message: `${tr('notifLevelUp')} ${xpRes.newLevel}!`, type: 'success' });
         setLevelUpData(xpRes.newLevel);
         for (const newLvl of xpRes.newLevels) {
@@ -638,6 +698,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
           }
         }
       }
+      if (leftover.length > 0) {
+        pushNotification({ message: lang === 'ru' ? `Рюкзак полон! ${leftover.length} шт. осталось в корзине.` : (lang === 'uk' ? `Рюкзак повний! ${leftover.length} шт. залишилось у кошику.` : `Backpack full! ${leftover.length} items left in basket.`), type: 'warning' });
+      }
       if (transferredCases > 0) {
         pushNotification({ message: `${tr('notifBasketCollected')} (+${transferredCases} ${tr('cases')})`, type: 'success' });
       } else {
@@ -645,7 +708,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       }
       return next;
     });
-  }, [pushNotification, tr]);
+  }, [pushNotification, tr, lang]);
 
   const buyActiveLease = useCallback(
     (value: number, unit: TimeUnit) => {
@@ -822,6 +885,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setState((prev) => {
         let next = { ...prev };
         next.foodInventory = { ...prev.foodInventory, [foodId]: prev.foodInventory[foodId] - 1 };
+        const ns = { ...prev.stats };
+        if (foodId === 'snickers') ns.foodSnickersEaten += 1;
+        else if (foodId === 'juice') ns.foodJuiceDrunk += 1;
+        else if (foodId === 'milka') ns.foodMilkaEaten += 1;
+        next.stats = ns;
 
         if (food.energyBoost > 0) {
           const effectiveMax = prev.maxEnergy + totalItemEffects.energyMaxBonus;
@@ -1011,6 +1079,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         },
         activePickaxeTierId: fallbackTier.id,
         ownedPickaxes: [...(prev.ownedPickaxes || []), fallbackTier.id],
+        stats: { ...prev.stats, moneySpentRepairs: Math.round((prev.stats.moneySpentRepairs + repairCost) * 100) / 100 },
       }));
       pushNotification({ message: tr('repaired'), type: 'success' });
       return;
@@ -1027,6 +1096,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       ...prev,
       balance: Math.round((prev.balance - cost) * 100) / 100,
       activePickaxe: { ...prev.activePickaxe!, durability: tier.maxDurability },
+      stats: { ...prev.stats, moneySpentRepairs: Math.round((prev.stats.moneySpentRepairs + cost) * 100) / 100 },
     }));
     pushNotification({ message: tr('repaired'), type: 'success' });
   }, [pushNotification, tr, lang]);
@@ -1048,6 +1118,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         gems: prev.gems - gemCost,
         maxEnergy: getEnergyMaxValue(prev.upgrades.energyMaxLvl + 1),
         upgrades: { ...prev.upgrades, energyMaxLvl: prev.upgrades.energyMaxLvl + 1 },
+        stats: { ...prev.stats, gemsSpentUpgrades: prev.stats.gemsSpentUpgrades + gemCost },
       }));
     } else {
       const cost = getEnergyMaxCost(lvl);
@@ -1060,6 +1131,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         balance: Math.round((prev.balance - cost) * 100) / 100,
         maxEnergy: getEnergyMaxValue(prev.upgrades.energyMaxLvl + 1),
         upgrades: { ...prev.upgrades, energyMaxLvl: prev.upgrades.energyMaxLvl + 1 },
+        stats: { ...prev.stats, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
       }));
     }
   }, [pushNotification, tr]);
@@ -1080,6 +1152,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         ...prev,
         gems: prev.gems - gemCost,
         upgrades: { ...prev.upgrades, energyRegenLvl: prev.upgrades.energyRegenLvl + 1 },
+        stats: { ...prev.stats, gemsSpentUpgrades: prev.stats.gemsSpentUpgrades + gemCost },
       }));
     } else {
       const cost = getEnergyRegenCost(lvl);
@@ -1091,6 +1164,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         ...prev,
         balance: Math.round((prev.balance - cost) * 100) / 100,
         upgrades: { ...prev.upgrades, energyRegenLvl: prev.upgrades.energyRegenLvl + 1 },
+        stats: { ...prev.stats, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
       }));
     }
   }, [pushNotification, tr]);
@@ -1111,6 +1185,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         ...prev,
         gems: prev.gems - gemCost,
         upgrades: { ...prev.upgrades, energyRegenAmountLvl: (prev.upgrades.energyRegenAmountLvl ?? 0) + 1 },
+        stats: { ...prev.stats, gemsSpentUpgrades: prev.stats.gemsSpentUpgrades + gemCost },
       }));
     } else {
       const cost = getEnergyRegenAmountCost(lvl);
@@ -1122,6 +1197,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         ...prev,
         balance: Math.round((prev.balance - cost) * 100) / 100,
         upgrades: { ...prev.upgrades, energyRegenAmountLvl: (prev.upgrades.energyRegenAmountLvl ?? 0) + 1 },
+        stats: { ...prev.stats, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
       }));
     }
   }, [pushNotification, tr]);
@@ -1153,9 +1229,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
       if (scaled.type === 'cash') {
         next.balance = Math.round((prev.balance + scaled.amount) * 100) / 100;
         next.totalEarned = Math.round((prev.totalEarned + scaled.amount) * 100) / 100;
+        next.stats = { ...prev.stats, moneyEarned: Math.round((prev.stats.moneyEarned + scaled.amount) * 100) / 100 };
       } else if (scaled.type === 'gems') {
         next.gems = prev.gems + scaled.amount;
         next.totalGemsEarned = prev.totalGemsEarned + scaled.amount;
+        next.stats = { ...prev.stats, gemsEarned: prev.stats.gemsEarned + scaled.amount };
       } else if (scaled.type === 'case') {
         const caseRarity = (scaled.caseRarity as CaseRarity) || 'common';
         next.cases = [...(prev.cases || []), { id: `daily_${nextDay}_${Date.now()}`, rarity: caseRarity, opened: false }];
@@ -1180,6 +1258,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           inventory: inv,
           balance: Math.round((prev.balance + earned) * 100) / 100,
           totalEarned: Math.round((prev.totalEarned + earned) * 100) / 100,
+          stats: { ...prev.stats, moneyEarned: Math.round((prev.stats.moneyEarned + earned) * 100) / 100 },
         };
       });
       pushNotification({ message: `${tr('notifSold')} ${earned.toFixed(2)}`, type: 'success' });
@@ -1208,6 +1287,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       inventory: inv,
       balance: Math.round((prev.balance + total) * 100) / 100,
       totalEarned: Math.round((prev.totalEarned + total) * 100) / 100,
+      stats: { ...prev.stats, moneyEarned: Math.round((prev.stats.moneyEarned + total) * 100) / 100 },
     }));
     pushNotification({ message: `${tr('notifSold')} ${total.toFixed(2)}`, type: 'success' });
   }, [pushNotification, tr, totalItemEffects]);
@@ -1308,6 +1388,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           itemBags: (prev.itemBags || 0) + itemBags,
           materials: newMaterials,
           redeemedPromoCodes: [...(prev.redeemedPromoCodes || []), cleanCode],
+          stats: { ...prev.stats, moneyEarned: Math.round((prev.stats.moneyEarned + bonusBalance) * 100) / 100, gemsEarned: prev.stats.gemsEarned + bonusGems },
         };
       });
 
@@ -1333,6 +1414,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       ...prev,
       balance: Math.round((prev.balance - cost) * 100) / 100,
       upgrades: { ...prev.upgrades, activeLeaseMult: prev.upgrades.activeLeaseMult + 1 },
+      stats: { ...prev.stats, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
     }));
   }, [pushNotification, tr]);
 
@@ -1351,6 +1433,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       ...prev,
       balance: Math.round((prev.balance - cost) * 100) / 100,
       upgrades: { ...prev.upgrades, autoLeaseMult: prev.upgrades.autoLeaseMult + 1 },
+      stats: { ...prev.stats, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
     }));
   }, [pushNotification, tr]);
 
@@ -1369,6 +1452,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       ...prev,
       balance: Math.round((prev.balance - cost) * 100) / 100,
       upgrades: { ...prev.upgrades, autoCooldownLvl: prev.upgrades.autoCooldownLvl + 1 },
+      stats: { ...prev.stats, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
     }));
   }, [pushNotification, tr]);
 
@@ -1387,6 +1471,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       ...prev,
       balance: Math.round((prev.balance - cost) * 100) / 100,
       upgrades: { ...prev.upgrades, basketCapLvl: prev.upgrades.basketCapLvl + 1 },
+      stats: { ...prev.stats, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
     }));
   }, [pushNotification, tr]);
 
@@ -1405,6 +1490,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       ...prev,
       balance: Math.round((prev.balance - cost) * 100) / 100,
       upgrades: { ...prev.upgrades, caseChanceLvl: prev.upgrades.caseChanceLvl + 1 },
+      stats: { ...prev.stats, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
     }));
   }, [pushNotification, tr]);
 
@@ -1420,17 +1506,28 @@ export function GameProvider({ children }: { children: ReactNode }) {
         loot: { type: loot.type, amount: loot.amount, label: lang === 'ru' ? loot.labelRu : (lang === 'uk' ? loot.label : loot.labelEn) },
       };
 
+      const rarityKey = caseItem.rarity as CaseRarity;
       setState((prev) => {
         let next = { ...prev };
         next.cases = prev.cases.filter((c) => c.id !== caseId);
         next.totalCasesOpened = prev.totalCasesOpened + 1;
+        const ns = { ...prev.stats };
+        ns.totalCasesOpened = prev.stats.totalCasesOpened + 1;
+        if (rarityKey === 'common') ns.casesCommonOpened += 1;
+        else if (rarityKey === 'rare') ns.casesRareOpened += 1;
+        else if (rarityKey === 'epic') ns.casesEpicOpened += 1;
+        else if (rarityKey === 'legendary') ns.casesLegendaryOpened += 1;
+        else if (rarityKey === 'energy') ns.casesEnergyOpened += 1;
+        next.stats = ns;
 
         if (loot.type === 'cash') {
           next.balance = Math.round((prev.balance + loot.amount) * 100) / 100;
           next.totalEarned = Math.round((prev.totalEarned + loot.amount) * 100) / 100;
+          next.stats = { ...next.stats, moneyEarned: Math.round((next.stats.moneyEarned + loot.amount) * 100) / 100 };
         } else if (loot.type === 'gems') {
           next.gems = prev.gems + loot.amount;
           next.totalGemsEarned = prev.totalGemsEarned + loot.amount;
+          next.stats = { ...next.stats, gemsEarned: next.stats.gemsEarned + loot.amount };
         } else if (loot.type === 'itembag') {
           next.itemBags = (prev.itemBags || 0) + loot.amount;
         } else if (loot.type === 'solar_essence') {
@@ -1478,13 +1575,24 @@ export function GameProvider({ children }: { children: ReactNode }) {
       let next = { ...prev };
       next.cases = [];
       next.totalCasesOpened = prev.totalCasesOpened + unopened.length;
+      const ns = { ...prev.stats };
+      ns.totalCasesOpened = prev.stats.totalCasesOpened + unopened.length;
+      for (const ci of unopened) {
+        if (ci.rarity === 'common') ns.casesCommonOpened += 1;
+        else if (ci.rarity === 'rare') ns.casesRareOpened += 1;
+        else if (ci.rarity === 'epic') ns.casesEpicOpened += 1;
+        else if (ci.rarity === 'legendary') ns.casesLegendaryOpened += 1;
+        else if (ci.rarity === 'energy') ns.casesEnergyOpened += 1;
+      }
       if (totalCash > 0) {
         next.balance = Math.round((prev.balance + totalCash) * 100) / 100;
         next.totalEarned = Math.round((prev.totalEarned + totalCash) * 100) / 100;
+        ns.moneyEarned = Math.round((ns.moneyEarned + totalCash) * 100) / 100;
       }
       if (totalGems > 0) {
         next.gems = prev.gems + totalGems;
         next.totalGemsEarned = prev.totalGemsEarned + totalGems;
+        ns.gemsEarned = ns.gemsEarned + totalGems;
       }
       if (totalItemBags > 0) {
         next.itemBags = (prev.itemBags || 0) + totalItemBags;
@@ -1492,6 +1600,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       if (totalSolarEssence > 0) {
         next.materials = { ...next.materials, solar_essence: (next.materials.solar_essence || 0) + totalSolarEssence };
       }
+      next.stats = ns;
       return next;
     });
 
@@ -1530,13 +1639,22 @@ export function GameProvider({ children }: { children: ReactNode }) {
       let next = { ...prev };
       next.cases = prev.cases.filter((c) => c.opened || c.rarity !== rarity);
       next.totalCasesOpened = prev.totalCasesOpened + matching.length;
+      const ns = { ...prev.stats };
+      ns.totalCasesOpened = prev.stats.totalCasesOpened + matching.length;
+      if (rarity === 'common') ns.casesCommonOpened += matching.length;
+      else if (rarity === 'rare') ns.casesRareOpened += matching.length;
+      else if (rarity === 'epic') ns.casesEpicOpened += matching.length;
+      else if (rarity === 'legendary') ns.casesLegendaryOpened += matching.length;
+      else if (rarity === 'energy') ns.casesEnergyOpened += matching.length;
       if (totalCash > 0) {
         next.balance = Math.round((prev.balance + totalCash) * 100) / 100;
         next.totalEarned = Math.round((prev.totalEarned + totalCash) * 100) / 100;
+        ns.moneyEarned = Math.round((ns.moneyEarned + totalCash) * 100) / 100;
       }
       if (totalGems > 0) {
         next.gems = prev.gems + totalGems;
         next.totalGemsEarned = prev.totalGemsEarned + totalGems;
+        ns.gemsEarned = ns.gemsEarned + totalGems;
       }
       if (totalItemBags > 0) {
         next.itemBags = (prev.itemBags || 0) + totalItemBags;
@@ -1544,6 +1662,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       if (totalSolarEssence > 0) {
         next.materials = { ...next.materials, solar_essence: (next.materials.solar_essence || 0) + totalSolarEssence };
       }
+      next.stats = ns;
       return next;
     });
 
@@ -1624,6 +1743,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       }
 
       setState((prev) => {
+        const tierKey = `expeditionsTier${expedition.tier}` as keyof typeof prev.stats;
         let next: GameState = {
           ...prev,
           balance: Math.round((prev.balance + expedition.cashReward + bonusCash) * 100) / 100,
@@ -1633,6 +1753,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
           materials: newMaterials,
           activeExpeditions: prev.activeExpeditions.filter((e) => e.id !== expeditionId),
           cases: [...prev.cases, ...newCases],
+          stats: {
+            ...prev.stats,
+            moneyEarned: Math.round((prev.stats.moneyEarned + expedition.cashReward + bonusCash) * 100) / 100,
+            gemsEarned: prev.stats.gemsEarned + expedition.diamondReward + bonusGems,
+            [tierKey]: (prev.stats[tierKey] as number || 0) + 1,
+          },
         };
         return next;
       });
@@ -1683,6 +1809,11 @@ export function GameProvider({ children }: { children: ReactNode }) {
       ...prev,
       itemBags: (prev.itemBags || 0) - 1,
       ownedItems: [...prev.ownedItems, newItem],
+      stats: {
+        ...prev.stats,
+        itemBagsOpened: prev.stats.itemBagsOpened + 1,
+        itemsOwned: prev.stats.itemsOwned + 1,
+      },
     }));
     return newItem;
   }, [pushNotification, tr, lang]);
@@ -1828,6 +1959,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         materials: { ...prev.materials, scroll: (prev.materials.scroll || 0) + 2 },
         ownedItems: prev.ownedItems.filter((o) => o.uid !== uid),
         equippedItems: prev.equippedItems.map((eu) => (eu === uid ? null : eu)),
+        stats: { ...prev.stats, itemsRecycled: prev.stats.itemsRecycled + 1, itemsOwned: Math.max(0, prev.stats.itemsOwned - 1) },
       }));
       pushNotification({ message: lang === 'ru' ? 'Предмет утилизирован! +3 💎 +2 📜' : (lang === 'uk' ? 'Предмет утилізовано! +3 💎 +2 📜' : 'Item recycled! +3 💎 +2 📜'), type: 'success' });
       return;
@@ -1861,6 +1993,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         materials: newMaterials,
         ownedItems: prev.ownedItems.filter((o) => o.uid !== uid),
         equippedItems: prev.equippedItems.map((eu) => (eu === uid ? null : eu)),
+        stats: { ...prev.stats, itemsRecycled: prev.stats.itemsRecycled + 1, itemsOwned: Math.max(0, prev.stats.itemsOwned - 1) },
       };
     });
     pushNotification({ message: lang === 'ru' ? 'Предмет утилизирован!' : (lang === 'uk' ? 'Предмет утилізовано!' : 'Item recycled!'), type: 'success' });
@@ -1881,6 +2014,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       ...prev,
       balance: Math.round((prev.balance - cost) * 100) / 100,
       upgrades: { ...prev.upgrades, backpackLvl: (prev.upgrades.backpackLvl ?? 0) + 1 },
+      stats: { ...prev.stats, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
     }));
   }, [pushNotification, tr]);
 
@@ -1899,6 +2033,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       ...prev,
       gems: prev.gems - cost,
       upgrades: { ...prev.upgrades, luckLvl: (prev.upgrades.luckLvl ?? 0) + 1 },
+      stats: { ...prev.stats, gemsSpentUpgrades: prev.stats.gemsSpentUpgrades + cost },
     }));
   }, [pushNotification, tr]);
 
@@ -1917,6 +2052,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       ...prev,
       gems: prev.gems - cost,
       upgrades: { ...prev.upgrades, diamondChanceLvl: (prev.upgrades.diamondChanceLvl ?? 0) + 1 },
+      stats: { ...prev.stats, gemsSpentUpgrades: prev.stats.gemsSpentUpgrades + cost },
     }));
   }, [pushNotification, tr]);
 
@@ -2199,6 +2335,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
          type === 'lighting' ? 'lightingLevel' :
          'ventilationLevel']: currentLevel + 1,
       },
+      stats: { ...prev.stats, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
     }));
   }, [highestUnlockedMine, pushNotification, lang, tr]);
 
@@ -2334,20 +2471,26 @@ export function GameProvider({ children }: { children: ReactNode }) {
       pushNotification({ message: tr('notifNoMoney'), type: 'error' });
       return;
     }
-    setState((prev) => ({
-      ...prev,
-      balance: Math.round((prev.balance - price) * 100) / 100,
-      craftInventory: {
-        ...prev.craftInventory,
-        [slot.materialType]: (prev.craftInventory[slot.materialType] || 0) + slot.packSize,
-      },
-      materialsShop: {
-        ...prev.materialsShop,
-        slots: prev.materialsShop.slots.map((s) =>
-          s.id === slotId ? { ...s, stock: s.stock - 1 } : s
-        ),
-      },
-    }));
+    setState((prev) => {
+      const ns = { ...prev.stats };
+      if (slot.materialType === 'wood_log') ns.logsBought += slot.packSize;
+      else if (slot.materialType === 'steel_plank') ns.planksBought += slot.packSize;
+      return {
+        ...prev,
+        balance: Math.round((prev.balance - price) * 100) / 100,
+        craftInventory: {
+          ...prev.craftInventory,
+          [slot.materialType]: (prev.craftInventory[slot.materialType] || 0) + slot.packSize,
+        },
+        materialsShop: {
+          ...prev.materialsShop,
+          slots: prev.materialsShop.slots.map((s) =>
+            s.id === slotId ? { ...s, stock: s.stock - 1 } : s
+          ),
+        },
+        stats: ns,
+      };
+    });
     pushNotification({ message: lang === 'ru' ? `Куплено ${slot.packSize} шт.` : (lang === 'uk' ? `Куплено ${slot.packSize} шт.` : `Purchased ${slot.packSize} pcs.`), type: 'success' });
   }, [pushNotification, lang, tr]);
 
@@ -2443,6 +2586,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
             }))),
         ],
         specialOffers: { ...prev.specialOffers, offers: newOffers },
+        stats: { ...prev.stats, gemsSpentSpecialOffers: prev.stats.gemsSpentSpecialOffers + price, specialOffersBought: prev.stats.specialOffersBought + 1 },
       };
     });
     pushNotification({ message: lang === 'ru' ? 'Предложение куплено!' : (lang === 'uk' ? 'Пропозицію куплено!' : 'Offer purchased!'), type: 'success' });
@@ -2748,57 +2892,64 @@ export function GameProvider({ children }: { children: ReactNode }) {
       ...prev,
       balance: Math.round((prev.balance + sellPrice) * 100) / 100,
       fuel: { ...prev.fuel, canisters: prev.fuel.canisters.filter((c) => c.id !== canisterId) },
+      stats: { ...prev.stats, moneyEarned: Math.round((prev.stats.moneyEarned + sellPrice) * 100) / 100 },
     }));
     pushNotification({ message: lang === 'ru' ? `Канистра продана за ${sellPrice}$` : (lang === 'uk' ? `Каністра продана за ${sellPrice}$` : `Canister sold for ${sellPrice}$`), type: 'success' });
-  }, [pushNotification, lang]);
+  }, [pushNotification, lang, tr]);
 
   const refuelGenerator = useCallback(() => {
     const current = stateRef.current;
     const gen = current.lifeSupport.generator;
     if (!gen.purchased) return;
-    const availableFuel = current.fuel.canisters.reduce((sum, c) => sum + c.currentFuel, 0);
-    if (availableFuel <= 0) {
-      pushNotification({ message: lang === 'ru' ? 'Нет дизеля в канистрах!' : (lang === 'uk' ? 'Немає дизеля в каністрах!' : 'No diesel in canisters!'), type: 'error' });
-      return;
-    }
     const space = gen.tankCapacity - gen.fuelLiters;
     if (space <= 0) {
       pushNotification({ message: lang === 'ru' ? 'Бак полон!' : (lang === 'uk' ? 'Бак повний!' : 'Tank is full!'), type: 'info' });
       return;
     }
-    const toTransfer = Math.min(availableFuel, space);
-    let remaining = toTransfer;
+    let taken = 0;
     const newCanisters = current.fuel.canisters.map((c) => {
-      if (remaining <= 0) return c;
-      const take = Math.min(c.currentFuel, remaining);
-      remaining -= take;
-      return { ...c, currentFuel: c.currentFuel - take };
+      if (space - taken <= 0) return c;
+      const avail = c.currentFuel;
+      if (avail <= 0) return c;
+      const toTake = Math.min(avail, space - taken);
+      taken += toTake;
+      return { ...c, currentFuel: c.currentFuel - toTake };
     });
+    if (taken <= 0) {
+      pushNotification({ message: lang === 'ru' ? 'Нет топлива в канистрах!' : (lang === 'uk' ? 'Немає палива в каністрах!' : 'No fuel in canisters!'), type: 'error' });
+      return;
+    }
     setState((prev) => ({
       ...prev,
       fuel: { ...prev.fuel, canisters: newCanisters },
       lifeSupport: {
         ...prev.lifeSupport,
-        generator: { ...prev.lifeSupport.generator, fuelLiters: prev.lifeSupport.generator.fuelLiters + toTransfer },
+        generator: { ...prev.lifeSupport.generator, fuelLiters: Math.round((prev.lifeSupport.generator.fuelLiters + taken) * 100) / 100 },
       },
     }));
-    pushNotification({ message: lang === 'ru' ? `Залито ${toTransfer.toFixed(1)}Л` : (lang === 'uk' ? `Залито ${toTransfer.toFixed(1)}Л` : `Poured ${toTransfer.toFixed(1)}L`), type: 'success' });
+    pushNotification({ message: lang === 'ru' ? `Заправлено ${taken.toFixed(1)}Л` : (lang === 'uk' ? `Заправлено ${taken.toFixed(1)}Л` : `Refueled ${taken.toFixed(1)}L`), type: 'success' });
   }, [pushNotification, lang]);
 
   const insertLithiumBattery = useCallback((batteryId: string) => {
-    setState((prev) => {
-      const gen = prev.lifeSupport.generator;
-      if (gen.lithiumBatteryIds.length >= GENERATOR_LITHIUM_SLOTS) return prev;
-      if (gen.lithiumBatteryIds.includes(batteryId)) return prev;
-      return {
-        ...prev,
-        lifeSupport: {
-          ...prev.lifeSupport,
-          generator: { ...gen, lithiumBatteryIds: [...gen.lithiumBatteryIds, batteryId] },
+    const current = stateRef.current;
+    const battery = current.lifeSupport.batteries.find((b) => b.id === batteryId);
+    if (!battery || battery.type !== 'battery_lithium') return;
+    if (current.lifeSupport.generator.lithiumBatteryIds.includes(batteryId)) return;
+    if (current.lifeSupport.generator.lithiumBatteryIds.length >= GENERATOR_LITHIUM_SLOTS) {
+      pushNotification({ message: lang === 'ru' ? 'Все слоты заняты!' : (lang === 'uk' ? 'Усі слоти зайняті!' : 'All slots are full!'), type: 'error' });
+      return;
+    }
+    setState((prev) => ({
+      ...prev,
+      lifeSupport: {
+        ...prev.lifeSupport,
+        generator: {
+          ...prev.lifeSupport.generator,
+          lithiumBatteryIds: [...prev.lifeSupport.generator.lithiumBatteryIds, batteryId],
         },
-      };
-    });
-  }, []);
+      },
+    }));
+  }, [pushNotification, lang]);
 
   const removeLithiumBattery = useCallback((batteryId: string) => {
     setState((prev) => ({
@@ -2816,17 +2967,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const buyShelf = useCallback(() => {
     const current = stateRef.current;
     if (current.lifeSupport.shelfCount >= MAX_SHELVES) {
-      pushNotification({ message: lang === 'ru' ? 'Максимум стеллажей!' : (lang === 'uk' ? 'Максимум стелажів!' : 'Maximum shelves reached!'), type: 'info' });
+      pushNotification({ message: lang === 'ru' ? 'Максимум стеллажей!' : (lang === 'uk' ? 'Максимум стелажів!' : 'Maximum shelves!'), type: 'info' });
       return;
     }
-    const shelfCount = (current.craftInventory?.shelf ?? 0);
-    if (shelfCount < 1) {
-      pushNotification({ message: lang === 'ru' ? 'Нужен стеллаж из крафта!' : (lang === 'uk' ? 'Потрібен стелаж з крафту!' : 'Need a crafted shelf!'), type: 'error' });
+    if ((current.craftInventory?.shelf ?? 0) < 1) {
+      pushNotification({ message: lang === 'ru' ? 'Нужен крафт стеллажа!' : (lang === 'uk' ? 'Потрібен крафт стелажа!' : 'Need to craft a shelf!'), type: 'error' });
       return;
     }
     setState((prev) => ({
       ...prev,
-      craftInventory: { ...prev.craftInventory, shelf: (prev.craftInventory.shelf ?? 0) - 1 },
+      craftInventory: { ...prev.craftInventory, shelf: (prev.craftInventory?.shelf ?? 0) - 1 },
       lifeSupport: { ...prev.lifeSupport, shelfCount: prev.lifeSupport.shelfCount + 1 },
     }));
     pushNotification({ message: lang === 'ru' ? 'Стеллаж установлен!' : (lang === 'uk' ? 'Стелаж встановлено!' : 'Shelf installed!'), type: 'success' });
@@ -2835,10 +2985,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const toggleOxygenValve = useCallback(() => {
     setState((prev) => ({
       ...prev,
-      lifeSupport: {
-        ...prev.lifeSupport,
-        oxygenValveOpen: !prev.lifeSupport.oxygenValveOpen,
-      },
+      lifeSupport: { ...prev.lifeSupport, oxygenValveOpen: !prev.lifeSupport.oxygenValveOpen },
     }));
   }, []);
 
@@ -2849,7 +2996,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const interval = setInterval(() => {
       setState((prev) => {
         const now = Date.now();
-        if (now - prev.fuel.diesel95PriceUpdatedAt < DIESEL95_UPDATE_MS) return prev;
+        if (!prev.fuel || now - (prev.fuel.diesel95PriceUpdatedAt ?? 0) < DIESEL95_UPDATE_MS) return prev;
         return {
           ...prev,
           fuel: {
@@ -2859,7 +3006,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           },
         };
       });
-    }, 1000);
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -2868,179 +3015,79 @@ export function GameProvider({ children }: { children: ReactNode }) {
       setState((prev) => {
         const now = Date.now();
         const deltaSec = 1;
-
-        const activeCoolers = prev.lifeSupport.coolers.filter((c) => c.active && c.durability > 0);
-        const hasChargedBattery = prev.lifeSupport.batteries.some((b) => b.currentCharge > 0);
-        const genActive = prev.lifeSupport.generator.active && prev.lifeSupport.generator.fuelLiters > 0;
-        const mineId = prev.currentMineId ?? 0;
-        const mineCfg = getMineById(mineId);
-        const oxygenPerMin = mineCfg.environment?.oxygenConsumptionPerMin ?? 0;
-        const needsOxygen = oxygenPerMin > 0;
-
-        const hasActiveLease = !!(prev.activeLeaseEndsAt && prev.activeLeaseEndsAt > now);
-
-        let newLifeSupport = prev.lifeSupport;
+        const ls = prev.lifeSupport;
         let changed = false;
+        let oxygenConsumed = 0;
 
-        if (!hasActiveLease) {
-          if (activeCoolers.length > 0) {
-            const newCoolers = newLifeSupport.coolers.map((c) =>
-              c.active ? { ...c, active: false } : c
-            );
-            newLifeSupport = { ...newLifeSupport, coolers: newCoolers };
-            changed = true;
+        const newCoolers = ls.coolers.map((c) => {
+          if (!c.active || c.durability <= 0) return c;
+          const cfg = COOLER_CONFIGS[c.type];
+          const degPerSec = getCoolerDegradationPerSec(cfg, c.mode);
+          const newDur = Math.max(0, c.durability - degPerSec * deltaSec);
+          if (newDur !== c.durability) { changed = true; }
+          if (newDur <= 0 && c.durability > 0) {
+            return { ...c, durability: 0, active: false };
           }
-          return changed ? { ...prev, lifeSupport: newLifeSupport } : prev;
+          return { ...c, durability: newDur };
+        });
+
+        const newOxygenTanks = ls.oxygenTanks.map((t) => {
+          if (t.currentOxygen <= 0) return t;
+          const mine = getMineById(prev.currentMineId ?? 1);
+          const oxygenPerMin = mine?.environment?.oxygenConsumptionPerMin ?? 0;
+          if (oxygenPerMin <= 0 || !ls.oxygenValveOpen) return t;
+          const consume = (oxygenPerMin / 60) * deltaSec;
+          const newOx = Math.max(0, t.currentOxygen - consume);
+          if (newOx !== t.currentOxygen) {
+            changed = true;
+            oxygenConsumed += (t.currentOxygen - newOx);
+          }
+          return { ...t, currentOxygen: newOx };
+        });
+
+        let newGenerator = ls.generator;
+        if (newGenerator.active && newGenerator.fuelLiters > 0) {
+          const fuelBurn = (GENERATOR_FUEL_PER_MIN / 60) * deltaSec;
+          const newFuel = Math.max(0, newGenerator.fuelLiters - fuelBurn);
+          if (newFuel !== newGenerator.fuelLiters) { changed = true; }
+          newGenerator = { ...newGenerator, fuelLiters: newFuel };
+          if (newFuel <= 0) {
+            newGenerator = { ...newGenerator, active: false };
+          }
         }
 
-        if (activeCoolers.length > 0 && !hasChargedBattery) {
-          const newCoolers = newLifeSupport.coolers.map((c) =>
-            c.active ? { ...c, active: false } : c
-          );
-          newLifeSupport = { ...newLifeSupport, coolers: newCoolers };
-          changed = true;
-        }
-
-        const stillActiveCoolers = newLifeSupport.coolers.filter((c) => c.active && c.durability > 0);
-        if (!changed && stillActiveCoolers.length === 0 && !genActive && !needsOxygen) return prev;
-
-        if (activeCoolers.length > 0) {
-          const coolersChanged = newLifeSupport.coolers.some((c) => c.active && c.durability > 0);
-          if (coolersChanged) {
-            const newCoolers = newLifeSupport.coolers.map((c) => {
-              if (!c.active || c.durability <= 0) return c;
+        const newBatteries = ls.batteries.map((b) => {
+          if (b.currentCharge <= 0) return b;
+          const coolerPower = newCoolers
+            .filter((c) => c.active && c.durability > 0)
+            .reduce((sum, c) => {
               const cfg = COOLER_CONFIGS[c.type];
-              const degrade = getCoolerDegradationPerSec(cfg, c.mode);
-              const newDurability = Math.max(0, c.durability - degrade * deltaSec);
-              if (newDurability <= 0) {
-                return { ...c, durability: 0, active: false };
-              }
-              return { ...c, durability: newDurability };
-            });
-            if (newCoolers.some((c, i) => c.durability !== newLifeSupport.coolers[i].durability)) {
-              newLifeSupport = { ...newLifeSupport, coolers: newCoolers };
-              changed = true;
-            }
-          }
-        }
+              return sum + (cfg.modeConfigs[c.mode]?.powerPerMin ?? 0);
+            }, 0);
+          if (coolerPower <= 0) return b;
+          const drain = (coolerPower / 60) * deltaSec;
+          const newCharge = Math.max(0, b.currentCharge - drain);
+          if (newCharge !== b.currentCharge) { changed = true; }
+          return { ...b, currentCharge: newCharge };
+        });
 
-        if (activeCoolers.length > 0) {
-          let activeBatteryId = newLifeSupport.activeBatteryId;
-          let batteries = [...newLifeSupport.batteries];
+        if (!changed) return prev;
 
-          const totalPowerPerSec = activeCoolers.reduce((sum, c) => {
-            const cfg = COOLER_CONFIGS[c.type];
-            return sum + (cfg.modeConfigs[c.mode]?.powerPerMin ?? 0) / 60;
-          }, 0);
+        const newStats = oxygenConsumed > 0
+          ? { ...prev.stats, oxygenSpent: Math.round((prev.stats.oxygenSpent + oxygenConsumed) * 100) / 100 }
+          : prev.stats;
 
-          if (totalPowerPerSec > 0) {
-            let activeBat = activeBatteryId ? batteries.find((b) => b.id === activeBatteryId) : null;
-            if (!activeBat || activeBat.currentCharge <= 0) {
-              const next = batteries.find((b) => b.currentCharge > 0);
-              if (next) {
-                activeBatteryId = next.id;
-                activeBat = next;
-                changed = true;
-              }
-            }
-
-            if (activeBat && activeBat.currentCharge > 0) {
-              const drain = totalPowerPerSec * deltaSec;
-              const newCharge = Math.max(0, activeBat.currentCharge - drain);
-              batteries = batteries.map((b) =>
-                b.id === activeBat!.id ? { ...b, currentCharge: newCharge } : b
-              );
-
-              if (newCharge <= 0) {
-                const batCfg = BATTERY_CONFIGS[activeBat.type];
-                if (batCfg.maxRecharges > 0) {
-                  activeBatteryId = null;
-                } else {
-                  batteries = batteries.filter((b) => b.id !== activeBat!.id);
-                  activeBatteryId = null;
-                }
-              }
-              changed = true;
-            }
-          }
-
-          newLifeSupport = { ...newLifeSupport, batteries, activeBatteryId };
-        }
-
-        if (needsOxygen) {
-          if (!newLifeSupport.oxygenValveOpen) {
-            // Valve closed — oxygen consumption paused when idle
-            newLifeSupport = { ...newLifeSupport, oxygenTanks: newLifeSupport.oxygenTanks, activeOxygenTankId: newLifeSupport.activeOxygenTankId };
-          } else {
-          let oxygenTanks = [...newLifeSupport.oxygenTanks];
-          let activeOxygenId = newLifeSupport.activeOxygenTankId;
-
-          const oxygenPerSec = oxygenPerMin / 60;
-          let activeTank = activeOxygenId ? oxygenTanks.find((t) => t.id === activeOxygenId) : null;
-
-          if (!activeTank || activeTank.currentOxygen <= 0) {
-            const next = oxygenTanks.find((t) => t.currentOxygen > 0);
-            if (next) {
-              activeOxygenId = next.id;
-              activeTank = next;
-              changed = true;
-            }
-          }
-
-          if (activeTank && activeTank.currentOxygen > 0) {
-            const newOxy = Math.max(0, activeTank.currentOxygen - oxygenPerSec * deltaSec);
-            oxygenTanks = oxygenTanks.map((t) =>
-              t.id === activeTank!.id ? { ...t, currentOxygen: newOxy } : t
-            );
-
-            if (newOxy <= 0) {
-              oxygenTanks = oxygenTanks.filter((t) => t.id !== activeTank!.id);
-              activeOxygenId = null;
-            }
-            changed = true;
-          }
-
-          newLifeSupport = { ...newLifeSupport, oxygenTanks, activeOxygenTankId: activeOxygenId };
-          }
-        }
-
-        if (genActive) {
-          const fuelBurned = (GENERATOR_FUEL_PER_MIN / 60) * deltaSec;
-          const newFuel = Math.max(0, newLifeSupport.generator.fuelLiters - fuelBurned);
-
-          let batteries = [...newLifeSupport.batteries];
-          const lithiumIds = newLifeSupport.generator.lithiumBatteryIds;
-          if (lithiumIds.length > 0 && newFuel > 0) {
-            const chargePerBattery = lithiumIds.length === 1 ? 5 / 60 : 2.5 / 60;
-            let batChanged = false;
-            batteries = batteries.map((b) => {
-              if (!lithiumIds.includes(b.id)) return b;
-              if (b.currentCharge >= b.capacity) return b;
-              const newCharge = Math.min(b.capacity, b.currentCharge + chargePerBattery * deltaSec);
-              if (newCharge !== b.currentCharge) {
-                batChanged = true;
-                return { ...b, currentCharge: newCharge };
-              }
-              return b;
-            });
-            if (batChanged) {
-              newLifeSupport = { ...newLifeSupport, batteries };
-              changed = true;
-            }
-          }
-
-          newLifeSupport = {
-            ...newLifeSupport,
-            generator: {
-              ...newLifeSupport.generator,
-              fuelLiters: newFuel,
-              active: newFuel > 0,
-            },
-          };
-          changed = true;
-        }
-
-        return changed ? { ...prev, lifeSupport: newLifeSupport } : prev;
+        return {
+          ...prev,
+          stats: newStats,
+          lifeSupport: {
+            ...ls,
+            coolers: newCoolers,
+            oxygenTanks: newOxygenTanks,
+            generator: newGenerator,
+            batteries: newBatteries,
+          },
+        };
       });
     }, 1000);
     return () => clearInterval(interval);
@@ -3079,6 +3126,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
     upgradeAutoCooldown,
     upgradeBasketCap,
     upgradeCaseChance,
+    upgradeBackpack,
+    upgradeLuck,
+    upgradeDiamondChance,
     openCase,
     openAllCases,
     openCasesByRarity,
@@ -3088,9 +3138,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
     currentBasketCap,
     currentBackpackLimit,
     currentBackpackWeight,
-    upgradeBackpack,
-    upgradeLuck,
-    upgradeDiamondChance,
     activeLeaseMult,
     autoLeaseMult,
     currentMineId: currentMineIdState,
@@ -3099,10 +3146,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
     upgradeEnergyMax,
     upgradeEnergyRegen,
     upgradeEnergyRegenAmount,
+    currentEnergyRegenAmount,
     claimDailyReward,
     currentEnergyMax,
     currentEnergyRegenSeconds,
-    currentEnergyRegenAmount,
     startExpedition,
     claimExpedition,
     refreshExpeditions,

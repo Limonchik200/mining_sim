@@ -88,6 +88,8 @@ export interface UpgradeState {
   energyRegenLvl: number;
   energyRegenAmountLvl: number;
   backpackLvl?: number;
+  luckLvl?: number;
+  diamondChanceLvl?: number;
 }
 
 export interface MineUnlockRequirements {
@@ -207,9 +209,11 @@ export interface GameState {
   slot6Unlocked: boolean;
 
   craftInventory: Record<string, number>;
+  foodInventory: Record<string, number>;
   fuel: import('./types/craft').FuelState;
   materialsShop: import('./types/craft').MaterialsShopState;
   lifeSupport: import('./types/craft').LifeSupportState;
+  specialOffers: import('./config/specialOffersConfig').SpecialOffersState;
 
   lastSavedAt: number;
 }

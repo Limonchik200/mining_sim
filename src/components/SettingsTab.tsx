@@ -3,6 +3,7 @@ import { useGame } from '@/context/GameContext';
 import type { Lang, Theme } from '@/types';
 import { formatMoney } from '@/config';
 import { xpForLevel } from '@/config/upgradesConfig';
+import AdvancedStatsModal from '@/components/AdvancedStatsModal';
 import {
   Globe,
   Moon,
@@ -14,6 +15,7 @@ import {
   KeyRound,
   CheckCircle2,
   X,
+  TrendingUp,
 } from 'lucide-react';
 
 export default function SettingsTab() {
@@ -21,6 +23,7 @@ export default function SettingsTab() {
   const [promoInput, setPromoInput] = useState('');
   const [promoBanner, setPromoBanner] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [advancedStatsOpen, setAdvancedStatsOpen] = useState(false);
 
   useEffect(() => {
     return () => {
@@ -177,6 +180,25 @@ export default function SettingsTab() {
         </div>
       </div>
 
+      {/* Advanced statistics */}
+      <button
+        onClick={() => setAdvancedStatsOpen(true)}
+        className="card w-full p-4 flex items-center gap-3 text-left transition-all hover:shadow-md group"
+      >
+        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-accent-400 to-accent-600 flex items-center justify-center shadow-md shadow-accent-500/20 shrink-0 group-hover:scale-105 transition-transform">
+          <TrendingUp className="w-5 h-5 text-white" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-bold text-neutral-800 dark:text-neutral-100">
+            {state.settings.lang === 'ru' ? 'Расширенная статистика' : (state.settings.lang === 'uk' ? 'Розширена статистика' : 'Advanced Statistics')}
+          </div>
+          <div className="text-xs text-neutral-400 truncate">
+            {state.settings.lang === 'ru' ? 'Полная история ваших действий' : (state.settings.lang === 'uk' ? 'Повна історія ваших дій' : 'Full history of your actions')}
+          </div>
+        </div>
+        <BarChart3 className="w-5 h-5 text-neutral-400 group-hover:text-accent-500 transition-colors shrink-0" />
+      </button>
+
       {/* Game data */}
       <div className="card p-4">
         <h3 className="font-bold text-neutral-800 dark:text-neutral-100 mb-3 flex items-center gap-2">
@@ -195,6 +217,14 @@ export default function SettingsTab() {
           {t('resetGame')}
         </button>
       </div>
+
+      {advancedStatsOpen && (
+        <AdvancedStatsModal
+          stats={state.stats}
+          lang={state.settings.lang}
+          onClose={() => setAdvancedStatsOpen(false)}
+        />
+      )}
     </div>
   );
 }

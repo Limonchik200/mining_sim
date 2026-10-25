@@ -1,17 +1,33 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useGame } from '@/context/GameContext';
 import { ShoppingBag, Package, Zap } from 'lucide-react';
 
 export default function FloatingQuickAccess() {
   const { state, setItemsOpen, collectBasket, t, lang } = useGame();
   const [expanded, setExpanded] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!expanded) return;
+    const handler = (e: MouseEvent | TouchEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setExpanded(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
+  }, [expanded]);
 
   const basketCount = state.autoBasket.length + state.autoBasketCases.length;
   const itemsUnlocked = state.level >= 5;
   const hasItems = itemsUnlocked && (state.ownedItems.length > 0 || state.itemBags > 0);
 
   return (
-    <div className="fixed left-3 z-50 flex flex-col items-start gap-2" style={{ bottom: 'calc(5.5rem + env(safe-area-inset-bottom, 0px))' }}>
+    <div ref={containerRef} className="fixed left-3 z-50 flex flex-col items-start gap-2" style={{ bottom: 'calc(5.5rem + env(safe-area-inset-bottom, 0px))' }}>
       {expanded && (
         <>
           {basketCount > 0 && (

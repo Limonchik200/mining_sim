@@ -1,4 +1,4 @@
-import type { GameState } from '@/types';
+import type { GameState, GameStats } from '@/types';
 import { ENERGY_MAX, BASE_AUTO_BASKET_MAX } from '@/config/minesConfig';
 import { getPickaxeTier } from '@/config/pickaxesConfig';
 import {
@@ -162,7 +162,49 @@ export function createInitialState(): GameState {
       const gen = generateSpecialOffers(Date.now());
       return gen;
     })(),
+    stats: createInitialStats(),
     lastSavedAt: Date.now(),
+  };
+}
+
+export function createInitialStats(): GameStats {
+  return {
+    casesCommonOpened: 0,
+    casesRareOpened: 0,
+    casesEpicOpened: 0,
+    casesLegendaryOpened: 0,
+    casesEnergyOpened: 0,
+    itemBagsOpened: 0,
+    itemsOwned: 0,
+    itemsRecycled: 0,
+    foodSnickersEaten: 0,
+    foodJuiceDrunk: 0,
+    foodMilkaEaten: 0,
+    oreMinedKg: 0,
+    moneyEarned: 0,
+    totalCasesOpened: 0,
+    moneySpentUpgrades: 0,
+    moneySpentRepairs: 0,
+    gemsSpentSpecialOffers: 0,
+    gemsSpentUpgrades: 0,
+    daysPlayed: 1,
+    energySpent: 0,
+    oxygenSpent: 0,
+    planksBought: 0,
+    logsBought: 0,
+    specialOffersBought: 0,
+    totalClicks: 0,
+    gemsEarned: 0,
+    expeditionsTier1: 0,
+    expeditionsTier2: 0,
+    expeditionsTier3: 0,
+    expeditionsTier4: 0,
+    expeditionsTier5: 0,
+    casesDugCommon: 0,
+    casesDugRare: 0,
+    casesDugEpic: 0,
+    casesDugLegendary: 0,
+    lastDayKey: 0,
   };
 }
 
@@ -303,6 +345,17 @@ export function migrateState(saved: Partial<GameState>): GameState {
       durability: Math.min(px.durability, tier.maxDurability),
     };
   });
+
+  merged.stats = { ...createInitialStats(), ...(saved.stats || {}) };
+
+  // v9.0.0 migration: sync advanced stats with legacy top-level counters.
+  // Legacy counters are authoritative — use them directly so the inflated
+  // stats from the earlier additive-migration bug are corrected, and both
+  // displays stay in sync going forward.
+  if (typeof saved.totalDigs === 'number') merged.stats.totalClicks = saved.totalDigs;
+  if (typeof saved.totalGemsEarned === 'number') merged.stats.gemsEarned = saved.totalGemsEarned;
+  if (typeof saved.totalEarned === 'number') merged.stats.moneyEarned = saved.totalEarned;
+  if (typeof saved.totalCasesOpened === 'number') merged.stats.totalCasesOpened = saved.totalCasesOpened;
 
   return merged;
 }

@@ -41,7 +41,7 @@ export const SPECIAL_OFFER_BUNDLES: SpecialOfferBundle[] = [
       { type: 'item_bag', amount: 1 },
       { type: 'scroll', amount: 4 },
     ],
-    icon: 'Package',
+    icon: 'ShoppingBag',
     color: '#f59e0b',
   },
   {

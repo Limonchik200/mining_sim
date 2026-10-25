@@ -39,6 +39,45 @@ export interface MineUnlockTimer {
   durationMs: number;
 }
 
+export interface GameStats {
+  casesCommonOpened: number;
+  casesRareOpened: number;
+  casesEpicOpened: number;
+  casesLegendaryOpened: number;
+  casesEnergyOpened: number;
+  itemBagsOpened: number;
+  itemsOwned: number;
+  itemsRecycled: number;
+  foodSnickersEaten: number;
+  foodJuiceDrunk: number;
+  foodMilkaEaten: number;
+  oreMinedKg: number;
+  moneyEarned: number;
+  totalCasesOpened: number;
+  moneySpentUpgrades: number;
+  moneySpentRepairs: number;
+  gemsSpentSpecialOffers: number;
+  gemsSpentUpgrades: number;
+  daysPlayed: number;
+  energySpent: number;
+  oxygenSpent: number;
+  planksBought: number;
+  logsBought: number;
+  specialOffersBought: number;
+  totalClicks: number;
+  gemsEarned: number;
+  expeditionsTier1: number;
+  expeditionsTier2: number;
+  expeditionsTier3: number;
+  expeditionsTier4: number;
+  expeditionsTier5: number;
+  casesDugCommon: number;
+  casesDugRare: number;
+  casesDugEpic: number;
+  casesDugLegendary: number;
+  lastDayKey: number;
+}
+
 export interface GameState {
   balance: number;
   gems: number;
@@ -108,6 +147,8 @@ export interface GameState {
   materialsShop: MaterialsShopState;
   lifeSupport: LifeSupportState;
   specialOffers: SpecialOffersState;
+
+  stats: GameStats;
 
   lastSavedAt: number;
 }

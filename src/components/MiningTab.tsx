@@ -4,7 +4,6 @@ import { formatTime, formatMoney } from '@/config';
 import { getPickaxeTier, getRepairCost, isUnlimitedDurability } from '@/config/pickaxesConfig';
 import { getMineById, MINES, RESOURCES, isDumpMine } from '@/config/minesConfig';
 import { CASE_RARITIES } from '@/config/casesConfig';
-import { COOLER_CONFIGS } from '@/config/coolerConfig';
 import type { ResourceType, CaseRarity } from '@/types';
 import MineRoomView from '@/components/MineRoomView';
 import {
@@ -69,14 +68,9 @@ export default function MiningTab() {
 
   // Temperature for current mine
   const currentMineData = getMineById(currentMineId);
-  const baseTemp = currentMineData.environment?.baseTemperature ?? 15;
   const activeCoolers = state.lifeSupport.coolers.filter((c) => c.active && c.durability > 0);
-  const tempReduction = activeCoolers.reduce((sum, c) => {
-    const cfg = COOLER_CONFIGS[c.type];
-    return sum + (cfg.modeConfigs[c.mode]?.tempReduction ?? 0);
-  }, 0);
-  const currentTemp = baseTemp - tempReduction;
-  const needsOxygen = currentMineId >= 3;
+  const oxygenPerMin = currentMineData.environment?.oxygenConsumptionPerMin ?? 0;
+  const needsOxygen = oxygenPerMin > 0;
   const activeTank = state.lifeSupport.activeOxygenTankId
     ? state.lifeSupport.oxygenTanks.find((t) => t.id === state.lifeSupport.activeOxygenTankId)
     : state.lifeSupport.oxygenTanks.find((t) => t.currentOxygen > 0);
@@ -84,8 +78,8 @@ export default function MiningTab() {
   const basketTotalMass = state.autoBasket.reduce((sum, item) => sum + item.mass, 0);
 
   const canDig = state.energy >= tier.energyCost && state.activePickaxe && (isShovel || state.activePickaxe.durability >= tier.durabilityCost) && hasLeaseOrDump
-    && (!needsOxygen || (activeTank && activeTank.currentOxygen > 0))
-    && (dumpMine || (currentTemp >= 8 && currentTemp <= 18));
+    && (!needsOxygen || (activeTank && activeTank.currentOxygen > 0 && state.lifeSupport.oxygenValveOpen))
+    && (dumpMine || (!needsOxygen || activeCoolers.length > 0));
 
   const autoMiningActive = !!state.autoMiningEndsAt && autoMiningRemaining > 0 && basketTotalMass < currentBasketCap;
   const basketFull = basketTotalMass >= currentBasketCap;
@@ -403,10 +397,16 @@ export default function MiningTab() {
                   {lang === 'ru' ? 'Нет кислорода! Нужен балон.' : (lang === 'uk' ? 'Немає кисню! Потрібен балон.' : 'No oxygen! Need a tank.')}
                 </div>
               )}
-              {!dumpMine && (currentTemp < 8 || currentTemp > 18) && (
+              {needsOxygen && activeTank && activeTank.currentOxygen > 0 && !state.lifeSupport.oxygenValveOpen && (
                 <div className="flex items-center gap-1.5 text-xs text-error-500 bg-error-500/10 px-3 py-2 rounded-lg">
                   <AlertCircle className="w-4 h-4" />
-                  {lang === 'ru' ? `Температура ${currentTemp.toFixed(0)}°C вне нормы (8–18°C)!` : (lang === 'uk' ? `Температура ${currentTemp.toFixed(0)}°C поза нормою (8–18°C)!` : `Temperature ${currentTemp.toFixed(0)}°C out of range (8–18°C)!`)}
+                  {lang === 'ru' ? 'Кислородный вентиль закрыт! Откройте вентиль.' : (lang === 'uk' ? 'Кисневий вентиль закритий! Відкрийте вентиль.' : 'Oxygen valve is closed! Open the valve.')}
+                </div>
+              )}
+              {!dumpMine && needsOxygen && activeCoolers.length === 0 && (
+                <div className="flex items-center gap-1.5 text-xs text-error-500 bg-error-500/10 px-3 py-2 rounded-lg">
+                  <AlertCircle className="w-4 h-4" />
+                  {lang === 'ru' ? 'Охладитель выключен! Включите активный охладитель.' : (lang === 'uk' ? 'Охолоджувач вимкнений! Увімкніть активний охолоджувач.' : 'Cooler is off! Enable an active cooler.')}
                 </div>
               )}
 

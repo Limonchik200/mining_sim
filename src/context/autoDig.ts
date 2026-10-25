@@ -1,9 +1,9 @@
 import type { GameState } from '@/types';
 import { getAutoCooldownMs, getBasketCapValue, getEnergyRegenValue, getEnergyRegenAmountValue, getDiamondChanceBonus } from '@/config/upgradesConfig';
 import { getPickaxeTier } from '@/config/pickaxesConfig';
-import { getRandomResourceForMine, getRandomMass, rollDiamondDrop } from '@/config/minesConfig';
+import { getRandomResourceForMine, getRandomMass, rollDiamondDrop, getMineById, isDumpMine } from '@/config/minesConfig';
 import { rollAutoCaseDrop, rollCaseRarity } from '@/config/casesConfig';
-import { computeItemEffectsForRegen } from './itemEffects';
+import { computeItemEffectsForRegen, computeTotalItemEffects } from './itemEffects';
 import { generateExpeditionSlots, EXPEDITION_REFRESH_MS } from './storage';
 import type { Notification } from '@/types';
 
@@ -109,6 +109,21 @@ export function processAutoDig(
     return state;
   }
 
+  const autoMineId = next.autoLeaseMineId || 1;
+  const autoMine = getMineById(autoMineId);
+  const autoDump = isDumpMine(autoMineId);
+  const autoOxygenPerMin = autoMine.environment?.oxygenConsumptionPerMin ?? 0;
+  const autoNeedsOxygen = !autoDump && autoOxygenPerMin > 0;
+  if (autoNeedsOxygen) {
+    const activeTank = next.lifeSupport.activeOxygenTankId
+      ? next.lifeSupport.oxygenTanks.find((t) => t.id === next.lifeSupport.activeOxygenTankId)
+      : next.lifeSupport.oxygenTanks.find((t) => t.currentOxygen > 0);
+    if (!activeTank || activeTank.currentOxygen <= 0) return state;
+    if (!next.lifeSupport.oxygenValveOpen) return state;
+    const activeCoolers = next.lifeSupport.coolers.filter((c) => c.active && c.durability > 0);
+    if (activeCoolers.length === 0) return state;
+  }
+
   const missedDigs = Math.floor(elapsedSinceDig / autoCooldown);
   let basket = [...next.autoBasket];
   let basketCases = [...next.autoBasketCases];
@@ -118,6 +133,7 @@ export function processAutoDig(
   let pickaxeBroken = false;
   let gems = next.gems;
   let totalGemsEarned = next.totalGemsEarned;
+  const itemEff = computeTotalItemEffects(next);
 
   let basketMass = currentMass;
   for (let i = 0; i < missedDigs; i++) {
@@ -127,7 +143,12 @@ export function processAutoDig(
       break;
     }
 
-    for (let j = 0; j < yieldCount && basketMass < basketCap; j++) {
+    let yieldMult = 1;
+    if (itemEff.oreYieldMultChance > 0 && Math.random() < itemEff.oreYieldMultChance) {
+      yieldMult = itemEff.oreYieldMult;
+    }
+    const rollsThisDig = Math.max(1, Math.round(yieldCount * yieldMult));
+    for (let j = 0; j < rollsThisDig && basketMass < basketCap; j++) {
       const resource = getRandomResourceForMine(next.autoLeaseMineId || 1);
       const mass = Math.round(getRandomMass(resource) * 100) / 100;
       basket.push({ resource: resource.type, mass, xp: resource.xp, timestamp: now });
@@ -210,6 +231,9 @@ export function processOfflineProgress(
   next.buffs = next.buffs.filter((b) => b.expiresAt > now);
   if (next.buffs.length !== prev.buffs.length) changed = true;
 
+  const autoLeaseEndAt = next.autoMiningEndsAt;
+  const lastOnlineAt = now - offlineSec * 1000;
+
   if (next.activeLeaseEndsAt && now > next.activeLeaseEndsAt) {
     next.activeLeaseEndsAt = null;
     next.activeLeaseTotal = 0;
@@ -221,9 +245,8 @@ export function processOfflineProgress(
     changed = true;
   }
 
-  if (next.autoMiningEndsAt && now < next.autoMiningEndsAt) {
+  if (autoLeaseEndAt && autoLeaseEndAt > lastOnlineAt) {
     const autoCooldown = getAutoCooldownMs(next.upgrades.autoCooldownLvl) / 1000;
-    const maxDigs = Math.floor(offlineSec / autoCooldown);
     const basketCap = getBasketCapValue(next.upgrades.basketCapLvl);
     const yieldCount = Math.max(1, getPickaxeTier(next.activePickaxeTierId).yieldMultiplier);
     let basket = [...next.autoBasket];
@@ -231,11 +254,39 @@ export function processOfflineProgress(
     let digsDone = 0;
     const tier = getPickaxeTier(next.activePickaxeTierId);
     let basketMass = basket.reduce((s, it) => s + it.mass, 0);
+    const itemEff = computeTotalItemEffects(next);
+    const effectiveAutoEnd = Math.min(autoLeaseEndAt, now);
+    const autoActiveSec = Math.max(0, (effectiveAutoEnd - lastOnlineAt) / 1000);
+    const cappedMaxDigs = Math.floor(autoActiveSec / autoCooldown);
 
-    for (let i = 0; i < maxDigs && basketMass < basketCap; i++) {
+    const offMineId = next.autoLeaseMineId || 1;
+    const offMine = getMineById(offMineId);
+    const offDump = isDumpMine(offMineId);
+    const offOxygenPerMin = offMine.environment?.oxygenConsumptionPerMin ?? 0;
+    const offNeedsOxygen = !offDump && offOxygenPerMin > 0;
+    let oxygenBlocked = false;
+    if (offNeedsOxygen) {
+      const activeTank = next.lifeSupport.activeOxygenTankId
+        ? next.lifeSupport.oxygenTanks.find((t) => t.id === next.lifeSupport.activeOxygenTankId)
+        : next.lifeSupport.oxygenTanks.find((t) => t.currentOxygen > 0);
+      if (!activeTank || activeTank.currentOxygen <= 0) oxygenBlocked = true;
+      if (!next.lifeSupport.oxygenValveOpen) oxygenBlocked = true;
+      const activeCoolers = next.lifeSupport.coolers.filter((c) => c.active && c.durability > 0);
+      if (activeCoolers.length === 0) oxygenBlocked = true;
+    }
+    if (oxygenBlocked) {
+      return changed ? next : prev;
+    }
+
+    for (let i = 0; i < cappedMaxDigs && basketMass < basketCap; i++) {
       if (!next.activePickaxe || next.activePickaxe.durability < tier.durabilityCost) break;
 
-      for (let j = 0; j < yieldCount && basketMass < basketCap; j++) {
+      let yieldMult = 1;
+      if (itemEff.oreYieldMultChance > 0 && Math.random() < itemEff.oreYieldMultChance) {
+        yieldMult = itemEff.oreYieldMult;
+      }
+      const rollsThisDig = Math.max(1, Math.round(yieldCount * yieldMult));
+      for (let j = 0; j < rollsThisDig && basketMass < basketCap; j++) {
         const resource = getRandomResourceForMine(next.autoLeaseMineId || 1);
         const mass = Math.round(getRandomMass(resource) * 100) / 100;
         basket.push({ resource: resource.type, mass, xp: resource.xp, timestamp: now });
