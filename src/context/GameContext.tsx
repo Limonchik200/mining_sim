@@ -143,6 +143,24 @@ import {
 } from './storage';
 import { computeTotalItemEffects, computeItemEffectsForRegen } from './itemEffects';
 import { processTick, processOfflineProgress } from './autoDig';
+import {
+  questComplete,
+  questProgress,
+  allQuestsClaimed,
+  questLabel,
+  dailyCycleKey,
+  weeklyCycleKey,
+  generateDailyQuests,
+  generateWeeklyQuests,
+  DAILY_GEM_REWARD,
+  WEEKLY_GEM_REWARD,
+  DAILY_ALL_CASE_RARITY,
+  WEEKLY_ALL_CASE_RARITY,
+  WEEKLY_ALL_CASE_COUNT,
+  DAILY_LEVEL_REQUIRED,
+  WEEKLY_LEVEL_REQUIRED,
+} from '@/features/quests/questData';
+import type { QuestKind } from '@/features/quests/types';
 
 export type { CaseOpenResult };
 
@@ -257,6 +275,8 @@ interface GameContextValue {
   totalWarehouseSpace: number;
   levelUpData: number | null;
   setLevelUpData: (level: number | null) => void;
+  claimQuest: (kind: QuestKind, questIndex: number) => void;
+  claimAllQuestsReward: (kind: QuestKind) => void;
 }
 
 const GameContext = createContext<GameContextValue | null>(null);
@@ -273,12 +293,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [activeTab, setActiveTab] = useState<Tab>('mining');
   const [pendingLeasePurchase, setPendingLeasePurchase] = useState<{ type: 'active' | 'auto'; value: number; unit: TimeUnit } | null>(null);
   const stateRef = useRef(state);
+  stateRef.current = state;
   const lastTickRef = useRef(Date.now());
   const lastDigRef = useRef(0);
-
-  useEffect(() => {
-    stateRef.current = state;
-  }, [state]);
 
   const lang = state.settings.lang;
   const theme = state.settings.theme;
@@ -319,7 +336,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const interval = setInterval(() => saveState(stateRef.current), 5000);
-    return () => clearInterval(interval);
+    const onBeforeUnload = () => saveState(stateRef.current);
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      saveState(stateRef.current);
+    };
   }, []);
 
   useEffect(() => {
@@ -386,7 +409,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
       lastTickRef.current = now;
       const deltaSec = (now - prev) / 1000;
 
-      setState((prev) => processTick(prev, now, deltaSec, pushNotification, tr));
+      setState((p) => {
+        const next = processTick(p, now, deltaSec, pushNotification, tr);
+        if (deltaSec > 0 && deltaSec < 10) {
+          next.stats = { ...next.stats, playSeconds: Math.round(((next.stats.playSeconds ?? 0) + deltaSec) * 100) / 100 };
+        }
+        return next;
+      });
     }, 250);
 
     return () => clearInterval(interval);
@@ -461,14 +490,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
         const ls = current.lifeSupport;
 
         if (needsOxygen) {
-          const activeTank = ls.activeOxygenTankId
-            ? ls.oxygenTanks.find((t) => t.id === ls.activeOxygenTankId)
-            : ls.oxygenTanks.find((t) => t.currentOxygen > 0);
-          if (!activeTank || activeTank.currentOxygen <= 0) {
-            pushNotification({ message: lang === 'ru' ? 'Нет кислорода! Нужен активный кислородный балон с запасом кисню.' : (lang === 'uk' ? 'Немає кисню! Потрібен активний кисневий балон із запасом кисню.' : 'No oxygen! Need an active oxygen tank with oxygen.'), type: 'error' });
-            return;
-          }
-          if (!ls.oxygenValveOpen) {
+          const valveOpen = ls.oxygenValveOpen;
+          if (!valveOpen) {
             pushNotification({ message: lang === 'ru' ? 'Кислородный вентиль закрыт! Откройте вентиль.' : (lang === 'uk' ? 'Кисневий вентиль закритий! Відкрийте вентиль.' : 'Oxygen valve is closed! Open the valve.'), type: 'error' });
             return;
           }
@@ -476,6 +499,26 @@ export function GameProvider({ children }: { children: ReactNode }) {
           if (activeCoolers.length === 0) {
             pushNotification({ message: lang === 'ru' ? 'Охладитель выключен или сломан! Включите активный охладитель.' : (lang === 'uk' ? 'Охолоджувач вимкнений або зламаний! Увімкніть активний охолоджувач.' : 'Cooler is off or broken! Enable an active cooler.'), type: 'error' });
             return;
+          }
+          const declaredActive = ls.activeOxygenTankId
+            ? ls.oxygenTanks.find((t) => t.id === ls.activeOxygenTankId)
+            : null;
+          const usableTank =
+            (declaredActive && declaredActive.currentOxygen > 0)
+              ? declaredActive
+              : ls.oxygenTanks.find((t) => t.currentOxygen > 0);
+          if (!usableTank) {
+            pushNotification({ message: lang === 'ru' ? 'Нет кислорода! Нужен активный кислородный балон с запасом кисню.' : (lang === 'uk' ? 'Немає кисню! Потрібен активний кисневий балон із запасом кисню.' : 'No oxygen! Need an active oxygen tank with oxygen.'), type: 'error' });
+            return;
+          }
+          // Auto-select the usable tank so subsequent digs and the drain loop
+          // consume oxygen from a tank that actually has some left.
+          if (!declaredActive || declaredActive.currentOxygen <= 0) {
+            current = {
+              ...current,
+              lifeSupport: { ...current.lifeSupport, activeOxygenTankId: usableTank.id },
+            };
+            stateRef.current = current;
           }
         }
       }
@@ -594,7 +637,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           next.stats = { ...next.stats, gemsEarned: next.stats.gemsEarned + (xpRes.gemsEarned || 0) };
           pushNotification({ message: `${tr('notifLevelUp')} ${xpRes.newLevel}!`, type: 'success' });
           setLevelUpData(xpRes.newLevel);
-          for (const newLvl of xpRes.newLevels) {
+          for (const newLvl of (xpRes.newLevels ?? [])) {
             for (const tier of PICKAXE_TIERS) {
               if (tier.requiredLevel === newLvl && tier.id !== 'shovel') {
                 const pxName = lang === 'ru' ? tier.nameRu : (lang === 'uk' ? tier.nameUk : tier.nameEn);
@@ -682,6 +725,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         cases: prev.autoBasketCases.length > 0
           ? [...prev.cases, ...prev.autoBasketCases]
           : prev.cases,
+        stats: { ...prev.stats, basketCollected: (prev.stats.basketCollected ?? 0) + 1 },
       };
       const xpRes = applyXp(next, totalXp);
       next = xpRes.state;
@@ -689,7 +733,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         next.stats = { ...next.stats, gemsEarned: next.stats.gemsEarned + (xpRes.gemsEarned || 0) };
         pushNotification({ message: `${tr('notifLevelUp')} ${xpRes.newLevel}!`, type: 'success' });
         setLevelUpData(xpRes.newLevel);
-        for (const newLvl of xpRes.newLevels) {
+        for (const newLvl of (xpRes.newLevels ?? [])) {
           for (const tier of PICKAXE_TIERS) {
             if (tier.requiredLevel === newLvl && tier.id !== 'shovel') {
               const pxName = lang === 'ru' ? tier.nameRu : (lang === 'uk' ? tier.nameUk : tier.nameEn);
@@ -865,6 +909,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           ...prev.foodInventory,
           [foodId]: (prev.foodInventory?.[foodId] ?? 0) + 1,
         },
+        stats: { ...prev.stats, purchasesCount: (prev.stats.purchasesCount ?? 0) + 1 },
       }));
       pushNotification({ message: `${tr('notifBought')} ${food.name}`, type: 'success' });
     },
@@ -894,7 +939,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
         if (food.energyBoost > 0) {
           const effectiveMax = prev.maxEnergy + totalItemEffects.energyMaxBonus;
           const boost = food.energyBoost * (1 + totalItemEffects.foodBonusPct);
+          const actualGain = Math.min(effectiveMax, prev.energy + boost) - prev.energy;
           next.energy = Math.min(effectiveMax, prev.energy + boost);
+          ns.energyRestored = Math.round(((ns.energyRestored ?? 0) + actualGain) * 100) / 100;
         }
 
         if (food.buffDuration > 0) {
@@ -1018,6 +1065,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
             activePickaxe: newPickaxe,
             activePickaxeTierId: tierId,
             ownedPickaxes: [...(prev.ownedPickaxes || []), tierId],
+            stats: { ...prev.stats, purchasesCount: (prev.stats.purchasesCount ?? 0) + 1 },
           };
         }
         const oldPickaxe = prev.activePickaxe;
@@ -1028,6 +1076,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           activePickaxeTierId: tierId,
           sparePickaxes: [...prev.sparePickaxes, oldPickaxe],
           ownedPickaxes: [...(prev.ownedPickaxes || []), tierId],
+          stats: { ...prev.stats, purchasesCount: (prev.stats.purchasesCount ?? 0) + 1 },
         };
       });
       const name = lang === 'ru' ? tier.nameRu : (lang === 'uk' ? tier.nameUk : tier.nameEn);
@@ -1079,7 +1128,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         },
         activePickaxeTierId: fallbackTier.id,
         ownedPickaxes: [...(prev.ownedPickaxes || []), fallbackTier.id],
-        stats: { ...prev.stats, moneySpentRepairs: Math.round((prev.stats.moneySpentRepairs + repairCost) * 100) / 100 },
+        stats: { ...prev.stats, repairsMade: (prev.stats.repairsMade ?? 0) + 1, moneySpentRepairs: Math.round((prev.stats.moneySpentRepairs + repairCost) * 100) / 100 },
       }));
       pushNotification({ message: tr('repaired'), type: 'success' });
       return;
@@ -1096,7 +1145,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       ...prev,
       balance: Math.round((prev.balance - cost) * 100) / 100,
       activePickaxe: { ...prev.activePickaxe!, durability: tier.maxDurability },
-      stats: { ...prev.stats, moneySpentRepairs: Math.round((prev.stats.moneySpentRepairs + cost) * 100) / 100 },
+      stats: { ...prev.stats, repairsMade: (prev.stats.repairsMade ?? 0) + 1, moneySpentRepairs: Math.round((prev.stats.moneySpentRepairs + cost) * 100) / 100 },
     }));
     pushNotification({ message: tr('repaired'), type: 'success' });
   }, [pushNotification, tr, lang]);
@@ -1118,7 +1167,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         gems: prev.gems - gemCost,
         maxEnergy: getEnergyMaxValue(prev.upgrades.energyMaxLvl + 1),
         upgrades: { ...prev.upgrades, energyMaxLvl: prev.upgrades.energyMaxLvl + 1 },
-        stats: { ...prev.stats, gemsSpentUpgrades: prev.stats.gemsSpentUpgrades + gemCost },
+        stats: { ...prev.stats, purchasesCount: (prev.stats.purchasesCount ?? 0) + 1, gemsSpentUpgrades: prev.stats.gemsSpentUpgrades + gemCost },
       }));
     } else {
       const cost = getEnergyMaxCost(lvl);
@@ -1131,7 +1180,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         balance: Math.round((prev.balance - cost) * 100) / 100,
         maxEnergy: getEnergyMaxValue(prev.upgrades.energyMaxLvl + 1),
         upgrades: { ...prev.upgrades, energyMaxLvl: prev.upgrades.energyMaxLvl + 1 },
-        stats: { ...prev.stats, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
+        stats: { ...prev.stats, purchasesCount: (prev.stats.purchasesCount ?? 0) + 1, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
       }));
     }
   }, [pushNotification, tr]);
@@ -1152,7 +1201,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         ...prev,
         gems: prev.gems - gemCost,
         upgrades: { ...prev.upgrades, energyRegenLvl: prev.upgrades.energyRegenLvl + 1 },
-        stats: { ...prev.stats, gemsSpentUpgrades: prev.stats.gemsSpentUpgrades + gemCost },
+        stats: { ...prev.stats, purchasesCount: (prev.stats.purchasesCount ?? 0) + 1, gemsSpentUpgrades: prev.stats.gemsSpentUpgrades + gemCost },
       }));
     } else {
       const cost = getEnergyRegenCost(lvl);
@@ -1164,7 +1213,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         ...prev,
         balance: Math.round((prev.balance - cost) * 100) / 100,
         upgrades: { ...prev.upgrades, energyRegenLvl: prev.upgrades.energyRegenLvl + 1 },
-        stats: { ...prev.stats, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
+        stats: { ...prev.stats, purchasesCount: (prev.stats.purchasesCount ?? 0) + 1, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
       }));
     }
   }, [pushNotification, tr]);
@@ -1185,7 +1234,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         ...prev,
         gems: prev.gems - gemCost,
         upgrades: { ...prev.upgrades, energyRegenAmountLvl: (prev.upgrades.energyRegenAmountLvl ?? 0) + 1 },
-        stats: { ...prev.stats, gemsSpentUpgrades: prev.stats.gemsSpentUpgrades + gemCost },
+        stats: { ...prev.stats, purchasesCount: (prev.stats.purchasesCount ?? 0) + 1, gemsSpentUpgrades: prev.stats.gemsSpentUpgrades + gemCost },
       }));
     } else {
       const cost = getEnergyRegenAmountCost(lvl);
@@ -1197,7 +1246,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         ...prev,
         balance: Math.round((prev.balance - cost) * 100) / 100,
         upgrades: { ...prev.upgrades, energyRegenAmountLvl: (prev.upgrades.energyRegenAmountLvl ?? 0) + 1 },
-        stats: { ...prev.stats, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
+        stats: { ...prev.stats, purchasesCount: (prev.stats.purchasesCount ?? 0) + 1, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
       }));
     }
   }, [pushNotification, tr]);
@@ -1226,18 +1275,20 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
     setState((prev) => {
       const next: GameState = { ...prev, dailyCalendar: { lastClaimDay: nextDay, lastClaimTimestamp: now } };
+      const ns = { ...prev.stats, dailyRewardsClaimed: (prev.stats.dailyRewardsClaimed ?? 0) + 1 };
       if (scaled.type === 'cash') {
         next.balance = Math.round((prev.balance + scaled.amount) * 100) / 100;
         next.totalEarned = Math.round((prev.totalEarned + scaled.amount) * 100) / 100;
-        next.stats = { ...prev.stats, moneyEarned: Math.round((prev.stats.moneyEarned + scaled.amount) * 100) / 100 };
+        ns.moneyEarned = Math.round((prev.stats.moneyEarned + scaled.amount) * 100) / 100;
       } else if (scaled.type === 'gems') {
         next.gems = prev.gems + scaled.amount;
         next.totalGemsEarned = prev.totalGemsEarned + scaled.amount;
-        next.stats = { ...prev.stats, gemsEarned: prev.stats.gemsEarned + scaled.amount };
+        ns.gemsEarned = prev.stats.gemsEarned + scaled.amount;
       } else if (scaled.type === 'case') {
         const caseRarity = (scaled.caseRarity as CaseRarity) || 'common';
         next.cases = [...(prev.cases || []), { id: `daily_${nextDay}_${Date.now()}`, rarity: caseRarity, opened: false }];
       }
+      next.stats = ns;
       return next;
     });
     pushNotification({ message: `${tr('dailyReward')}: ${rewardLabel}`, type: 'success' });
@@ -1258,7 +1309,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           inventory: inv,
           balance: Math.round((prev.balance + earned) * 100) / 100,
           totalEarned: Math.round((prev.totalEarned + earned) * 100) / 100,
-          stats: { ...prev.stats, moneyEarned: Math.round((prev.stats.moneyEarned + earned) * 100) / 100 },
+          stats: { ...prev.stats, sellsCount: (prev.stats.sellsCount ?? 0) + 1, moneyEarned: Math.round((prev.stats.moneyEarned + earned) * 100) / 100 },
         };
       });
       pushNotification({ message: `${tr('notifSold')} ${earned.toFixed(2)}`, type: 'success' });
@@ -1287,7 +1338,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       inventory: inv,
       balance: Math.round((prev.balance + total) * 100) / 100,
       totalEarned: Math.round((prev.totalEarned + total) * 100) / 100,
-      stats: { ...prev.stats, moneyEarned: Math.round((prev.stats.moneyEarned + total) * 100) / 100 },
+      stats: { ...prev.stats, sellsCount: (prev.stats.sellsCount ?? 0) + 1, moneyEarned: Math.round((prev.stats.moneyEarned + total) * 100) / 100 },
     }));
     pushNotification({ message: `${tr('notifSold')} ${total.toFixed(2)}`, type: 'success' });
   }, [pushNotification, tr, totalItemEffects]);
@@ -1414,7 +1465,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       ...prev,
       balance: Math.round((prev.balance - cost) * 100) / 100,
       upgrades: { ...prev.upgrades, activeLeaseMult: prev.upgrades.activeLeaseMult + 1 },
-      stats: { ...prev.stats, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
+      stats: { ...prev.stats, purchasesCount: (prev.stats.purchasesCount ?? 0) + 1, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
     }));
   }, [pushNotification, tr]);
 
@@ -1433,7 +1484,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       ...prev,
       balance: Math.round((prev.balance - cost) * 100) / 100,
       upgrades: { ...prev.upgrades, autoLeaseMult: prev.upgrades.autoLeaseMult + 1 },
-      stats: { ...prev.stats, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
+      stats: { ...prev.stats, purchasesCount: (prev.stats.purchasesCount ?? 0) + 1, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
     }));
   }, [pushNotification, tr]);
 
@@ -1452,7 +1503,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       ...prev,
       balance: Math.round((prev.balance - cost) * 100) / 100,
       upgrades: { ...prev.upgrades, autoCooldownLvl: prev.upgrades.autoCooldownLvl + 1 },
-      stats: { ...prev.stats, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
+      stats: { ...prev.stats, purchasesCount: (prev.stats.purchasesCount ?? 0) + 1, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
     }));
   }, [pushNotification, tr]);
 
@@ -1471,7 +1522,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       ...prev,
       balance: Math.round((prev.balance - cost) * 100) / 100,
       upgrades: { ...prev.upgrades, basketCapLvl: prev.upgrades.basketCapLvl + 1 },
-      stats: { ...prev.stats, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
+      stats: { ...prev.stats, purchasesCount: (prev.stats.purchasesCount ?? 0) + 1, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
     }));
   }, [pushNotification, tr]);
 
@@ -1490,7 +1541,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       ...prev,
       balance: Math.round((prev.balance - cost) * 100) / 100,
       upgrades: { ...prev.upgrades, caseChanceLvl: prev.upgrades.caseChanceLvl + 1 },
-      stats: { ...prev.stats, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
+      stats: { ...prev.stats, purchasesCount: (prev.stats.purchasesCount ?? 0) + 1, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
     }));
   }, [pushNotification, tr]);
 
@@ -1692,11 +1743,18 @@ export function GameProvider({ children }: { children: ReactNode }) {
         completedAt: now + reducedDuration,
       };
 
-      setState((prev) => ({
-        ...prev,
-        availableExpeditions: prev.availableExpeditions.filter((e) => e.id !== expeditionId),
-        activeExpeditions: [...prev.activeExpeditions, active],
-      }));
+      setState((prev) => {
+        const tierKey = `expeditionsTier${expedition.tier}` as keyof typeof prev.stats;
+        return {
+          ...prev,
+          availableExpeditions: prev.availableExpeditions.filter((e) => e.id !== expeditionId),
+          activeExpeditions: [...prev.activeExpeditions, active],
+          stats: {
+            ...prev.stats,
+            [tierKey]: (prev.stats[tierKey] as number || 0) + 1,
+          },
+        };
+      });
       pushNotification({ message: tr('expeditionsStarted'), type: 'success' });
     },
     [pushNotification, tr, totalItemEffects]
@@ -1743,7 +1801,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
       }
 
       setState((prev) => {
-        const tierKey = `expeditionsTier${expedition.tier}` as keyof typeof prev.stats;
         let next: GameState = {
           ...prev,
           balance: Math.round((prev.balance + expedition.cashReward + bonusCash) * 100) / 100,
@@ -1757,7 +1814,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
             ...prev.stats,
             moneyEarned: Math.round((prev.stats.moneyEarned + expedition.cashReward + bonusCash) * 100) / 100,
             gemsEarned: prev.stats.gemsEarned + expedition.diamondReward + bonusGems,
-            [tierKey]: (prev.stats[tierKey] as number || 0) + 1,
+            expeditionCasesEarned: (prev.stats.expeditionCasesEarned ?? 0) + newCases.length,
           },
         };
         return next;
@@ -2014,7 +2071,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       ...prev,
       balance: Math.round((prev.balance - cost) * 100) / 100,
       upgrades: { ...prev.upgrades, backpackLvl: (prev.upgrades.backpackLvl ?? 0) + 1 },
-      stats: { ...prev.stats, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
+      stats: { ...prev.stats, purchasesCount: (prev.stats.purchasesCount ?? 0) + 1, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
     }));
   }, [pushNotification, tr]);
 
@@ -2033,7 +2090,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       ...prev,
       gems: prev.gems - cost,
       upgrades: { ...prev.upgrades, luckLvl: (prev.upgrades.luckLvl ?? 0) + 1 },
-      stats: { ...prev.stats, gemsSpentUpgrades: prev.stats.gemsSpentUpgrades + cost },
+      stats: { ...prev.stats, purchasesCount: (prev.stats.purchasesCount ?? 0) + 1, gemsSpentUpgrades: prev.stats.gemsSpentUpgrades + cost },
     }));
   }, [pushNotification, tr]);
 
@@ -2052,7 +2109,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       ...prev,
       gems: prev.gems - cost,
       upgrades: { ...prev.upgrades, diamondChanceLvl: (prev.upgrades.diamondChanceLvl ?? 0) + 1 },
-      stats: { ...prev.stats, gemsSpentUpgrades: prev.stats.gemsSpentUpgrades + cost },
+      stats: { ...prev.stats, purchasesCount: (prev.stats.purchasesCount ?? 0) + 1, gemsSpentUpgrades: prev.stats.gemsSpentUpgrades + cost },
     }));
   }, [pushNotification, tr]);
 
@@ -2335,7 +2392,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
          type === 'lighting' ? 'lightingLevel' :
          'ventilationLevel']: currentLevel + 1,
       },
-      stats: { ...prev.stats, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
+      stats: { ...prev.stats, purchasesCount: (prev.stats.purchasesCount ?? 0) + 1, moneySpentUpgrades: Math.round((prev.stats.moneySpentUpgrades + cost) * 100) / 100 },
     }));
   }, [highestUnlockedMine, pushNotification, lang, tr]);
 
@@ -2472,7 +2529,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       return;
     }
     setState((prev) => {
-      const ns = { ...prev.stats };
+      const ns = { ...prev.stats, purchasesCount: (prev.stats.purchasesCount ?? 0) + 1, materialPacksBought: (prev.stats.materialPacksBought ?? 0) + 1 };
       if (slot.materialType === 'wood_log') ns.logsBought += slot.packSize;
       else if (slot.materialType === 'steel_plank') ns.planksBought += slot.packSize;
       return {
@@ -2586,7 +2643,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
             }))),
         ],
         specialOffers: { ...prev.specialOffers, offers: newOffers },
-        stats: { ...prev.stats, gemsSpentSpecialOffers: prev.stats.gemsSpentSpecialOffers + price, specialOffersBought: prev.stats.specialOffersBought + 1 },
+        stats: { ...prev.stats, purchasesCount: (prev.stats.purchasesCount ?? 0) + 1, gemsSpentSpecialOffers: prev.stats.gemsSpentSpecialOffers + price, specialOffersBought: prev.stats.specialOffersBought + 1 },
       };
     });
     pushNotification({ message: lang === 'ru' ? 'Предложение куплено!' : (lang === 'uk' ? 'Пропозицію куплено!' : 'Offer purchased!'), type: 'success' });
@@ -2636,6 +2693,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       ...prev,
       balance: Math.round((prev.balance - totalCost) * 100) / 100,
       fuel: { ...prev.fuel, canisters: newCanisters },
+      stats: { ...prev.stats, purchasesCount: (prev.stats.purchasesCount ?? 0) + 1, fuelBoughtLiters: Math.round(((prev.stats.fuelBoughtLiters ?? 0) + actualLiters) * 100) / 100 },
     }));
     pushNotification({ message: lang === 'ru' ? `Заправлено ${actualLiters.toFixed(1)}Л за ${totalCost.toFixed(2)}$` : (lang === 'uk' ? `Заправлено ${actualLiters.toFixed(1)}Л за ${totalCost.toFixed(2)}$` : `Refueled ${actualLiters.toFixed(1)}L for ${totalCost.toFixed(2)}$`), type: 'success' });
   }, [pushNotification, lang, tr]);
@@ -2850,6 +2908,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         ...prev.lifeSupport,
         generator: { ...prev.lifeSupport.generator, purchased: true },
       },
+      stats: { ...prev.stats, purchasesCount: (prev.stats.purchasesCount ?? 0) + 1 },
     }));
     pushNotification({ message: lang === 'ru' ? 'Генератор куплен!' : (lang === 'uk' ? 'Генератор куплено!' : 'Generator purchased!'), type: 'success' });
   }, [pushNotification, lang, tr]);
@@ -2989,6 +3048,151 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setState((prev) => {
+        if (!prev.quests) return prev;
+        const now = Date.now();
+        const dKey = dailyCycleKey();
+        const wKey = weeklyCycleKey();
+        let next = prev;
+        if (prev.quests.daily.cycleKey !== dKey) {
+          next = {
+            ...next,
+            quests: {
+              ...next.quests,
+              daily: {
+                generatedAt: now,
+                cycleKey: dKey,
+                quests: generateDailyQuests(next.stats),
+                allClaimedRewardClaimed: false,
+              },
+            },
+          };
+        }
+        if (prev.quests.weekly.cycleKey !== wKey) {
+          next = {
+            ...next,
+            quests: {
+              ...next.quests,
+              weekly: {
+                generatedAt: now,
+                cycleKey: wKey,
+                quests: generateWeeklyQuests(next.stats, next.level),
+                allClaimedRewardClaimed: false,
+              },
+            },
+          };
+        }
+        return next === prev ? prev : next;
+      });
+    }, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Regenerate quests the moment the player reaches the unlock level.
+  // Before unlock, quests are held as placeholder snapshots with empty
+  // startValues; once unlocked we re-snapshot against current stats so
+  // progress tracking starts from the right baseline.
+  const prevLevelRef = useRef(state.level);
+  useEffect(() => {
+    const prevLevel = prevLevelRef.current;
+    prevLevelRef.current = state.level;
+    if (state.level === prevLevel || !state.quests) return;
+    const now = Date.now();
+    setState((p) => {
+      if (!p.quests) return p;
+      let quests = p.quests;
+      if (prevLevel < DAILY_LEVEL_REQUIRED && p.level >= DAILY_LEVEL_REQUIRED) {
+        quests = {
+          ...quests,
+          daily: {
+            generatedAt: now,
+            cycleKey: dailyCycleKey(),
+            quests: generateDailyQuests(p.stats),
+            allClaimedRewardClaimed: false,
+          },
+        };
+      }
+      if (prevLevel < WEEKLY_LEVEL_REQUIRED && p.level >= WEEKLY_LEVEL_REQUIRED) {
+        quests = {
+          ...quests,
+          weekly: {
+            generatedAt: now,
+            cycleKey: weeklyCycleKey(),
+            quests: generateWeeklyQuests(p.stats, p.level),
+            allClaimedRewardClaimed: false,
+          },
+        };
+      }
+      return quests === p.quests ? p : { ...p, quests };
+    });
+  }, [state.level]);
+
+  const claimQuest = useCallback((kind: QuestKind, questIndex: number) => {
+    setState((prev) => {
+      if (!prev.quests) return prev;
+      const bucket = kind === 'daily' ? prev.quests.daily : prev.quests.weekly;
+      const quest = bucket.quests[questIndex];
+      if (!quest || quest.claimed) return prev;
+      if (!questComplete(prev.stats, quest)) return prev;
+
+      const gemReward = kind === 'daily' ? DAILY_GEM_REWARD : WEEKLY_GEM_REWARD;
+      const newQuests = bucket.quests.map((q, i) =>
+        i === questIndex ? { ...q, claimed: true } : q
+      );
+
+      return {
+        ...prev,
+        gems: prev.gems + gemReward,
+        totalGemsEarned: prev.totalGemsEarned + gemReward,
+        stats: { ...prev.stats, gemsEarned: prev.stats.gemsEarned + gemReward },
+        quests: {
+          ...prev.quests,
+          [kind]: { ...bucket, quests: newQuests },
+        },
+      };
+    });
+    pushNotification({
+      message: lang === 'ru' ? `Награда за задание: +${kind === 'daily' ? DAILY_GEM_REWARD : WEEKLY_GEM_REWARD} 💎`
+        : lang === 'uk' ? `Нагорода за завдання: +${kind === 'daily' ? DAILY_GEM_REWARD : WEEKLY_GEM_REWARD} 💎`
+        : `Quest reward: +${kind === 'daily' ? DAILY_GEM_REWARD : WEEKLY_GEM_REWARD} 💎`,
+      type: 'success',
+    });
+  }, [pushNotification, lang]);
+
+  const claimAllQuestsReward = useCallback((kind: QuestKind) => {
+    setState((prev) => {
+      if (!prev.quests) return prev;
+      const bucket = kind === 'daily' ? prev.quests.daily : prev.quests.weekly;
+      if (bucket.allClaimedRewardClaimed) return prev;
+      if (!allQuestsClaimed(prev.stats, bucket.quests)) return prev;
+
+      const rarity = kind === 'daily' ? DAILY_ALL_CASE_RARITY : WEEKLY_ALL_CASE_RARITY;
+      const caseCount = kind === 'daily' ? 1 : WEEKLY_ALL_CASE_COUNT;
+      const newCases = Array.from({ length: caseCount }, (_, i) => ({
+        id: `quest-${kind}-${Date.now()}-${i}`,
+        rarity,
+        opened: false,
+      }));
+
+      return {
+        ...prev,
+        cases: [...prev.cases, ...newCases],
+        quests: {
+          ...prev.quests,
+          [kind]: { ...bucket, allClaimedRewardClaimed: true },
+        },
+      };
+    });
+    pushNotification({
+      message: lang === 'ru' ? `Бонус за все задания получен!`
+        : lang === 'uk' ? `Бонус за всі завдання отримано!`
+        : `All-quest bonus claimed!`,
+      type: 'success',
+    });
+  }, [pushNotification, lang]);
+
   const usedWarehouseSpace = getUsedSpace(state.lifeSupport, state.fuel);
   const totalWarehouseSpace = getTotalSpace(state.lifeSupport.shelfCount);
 
@@ -3033,6 +3237,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
         const newOxygenTanks = ls.oxygenTanks.map((t) => {
           if (t.currentOxygen <= 0) return t;
+          // Only the active (or first usable) tank is drained. Other tanks are
+          // kept in reserve and swapped in once the active one is depleted.
+          const isDrainTarget =
+            t.id === ls.activeOxygenTankId ||
+            (!ls.oxygenTanks.some((o) => o.id === ls.activeOxygenTankId && o.currentOxygen > 0)
+              && t === ls.oxygenTanks.find((o) => o.currentOxygen > 0));
+          if (!isDrainTarget) return t;
           const mine = getMineById(prev.currentMineId ?? 1);
           const oxygenPerMin = mine?.environment?.oxygenConsumptionPerMin ?? 0;
           if (oxygenPerMin <= 0 || !ls.oxygenValveOpen) return t;
@@ -3043,13 +3254,20 @@ export function GameProvider({ children }: { children: ReactNode }) {
             oxygenConsumed += (t.currentOxygen - newOx);
           }
           return { ...t, currentOxygen: newOx };
-        });
+        }).filter((t) => t.currentOxygen > 0);
+
+        let nextActiveTankId = ls.activeOxygenTankId;
+        if (nextActiveTankId && !newOxygenTanks.some((t) => t.id === nextActiveTankId)) {
+          nextActiveTankId = newOxygenTanks[0]?.id ?? null;
+        }
 
         let newGenerator = ls.generator;
+        let generatorEnergyProduced = 0;
         if (newGenerator.active && newGenerator.fuelLiters > 0) {
           const fuelBurn = (GENERATOR_FUEL_PER_MIN / 60) * deltaSec;
           const newFuel = Math.max(0, newGenerator.fuelLiters - fuelBurn);
           if (newFuel !== newGenerator.fuelLiters) { changed = true; }
+          generatorEnergyProduced = Math.round((newGenerator.fuelLiters - newFuel) * 100) / 100;
           newGenerator = { ...newGenerator, fuelLiters: newFuel };
           if (newFuel <= 0) {
             newGenerator = { ...newGenerator, active: false };
@@ -3073,9 +3291,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
         if (!changed) return prev;
 
-        const newStats = oxygenConsumed > 0
-          ? { ...prev.stats, oxygenSpent: Math.round((prev.stats.oxygenSpent + oxygenConsumed) * 100) / 100 }
-          : prev.stats;
+        let newStats = prev.stats;
+        if (oxygenConsumed > 0) {
+          newStats = { ...newStats, oxygenSpent: Math.round((newStats.oxygenSpent + oxygenConsumed) * 100) / 100 };
+        }
+        if (generatorEnergyProduced > 0) {
+          newStats = { ...newStats, generatorEnergyProduced: Math.round(((newStats.generatorEnergyProduced ?? 0) + generatorEnergyProduced) * 100) / 100 };
+        }
 
         return {
           ...prev,
@@ -3084,6 +3306,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
             ...ls,
             coolers: newCoolers,
             oxygenTanks: newOxygenTanks,
+            activeOxygenTankId: nextActiveTankId,
             generator: newGenerator,
             batteries: newBatteries,
           },
@@ -3200,6 +3423,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
     totalWarehouseSpace,
     levelUpData,
     setLevelUpData,
+    claimQuest,
+    claimAllQuestsReward,
   };
 
   return <GameContext.Provider value={value}>{children}</GameContext.Provider>;

@@ -1,6 +1,6 @@
 export type Lang = 'uk' | 'en' | 'ru';
 export type Theme = 'dark' | 'light';
-export type Tab = 'mining' | 'shop' | 'upgrades' | 'expeditions' | 'settings';
+export type Tab = 'mining' | 'shop' | 'upgrades' | 'expeditions' | 'settings' | 'equipment';
 export type TimeUnit = 'seconds' | 'minutes' | 'hours';
 
 import type { OwnedItem, EquippedItems, ItemEffect } from './items';
@@ -76,6 +76,18 @@ export interface GameStats {
   casesDugEpic: number;
   casesDugLegendary: number;
   lastDayKey: number;
+
+  repairsMade: number;
+  basketCollected: number;
+  sellsCount: number;
+  purchasesCount: number;
+  energyRestored: number;
+  fuelBoughtLiters: number;
+  generatorEnergyProduced: number;
+  playSeconds: number;
+  dailyRewardsClaimed: number;
+  expeditionCasesEarned: number;
+  materialPacksBought: number;
 }
 
 export interface GameState {
@@ -92,8 +104,10 @@ export interface GameState {
 
   activeLeaseEndsAt: number | null;
   activeLeaseTotal: number;
+  activeLeaseMineId: number;
   autoMiningEndsAt: number | null;
   autoMiningTotal: number;
+  autoLeaseMineId: number;
   lastAutoDigAt: number;
 
   buffs: import('./inventory').ActiveBuff[];
@@ -149,6 +163,8 @@ export interface GameState {
   specialOffers: SpecialOffersState;
 
   stats: GameStats;
+
+  quests: import('../features/quests/types').QuestsState;
 
   lastSavedAt: number;
 }

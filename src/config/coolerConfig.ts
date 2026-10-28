@@ -19,6 +19,7 @@ export interface CoolerConfig {
   nameEn: string;
   icon: string;
   color: string;
+  space: number;
 }
 
 export const COOLER_CONFIGS: Record<CoolerType, CoolerConfig> = {
@@ -39,6 +40,7 @@ export const COOLER_CONFIGS: Record<CoolerType, CoolerConfig> = {
     nameEn: 'Weak Cooler',
     icon: 'Snowflake',
     color: '#06b6d4',
+    space: 1,
   },
   cooler_normal: {
     type: 'cooler_normal',
@@ -57,6 +59,7 @@ export const COOLER_CONFIGS: Record<CoolerType, CoolerConfig> = {
     nameEn: 'Normal Cooler',
     icon: 'Snowflake',
     color: '#0891b2',
+    space: 1,
   },
   cooler_industrial: {
     type: 'cooler_industrial',
@@ -75,6 +78,7 @@ export const COOLER_CONFIGS: Record<CoolerType, CoolerConfig> = {
     nameEn: 'Industrial Cooler',
     icon: 'Snowflake',
     color: '#0e7490',
+    space: 2,
   },
 };
 

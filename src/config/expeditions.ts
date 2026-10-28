@@ -187,9 +187,9 @@ export const EXPEDITION_TIERS: Record<number, ExpeditionTierConfig> = {
     maxCash: 175,
     materialSlots: [
       [
-        { materialId: 'scroll', chance: 40, minAmount: 5, maxAmount: 9 },
-        { materialId: 'rainbow_stone', chance: 40, minAmount: 1, maxAmount: 2 },
-        { materialId: 'ruby_powder', chance: 20, minAmount: 3, maxAmount: 5 }
+        { materialId: 'scroll', chance: 50, minAmount: 5, maxAmount: 9 },
+        { materialId: 'rainbow_stone', chance: 25, minAmount: 1, maxAmount: 2 },
+        { materialId: 'ruby_powder', chance: 25, minAmount: 3, maxAmount: 5 }
       ]
     ],
     caseRewards: [
@@ -213,10 +213,10 @@ export const EXPEDITION_TIERS: Record<number, ExpeditionTierConfig> = {
     },
     materialSlots: [
       [
-        { materialId: 'scroll', chance: 30, minAmount: 8, maxAmount: 12 },
-        { materialId: 'rainbow_stone', chance: 30, minAmount: 1, maxAmount: 3 },
-        { materialId: 'ruby_powder', chance: 25, minAmount: 5, maxAmount: 8 },
-        { materialId: 'essence', chance: 15, minAmount: 2, maxAmount: 4 }
+        { materialId: 'scroll', chance: 35, minAmount: 8, maxAmount: 12 },
+        { materialId: 'rainbow_stone', chance: 20, minAmount: 1, maxAmount: 3 },
+        { materialId: 'ruby_powder', chance: 27, minAmount: 5, maxAmount: 8 },
+        { materialId: 'essence', chance: 18, minAmount: 2, maxAmount: 4 }
       ]
     ],
     caseRewards: [
@@ -241,8 +241,8 @@ export const EXPEDITION_TIERS: Record<number, ExpeditionTierConfig> = {
     materialSlots: [
       // Slot 1: Scrolls vs Rainbow Stone (50 / 50)
       [
-        { materialId: 'scroll', chance: 50, minAmount: 12, maxAmount: 18 },
-        { materialId: 'rainbow_stone', chance: 50, minAmount: 3, maxAmount: 5 }
+        { materialId: 'scroll', chance: 60, minAmount: 12, maxAmount: 18 },
+        { materialId: 'rainbow_stone', chance: 40, minAmount: 3, maxAmount: 5 }
       ],
       // Slot 2: Ruby Powder vs Essence vs Magma Stone (55 / 30 / 15)
       [

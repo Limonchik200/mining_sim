@@ -1,11 +1,12 @@
 import { X, BarChart3 } from 'lucide-react';
 import { useEffect } from 'react';
-import type { GameStats, Lang } from '@/types';
+import type { GameStats, Lang } from '@/types/player';
 import { formatMoney } from '@/config';
 
 interface AdvancedStatsModalProps {
   stats: GameStats;
   lang: Lang;
+  ownedItemsCount: number;
   onClose: () => void;
 }
 
@@ -46,14 +47,15 @@ const ROWS: StatRow[] = [
   { key: 'gemsSpentSpecialOffers', label: { uk: 'Алмазів у спецпропозиціях', en: 'Gems in special offers', ru: 'Алмазов в спецпредложениях' }, format: (v) => `${v} 💎` },
   { key: 'gemsSpentUpgrades', label: { uk: 'Алмазів на прокачку', en: 'Gems on upgrades', ru: 'Алмазов на прокачку' }, format: (v) => `${v} 💎` },
   { key: 'daysPlayed', label: { uk: 'Днів у грі', en: 'Days played', ru: 'Дней в игре' } },
-  { key: 'energySpent', label: { uk: 'Витрачено енергії', en: 'Energy spent', ru: 'Потрачено энергии' }, format: (v) => v.toFixed(2) },
+  { key: 'energySpent', label: { uk: 'Витрачено енергії', en: 'Energy spent', ru: 'Потрачено энергии' }, format: (v) => Math.round(v).toString() },
+  { key: 'generatorEnergyProduced', label: { uk: 'Усього вироблено електроенергії', en: 'Total electricity produced', ru: 'Всего произведено электроэнергии' }, format: (v) => `${Math.round(v)} МВт` },
   { key: 'oxygenSpent', label: { uk: 'Витрачено кисню', en: 'Oxygen spent', ru: 'Потрачено кислорода' }, format: (v) => v.toFixed(2) },
   { key: 'logsBought', label: { uk: 'Куплено колод', en: 'Logs bought', ru: 'Куплено бревен' } },
   { key: 'planksBought', label: { uk: 'Куплено планок', en: 'Planks bought', ru: 'Куплено планок' } },
   { key: 'specialOffersBought', label: { uk: 'Куплено спецпропозицій', en: 'Special offers bought', ru: 'Куплено спецпредложений' } },
 ];
 
-export default function AdvancedStatsModal({ stats, lang, onClose }: AdvancedStatsModalProps) {
+export default function AdvancedStatsModal({ stats, lang, ownedItemsCount, onClose }: AdvancedStatsModalProps) {
   const tr = (ru: string, uk: string, en: string) => lang === 'ru' ? ru : (lang === 'uk' ? uk : en);
 
   useEffect(() => {
@@ -100,7 +102,8 @@ export default function AdvancedStatsModal({ stats, lang, onClose }: AdvancedSta
 
         <div className="overflow-y-auto p-4 space-y-2 overscroll-contain">
           {ROWS.map((row) => {
-            const value = stats[row.key] ?? 0;
+            let value = stats[row.key] ?? 0;
+            if (row.key === 'itemsOwned') value = ownedItemsCount;
             const display = row.format ? row.format(value as number) : String(value);
             return (
               <div

@@ -28,6 +28,9 @@ export function processTick(
   let next = { ...prev };
   let changed = false;
 
+  next.stats = { ...next.stats, playSeconds: (next.stats.playSeconds ?? 0) + deltaSec };
+  changed = true;
+
   const { energyMaxBonus, energyRegenBonus } = computeItemEffectsForRegen(
     prev.equippedItems, prev.ownedItems
   );
@@ -216,7 +219,6 @@ export function processOfflineProgress(
   next.buffs = next.buffs.filter((b) => b.expiresAt > now);
   if (next.buffs.length !== prev.buffs.length) changed = true;
 
-  const autoLeaseEndAt = next.autoMiningEndsAt;
   const lastOnlineAt = now - offlineSec * 1000;
 
   if (next.activeLeaseEndsAt && now > next.activeLeaseEndsAt) {
@@ -230,22 +232,39 @@ export function processOfflineProgress(
     changed = true;
   }
 
+  // Offline auto-mining: deterministic, bounded by whichever ends first —
+  // the auto-lease end, or the basket filling up. We compute the exact number
+  // of digs that fit and execute them in order, degrading the pickaxe and
+  // swapping in spares just like live play. No partial ore is lost.
+  const autoLeaseEndAt = next.autoMiningEndsAt;
   if (autoLeaseEndAt && autoLeaseEndAt > lastOnlineAt) {
-    const autoCooldown = getAutoCooldownMs(next.upgrades.autoCooldownLvl) / 1000;
+    const autoCooldownSec = getAutoCooldownMs(next.upgrades.autoCooldownLvl) / 1000;
     const basketCap = getBasketCapValue(next.upgrades.basketCapLvl);
-    const yieldCount = Math.max(1, getPickaxeTier(next.activePickaxeTierId).yieldMultiplier);
-    let basket = [...next.autoBasket];
-    let basketCases = [...next.autoBasketCases];
-    let digsDone = 0;
     const tier = getPickaxeTier(next.activePickaxeTierId);
-    let basketMass = basket.reduce((s, it) => s + it.mass, 0);
+    const yieldCount = Math.max(1, tier.yieldMultiplier);
     const itemEff = computeTotalItemEffects(next);
+
+    // Effective auto-mining window: from when the player went offline until
+    // either now (still active) or when the lease ended.
     const effectiveAutoEnd = Math.min(autoLeaseEndAt, now);
     const autoActiveSec = Math.max(0, (effectiveAutoEnd - lastOnlineAt) / 1000);
-    const cappedMaxDigs = Math.floor(autoActiveSec / autoCooldown);
+    // Upper bound on digs by time. The loop below further caps by basket cap
+    // and pickaxe durability, so the player never gets more than they should.
+    const maxDigsByTime = Math.floor(autoActiveSec / autoCooldownSec);
 
-    for (let i = 0; i < cappedMaxDigs && basketMass < basketCap; i++) {
-      if (!next.activePickaxe || next.activePickaxe.durability < tier.durabilityCost) break;
+    let basket = [...next.autoBasket];
+    let basketCases = [...next.autoBasketCases];
+    let activePickaxe = next.activePickaxe ? { ...next.activePickaxe } : null;
+    let sparePickaxes = [...next.sparePickaxes];
+    let totalDigs = next.totalDigs;
+    let gems = next.gems;
+    let totalGemsEarned = next.totalGemsEarned;
+    let basketMass = basket.reduce((s, it) => s + it.mass, 0);
+    let digsDone = 0;
+
+    for (let i = 0; i < maxDigsByTime; i++) {
+      if (basketMass >= basketCap) break;
+      if (!activePickaxe || activePickaxe.durability < tier.durabilityCost) break;
 
       let yieldMult = 1;
       if (itemEff.oreYieldMultChance > 0 && Math.random() < itemEff.oreYieldMultChance) {
@@ -259,38 +278,44 @@ export function processOfflineProgress(
         basketMass += mass;
       }
       digsDone++;
+      totalDigs++;
 
-      const newDur = Math.round(next.activePickaxe.durability - tier.durabilityCost * AUTO_DURABILITY_MULT);
+      const newDur = Math.round(activePickaxe.durability - tier.durabilityCost * AUTO_DURABILITY_MULT);
       if (newDur <= 0) {
-        if (next.sparePickaxes.length > 0) {
-          const spare = next.sparePickaxes[0];
-          next.activePickaxe = { ...spare };
-          next.sparePickaxes = next.sparePickaxes.slice(1);
+        if (sparePickaxes.length > 0) {
+          activePickaxe = { ...sparePickaxes[0] };
+          sparePickaxes = sparePickaxes.slice(1);
         } else {
-          next.activePickaxe = { ...next.activePickaxe, durability: 0 };
+          activePickaxe = { ...activePickaxe, durability: 0 };
           break;
         }
       } else {
-        next.activePickaxe = { ...next.activePickaxe, durability: newDur };
+        activePickaxe = { ...activePickaxe, durability: newDur };
       }
 
       if (rollAutoCaseDrop(next.upgrades.caseChanceLvl, next.autoLeaseMineId || 1)) {
         const rarity = rollCaseRarity();
-        basketCases.push({ id: `case-${now}-${i}-${Math.random()}`, rarity, opened: false });
+        basketCases.push({ id: `case-offline-${now}-${i}-${Math.random()}`, rarity, opened: false });
       }
 
       const offlineDiamond = rollDiamondDrop(getDiamondChanceBonus(next.upgrades.diamondChanceLvl ?? 0), next.autoLeaseMineId || 1);
       if (offlineDiamond.dropped) {
-        next.gems = next.gems + offlineDiamond.amount;
-        next.totalGemsEarned = (next.totalGemsEarned || 0) + offlineDiamond.amount;
+        gems = gems + offlineDiamond.amount;
+        totalGemsEarned = (totalGemsEarned || 0) + offlineDiamond.amount;
       }
     }
 
     if (digsDone > 0) {
       next.autoBasket = basket;
       next.autoBasketCases = basketCases;
-      next.totalDigs = next.totalDigs + digsDone;
-      next.lastAutoDigAt = now;
+      next.activePickaxe = activePickaxe;
+      next.sparePickaxes = sparePickaxes;
+      next.totalDigs = totalDigs;
+      next.gems = gems;
+      next.totalGemsEarned = totalGemsEarned;
+      // Advance lastAutoDigAt by the time actually consumed so the live tick
+      // resumes from the right point and doesn't re-process offline time.
+      next.lastAutoDigAt = effectiveAutoEnd;
       changed = true;
     }
   }

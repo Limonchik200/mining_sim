@@ -222,6 +222,7 @@ export default function SettingsTab() {
         <AdvancedStatsModal
           stats={state.stats}
           lang={state.settings.lang}
+          ownedItemsCount={state.ownedItems.length}
           onClose={() => setAdvancedStatsOpen(false)}
         />
       )}

@@ -1,4 +1,4 @@
-import type { GameState, GameStats } from '@/types';
+import type { GameState, GameStats } from '@/types/player';
 import { ENERGY_MAX, BASE_AUTO_BASKET_MAX } from '@/config/minesConfig';
 import { getPickaxeTier } from '@/config/pickaxesConfig';
 import {
@@ -17,6 +17,15 @@ import { generateMaterialsShopSlots } from '@/config/materialsShopConfig';
 import { generateSpecialOffers } from '@/config/specialOffersConfig';
 import { GENERATOR_TANK_CAPACITY } from '@/config/generatorConfig';
 import { gemsForLevel } from '@/config/levelUnlocks';
+import {
+  dailyCycleKey,
+  weeklyCycleKey,
+  generateDailyQuests,
+  generateWeeklyQuests,
+  DAILY_LEVEL_REQUIRED,
+  WEEKLY_LEVEL_REQUIRED,
+} from '@/features/quests/questData';
+import type { QuestsState } from '@/features/quests/types';
 
 export const STORAGE_KEY = 'mining-sim-v3-save';
 export const EXPEDITION_REFRESH_MS = 3 * 60 * 60 * 1000;
@@ -163,7 +172,27 @@ export function createInitialState(): GameState {
       return gen;
     })(),
     stats: createInitialStats(),
+    quests: createInitialQuests(),
     lastSavedAt: Date.now(),
+  };
+}
+
+export function createInitialQuests(): QuestsState {
+  const now = Date.now();
+  const emptyStats = createInitialStats();
+  return {
+    daily: {
+      generatedAt: now,
+      cycleKey: dailyCycleKey(),
+      quests: generateDailyQuests(emptyStats),
+      allClaimedRewardClaimed: false,
+    },
+    weekly: {
+      generatedAt: now,
+      cycleKey: weeklyCycleKey(),
+      quests: generateWeeklyQuests(emptyStats, 1),
+      allClaimedRewardClaimed: false,
+    },
   };
 }
 
@@ -205,6 +234,17 @@ export function createInitialStats(): GameStats {
     casesDugEpic: 0,
     casesDugLegendary: 0,
     lastDayKey: 0,
+    repairsMade: 0,
+    basketCollected: 0,
+    sellsCount: 0,
+    purchasesCount: 0,
+    energyRestored: 0,
+    fuelBoughtLiters: 0,
+    generatorEnergyProduced: 0,
+    playSeconds: 0,
+    dailyRewardsClaimed: 0,
+    expeditionCasesEarned: 0,
+    materialPacksBought: 0,
   };
 }
 
@@ -357,6 +397,27 @@ export function migrateState(saved: Partial<GameState>): GameState {
   if (typeof saved.totalEarned === 'number') merged.stats.moneyEarned = saved.totalEarned;
   if (typeof saved.totalCasesOpened === 'number') merged.stats.totalCasesOpened = saved.totalCasesOpened;
 
+  merged.quests = saved.quests
+    ? {
+        daily: {
+          generatedAt: saved.quests.daily?.generatedAt ?? Date.now(),
+          cycleKey: saved.quests.daily?.cycleKey ?? dailyCycleKey(),
+          quests: Array.isArray(saved.quests.daily?.quests) && merged.level >= DAILY_LEVEL_REQUIRED
+            ? saved.quests.daily.quests
+            : generateDailyQuests(merged.stats),
+          allClaimedRewardClaimed: saved.quests.daily?.allClaimedRewardClaimed ?? false,
+        },
+        weekly: {
+          generatedAt: saved.quests.weekly?.generatedAt ?? Date.now(),
+          cycleKey: saved.quests.weekly?.cycleKey ?? weeklyCycleKey(),
+          quests: Array.isArray(saved.quests.weekly?.quests) && merged.level >= WEEKLY_LEVEL_REQUIRED
+            ? saved.quests.weekly.quests
+            : generateWeeklyQuests(merged.stats, merged.level),
+          allClaimedRewardClaimed: saved.quests.weekly?.allClaimedRewardClaimed ?? false,
+        },
+      }
+    : createInitialQuests();
+
   return merged;
 }
 
@@ -368,16 +429,23 @@ export function loadState(): GameState {
       return createInitialState();
     }
     const saved = JSON.parse(raw) as Partial<GameState>;
-    const migrated = migrateState(saved);
-    console.log('[GameContext] Save loaded.', {
-      level: migrated.level,
-      balance: migrated.balance,
-      gems: migrated.gems,
-      ownedItems: migrated.ownedItems.length,
-      equippedItems: migrated.equippedItems.filter(Boolean).length,
-      savedAt: new Date(migrated.lastSavedAt).toISOString(),
-    });
-    return migrated;
+    try {
+      const migrated = migrateState(saved);
+      console.log('[GameContext] Save loaded.', {
+        level: migrated.level,
+        balance: migrated.balance,
+        gems: migrated.gems,
+        ownedItems: migrated.ownedItems.length,
+        equippedItems: migrated.equippedItems.filter(Boolean).length,
+        savedAt: new Date(migrated.lastSavedAt).toISOString(),
+      });
+      return migrated;
+    } catch (migrateErr) {
+      console.error('[GameContext] Migration failed, preserving raw save.', migrateErr);
+      // Fallback: merge raw saved data as-is onto a fresh base so the player
+      // keeps their progress even if a migration step is broken.
+      return { ...createInitialState(), ...saved };
+    }
   } catch (e) {
     console.error('[GameContext] Failed to load save, starting fresh.', e);
     return createInitialState();

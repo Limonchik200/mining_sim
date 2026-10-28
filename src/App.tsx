@@ -81,7 +81,7 @@ function GameApp() {
   const { activeTab, t, state, levelUpData, setLevelUpData, lang } = useGame();
 
   return (
-    <div className="min-h-screen bg-neutral-100 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 transition-colors duration-300 overflow-y-auto">
+    <div className="min-h-screen bg-neutral-100 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 transition-colors duration-300">
       {/* Header */}
       <header className="sticky top-0 z-30 bg-white/80 dark:bg-neutral-900/80 backdrop-blur-md border-b border-neutral-200 dark:border-neutral-800" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         <div className="max-w-2xl mx-auto px-4 py-2.5 flex items-center justify-between">
@@ -94,7 +94,7 @@ function GameApp() {
       </header>
 
       {/* Main content */}
-      <main className="max-w-2xl mx-auto px-3 sm:px-4 py-4 pb-28 space-y-4 overflow-y-auto" style={{ paddingBottom: 'calc(7rem + env(safe-area-inset-bottom, 0px))' }}>
+      <main className="max-w-2xl mx-auto px-3 sm:px-4 py-4 space-y-4" style={{ paddingBottom: 'calc(7rem + env(safe-area-inset-bottom, 0px))' }}>
         {activeTab === 'mining' && <MiningTab />}
         {activeTab === 'shop' && <ShopTab />}
         {activeTab === 'upgrades' && <UpgradesTab />}

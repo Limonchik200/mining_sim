@@ -49,7 +49,7 @@ export const SPECIAL_OFFER_BUNDLES: SpecialOfferBundle[] = [
     nameUk: 'Набір матеріалів',
     nameRu: 'Набор материалов',
     nameEn: 'Materials Pack',
-    basePriceGems: 270,
+    basePriceGems: 300,
     rewards: [
       { type: 'scroll', amount: 35 },
       { type: 'ruby_dust', amount: 20 },
