@@ -91,6 +91,15 @@ export const PROMO_CODES: PromoCode[] = [
     messageRu: 'Получен полный набор материалов для прокачки!',
   },
   {
+  code: 'compensation_bags',
+  type: 'items', // або комбінований тип, залежно від того, як твій код обробляє і геми, і сумки одночасно
+  gems: 250,
+  itemBags: 2, // або відповідна назва поля для сумок з предметами, судячи з твоїх попередніх скріншотів (де було itemBags: 50)
+  messageUk: 'Компенсація за баг на старті: отримано 250 гемів та 2 сумки з предметами!',
+  messageEn: 'Start bug compensation: received 250 gems and 2 item bags!',
+  messageRu: 'Компенсация за баг на старте: получено 250 гемов и 2 сумки с     предметами!',
+},
+  {
     code: 'items5',
     type: 'items',
     gems: 15,
