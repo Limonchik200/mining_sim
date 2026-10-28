@@ -25,9 +25,14 @@ import {
   ShoppingBag,
   ChevronRight,
   AlertTriangle,
+  Skull,
 } from 'lucide-react';
 
-export default function MiningTab() {
+interface MiningTabProps {
+  onOpenBosses?: () => void;
+}
+
+export default function MiningTab({ onOpenBosses }: MiningTabProps = {}) {
   const { state, dig, collectBasket, t, lang, currentAutoCooldownMs, currentBasketCap, currentMineId, setCurrentMineId, repairActivePickaxe, currentEnergyRegenSeconds, currentEnergyRegenAmount, totalItemEffects, currentEnergyMax, isMineUnlocked, startMineUnlock, speedUpMineUnlock, checkMineUnlockRequirements, setItemsOpen } = useGame();
   const [, force] = useState(0);
   const [showMineSelector, setShowMineSelector] = useState(false);
@@ -156,12 +161,23 @@ export default function MiningTab() {
             </>
           )}
         </button>
-        <button
-          onClick={() => setShowMineSelector(true)}
-          className="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-xl shadow-lg flex items-center gap-2 font-bold text-sm border border-amber-400/30 transition-all"
-        >
-          ⛏️ {mineName}
-        </button>
+        <div className="flex gap-2">
+          {onOpenBosses && (
+            <button
+              onClick={onOpenBosses}
+              className="bg-red-600 hover:bg-red-500 text-white px-3 py-2 rounded-xl shadow-lg flex items-center gap-1.5 font-bold text-sm border border-red-400/30 transition-all"
+            >
+              <Skull className="w-4 h-4" />
+              {lang === 'ru' ? 'Боссы' : (lang === 'uk' ? 'Боси' : 'Bosses')}
+            </button>
+          )}
+          <button
+            onClick={() => setShowMineSelector(true)}
+            className="bg-amber-600 hover:bg-amber-500 text-white px-4 py-2 rounded-xl shadow-lg flex items-center gap-2 font-bold text-sm border border-amber-400/30 transition-all"
+          >
+            ⛏️ {mineName}
+          </button>
+        </div>
       </div>
 
       {/* Mine Room Visual */}

@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { GameProvider, useGame } from '@/context/GameContext';
+import { BossProvider } from '@/context/BossContext';
+import { BossesScreen } from '@/components/bosses/BossesScreen';
 import TabNav from '@/components/TabNav';
 import MiningTab from '@/components/MiningTab';
 import ShopTab from '@/components/ShopTab';
@@ -79,6 +81,7 @@ function Balances() {
 
 function GameApp() {
   const { activeTab, t, state, levelUpData, setLevelUpData, lang } = useGame();
+  const [currentScreen, setCurrentScreen] = useState<'mine' | 'bosses'>('mine');
 
   return (
     <div className="min-h-screen bg-neutral-100 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 transition-colors duration-300">
@@ -95,12 +98,18 @@ function GameApp() {
 
       {/* Main content */}
       <main className="max-w-2xl mx-auto px-3 sm:px-4 py-4 space-y-4" style={{ paddingBottom: 'calc(7rem + env(safe-area-inset-bottom, 0px))' }}>
-        {activeTab === 'mining' && <MiningTab />}
-        {activeTab === 'shop' && <ShopTab />}
-        {activeTab === 'upgrades' && <UpgradesTab />}
-        {activeTab === 'equipment' && <EquipmentTab />}
-        {activeTab === 'expeditions' && <ExpeditionsTab />}
-        {activeTab === 'settings' && <SettingsTab />}
+        {currentScreen === 'bosses' ? (
+          <BossesScreen onBackToMain={() => setCurrentScreen('mine')} />
+        ) : (
+          <>
+            {activeTab === 'mining' && <MiningTab onOpenBosses={() => setCurrentScreen('bosses')} />}
+            {activeTab === 'shop' && <ShopTab />}
+            {activeTab === 'upgrades' && <UpgradesTab />}
+            {activeTab === 'equipment' && <EquipmentTab />}
+            {activeTab === 'expeditions' && <ExpeditionsTab />}
+            {activeTab === 'settings' && <SettingsTab />}
+          </>
+        )}
       </main>
 
       {/* Bottom tab nav */}
@@ -136,7 +145,9 @@ function GameApp() {
 function App() {
   return (
     <GameProvider>
-      <GameApp />
+      <BossProvider>
+        <GameApp />
+      </BossProvider>
     </GameProvider>
   );
 }
