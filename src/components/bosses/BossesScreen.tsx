@@ -31,6 +31,8 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({ onBackToMain }) => {
     buyExchangeItem,
     upgradePlayerStat,
     hasUsedChestDiscount,
+    materials,
+    attackCooldown,
   } = useBossContext();
 
   // Активна вкладка (bosses | equipment | upgrades | exchange)
@@ -188,7 +190,7 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({ onBackToMain }) => {
             hpLevel={playerStats.upgrades.hpLevel}
             regenLevel={playerStats.upgrades.regenLevel}
             dodgeLevel={playerStats.upgrades.dodgeLevel}
-            playerResources={{ tokens: playerStats.tokens, medals: playerStats.medals }}
+            playerResources={{ ...materials, tokens: playerStats.tokens, medals: playerStats.medals }}
             onUpgrade={upgradePlayerStat}
           />
         )}
@@ -223,6 +225,7 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({ onBackToMain }) => {
         playerMaxHp={playerStats.maxHp}
         battleLog={battleLog}
         isFighting={isFighting}
+        attackCooldown={attackCooldown}
         onAttack={processAttack}
         onClose={() => setIsBattleModalOpen(false)}
         lootData={lootData}
