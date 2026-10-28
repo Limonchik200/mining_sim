@@ -12,6 +12,8 @@ export interface PromoCode {
   gems?: number;
   cases?: { rarity: CaseRarityType; count: number }[];
   itemBags?: number;
+  suitcases?: number;
+  chronoCapsules?: number;
   materials?: Record<string, number>;
   messageUk: string;
   messageEn: string;
@@ -91,15 +93,6 @@ export const PROMO_CODES: PromoCode[] = [
     messageRu: 'Получен полный набор материалов для прокачки!',
   },
   {
-  code: 'compensation_bags',
-  type: 'items', // або комбінований тип, залежно від того, як твій код обробляє і геми, і сумки одночасно
-  gems: 250,
-  itemBags: 2, // або відповідна назва поля для сумок з предметами, судячи з твоїх попередніх скріншотів (де було itemBags: 50)
-  messageUk: 'Компенсація за баг на старті: отримано 250 гемів та 2 сумки з предметами!',
-  messageEn: 'Start bug compensation: received 250 gems and 2 item bags!',
-  messageRu: 'Компенсация за баг на старте: получено 250 гемов и 2 сумки с     предметами!',
-},
-  {
     code: 'items5',
     type: 'items',
     gems: 15,
@@ -122,17 +115,6 @@ export const PROMO_CODES: PromoCode[] = [
     messageRu: '+25 кристаллов и 1 Эпический кейс!',
   },
   {
-  code: 'v10_epic_drop',
-  type: 'mixed', // або 'items_and_gems' залежно від обробника в коді
-  gems: 1000,
-  cases: [
-    { rarity: 'legendary', count: 3 }
-  ],
-  messageUk: 'Отримано 1000 гемів та 3 легендарних кейси!',
-  messageEn: 'Received 1000 gems and 3 legendary cases!',
-  messageRu: 'Получено 1000 гемов и 3 легендарных кейса!',
-  },
-  {
     code: 'miner2026',
     type: 'balance',
     bonusBalance: 1000,
@@ -148,6 +130,24 @@ export const PROMO_CODES: PromoCode[] = [
     messageUk: '+10 алмазів та 1 Епічний кейс!',
     messageEn: '+10 gems and 1 Epic case!',
     messageRu: '+10 алмазов и 1 Эпический кейс!',
+  },
+  {
+    code: 'adm_items2',
+    type: 'items',
+    suitcases: 100,
+    chronoCapsules: 10000,
+    messageUk: 'Отримано 100 чемоданів з предметами та 10000 хроно-капсул!',
+    messageEn: 'Received 100 item suitcases and 10000 chrono capsules!',
+    messageRu: 'Получено 100 чемоданов с предметами и 10000 хроно-капсул!',
+  },
+  {
+    code: 'quests',
+    type: 'mixed',
+    gems: 15,
+    cases: [{ rarity: 'rare', count: 1 }],
+    messageUk: '+15 алмазів та 1 Рідкісний кейс!',
+    messageEn: '+15 gems and 1 Rare case!',
+    messageRu: '+15 алмазов и 1 Редкий кейс!',
   },
 ];
 

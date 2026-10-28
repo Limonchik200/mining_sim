@@ -106,7 +106,20 @@ export function isEnergyUpgradeDiamond(level: number): boolean {
 }
 
 export function xpForLevel(level: number): number {
-  return 50 * (level * level) + 50 * level - 50;
+  if (level <= 1) return 0;
+  // Stage 1: levels 2-15 (+40% per level, reaching ~11,112 at level 15)
+  if (level <= 15) {
+    let exp = 100;
+    for (let i = 3; i <= level; i++) {
+      exp *= 1.4;
+    }
+    return Math.floor(exp);
+  }
+  // Stage 2: levels 16+ (quadratic growth)
+  const expAt15 = 11112;
+  const scale = level - 15;
+  const quadraticGrowth = scale * scale * 153;
+  return Math.floor(expAt15 + quadraticGrowth);
 }
 
 // === Luck Upgrade (x2 XP drop chance) ===

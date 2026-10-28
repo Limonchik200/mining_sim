@@ -18,6 +18,7 @@ import {
   Sparkles,
   Recycle,
   Diamond,
+  Map,
 } from 'lucide-react';
 import {
   ITEM_TYPES,
@@ -41,6 +42,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string; style?:
   ShoppingBasket,
   Gem,
   Diamond,
+  Map,
 };
 
 interface EffectLine {
@@ -80,6 +82,11 @@ function getEffectLines(type: ItemType, level: ItemLevel, nextLevel: ItemLevel, 
     compare('diamondDropBonus', lang === 'ru' ? 'Шанс алмаза' : (lang === 'uk' ? 'Шанс алмазу' : 'Diamond chance'), (v) => `+${(v * 100).toFixed(3)}%`);
     compare('diamondMultChance', lang === 'ru' ? 'Множ. алмаза шанс' : (lang === 'uk' ? 'Множ. алмазу шанс' : 'Diamond mult chance'), (v) => `${Math.round(v * 100)}%`);
     compare('diamondMult', lang === 'ru' ? 'Множ. алмаза' : (lang === 'uk' ? 'Множ. алмазу' : 'Diamond mult'), (v) => `x${v}`);
+  }
+  if (type === 'roadmap') {
+    compare('expeditionExtraChance', lang === 'ru' ? 'Доп. экспедиции' : (lang === 'uk' ? 'Дод. експедиції' : 'Extra expeditions'), (v) => `${Math.round(v * 100)}%`);
+    compare('expeditionExtraCount', lang === 'ru' ? 'Кол-во доп. эксп.' : (lang === 'uk' ? 'Кіл-ть дод. експ.' : 'Extra count'), (v) => `+${v}`);
+    compare('expeditionTier6Chance', lang === 'ru' ? 'Шанс Тир-6' : (lang === 'uk' ? 'Шанс Тір-6' : 'Tier-6 chance'), (v) => `${Math.round(v * 100)}%`);
   }
 
   return lines;

@@ -6,7 +6,7 @@ import {
   getRewardDisplayName,
   type SpecialOfferBundle,
 } from '@/config/specialOffersConfig';
-import { Gem, Package, Layers, HardHat, Gift, Check, Clock, ShoppingBag } from 'lucide-react';
+import { Gem, Package, Layers, HardHat, Gift, Check, Clock, ShoppingBag, Briefcase, Timer } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 const ICON_MAP: Record<string, LucideIcon> = {
@@ -15,6 +15,8 @@ const ICON_MAP: Record<string, LucideIcon> = {
   HardHat,
   Gift,
   ShoppingBag,
+  Briefcase,
+  Timer,
 };
 
 export default function SpecialOffersSubTab() {
@@ -119,6 +121,7 @@ export default function SpecialOffersSubTab() {
               </div>
             ) : (
               <button
+                type="button"
                 onClick={() => buySpecialOffer(idx)}
                 disabled={!canAfford}
                 className={`btn w-full py-2 text-sm rounded-lg flex items-center justify-center gap-1.5 ${

@@ -12,7 +12,9 @@ export type SpecialOfferRewardType =
   | 'oxygen_tank_medium'
   | 'battery_weak'
   | 'case_rare'
-  | 'case_epic';
+  | 'case_epic'
+  | 'item_case_suitcase'
+  | 'chrono_capsule';
 
 export interface SpecialOfferReward {
   type: SpecialOfferRewardType;
@@ -84,6 +86,31 @@ export const SPECIAL_OFFER_BUNDLES: SpecialOfferBundle[] = [
     ],
     icon: 'Gift',
     color: '#ec4899',
+  },
+  {
+    id: 'expedition_pack',
+    nameUk: 'Набір експедиції',
+    nameRu: 'Набор экспедиции',
+    nameEn: 'Expedition Pack',
+    basePriceGems: 50,
+    rewards: [
+      { type: 'chrono_capsule', amount: 10 },
+    ],
+    icon: 'Timer',
+    color: '#06b6d4',
+  },
+  {
+    id: 'big_items_pack',
+    nameUk: 'Великий набір предметів',
+    nameRu: 'Большой набор предметов',
+    nameEn: 'Big Items Pack',
+    basePriceGems: 500,
+    rewards: [
+      { type: 'item_case_suitcase', amount: 1 },
+      { type: 'item_bag', amount: 2 },
+    ],
+    icon: 'Briefcase',
+    color: '#f59e0b',
   },
 ];
 
@@ -163,6 +190,8 @@ export function getRewardDisplayName(type: SpecialOfferRewardType, lang: Lang): 
     battery_weak: { ru: 'Слабый аккумулятор', uk: 'Слабкий акумулятор', en: 'Weak Accumulator' },
     case_rare: { ru: 'Редкий кейс', uk: 'Рідкісний кейс', en: 'Rare Case' },
     case_epic: { ru: 'Эпический кейс', uk: 'Епічний кейс', en: 'Epic Case' },
+    item_case_suitcase: { ru: 'Чемодан с предметами', uk: 'Чемодан з предметами', en: 'Item Suitcase' },
+    chrono_capsule: { ru: 'Хроно-капсула', uk: 'Хроно-капсула', en: 'Chrono Capsule' },
   };
   const n = names[type];
   return lang === 'ru' ? n.ru : lang === 'uk' ? n.uk : n.en;

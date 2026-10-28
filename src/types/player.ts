@@ -124,6 +124,8 @@ export interface GameState {
   cases: import('./inventory').CaseItem[];
   autoBasketCases: import('./inventory').CaseItem[];
   itemBags: number;
+  suitcases: number;
+  chronoCapsules: number;
 
   upgrades: UpgradeState;
   equipment: EquipmentUpgradeState;

@@ -120,6 +120,7 @@ import {
   type GeneratedExpedition,
   type MaterialId,
 } from '@/config/expeditions';
+import { openSuitcase as rollSuitcase, getSuitcaseName, type SuitcaseOpenResult } from '@/config/suitcaseConfig';
 import {
   ITEM_TYPES,
   rollItemFromBag,
@@ -207,6 +208,7 @@ interface GameContextValue {
   openCase: (caseId: string) => CaseOpenResult | null;
   openAllCases: () => CaseOpenResult[];
   openCasesByRarity: (rarity: CaseRarity) => CaseOpenResult[];
+  openCasesByAmount: (rarity: CaseRarity, amount: number) => CaseOpenResult[];
   backpackOpen: boolean;
   setBackpackOpen: (open: boolean) => void;
   currentAutoCooldownMs: number;
@@ -228,6 +230,10 @@ interface GameContextValue {
   startExpedition: (expeditionId: string) => void;
   claimExpedition: (expeditionId: string) => void;
   refreshExpeditions: () => void;
+  refreshExpeditionsOnTabFocus: () => void;
+  refreshExpeditionsWithCapsules: () => void;
+  openSuitcase: () => SuitcaseOpenResult | null;
+  applyChronoCapsule: (expeditionId: string) => void;
   itemsOpen: boolean;
   setItemsOpen: (open: boolean) => void;
   openItemBag: () => OwnedItem | null;
@@ -1423,6 +1429,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const bonusBalance = promo.bonusBalance || 0;
       const bonusGems = promo.gems || 0;
       const itemBags = promo.itemBags || 0;
+      const promoSuitcases = promo.suitcases || 0;
+      const promoChronoCapsules = promo.chronoCapsules || 0;
       const materials = promo.materials || {};
 
       setState((prev) => {
@@ -1437,6 +1445,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
           totalGemsEarned: prev.totalGemsEarned + bonusGems,
           cases: [...(prev.cases || []), ...newCases],
           itemBags: (prev.itemBags || 0) + itemBags,
+          suitcases: (prev.suitcases || 0) + promoSuitcases,
+          chronoCapsules: (prev.chronoCapsules || 0) + promoChronoCapsules,
           materials: newMaterials,
           redeemedPromoCodes: [...(prev.redeemedPromoCodes || []), cleanCode],
           stats: { ...prev.stats, moneyEarned: Math.round((prev.stats.moneyEarned + bonusBalance) * 100) / 100, gemsEarned: prev.stats.gemsEarned + bonusGems },
@@ -1725,6 +1735,69 @@ export function GameProvider({ children }: { children: ReactNode }) {
     return results;
   }, [pushNotification, tr, lang]);
 
+  const openCasesByAmount = useCallback((rarity: CaseRarity, amount: number): CaseOpenResult[] => {
+    const current = stateRef.current;
+    const matching = current.cases.filter((c) => !c.opened && c.rarity === rarity).slice(0, amount);
+    if (matching.length === 0) return [];
+
+    const results: CaseOpenResult[] = [];
+    let totalCash = 0;
+    let totalGems = 0;
+    let totalItemBags = 0;
+    let totalSolarEssence = 0;
+
+    for (const caseItem of matching) {
+      const loot = openCaseLoot(caseItem.rarity, current.level);
+      results.push({
+        rarity: caseItem.rarity,
+        loot: { type: loot.type, amount: loot.amount, label: lang === 'ru' ? loot.labelRu : (lang === 'uk' ? loot.label : loot.labelEn) },
+      });
+      if (loot.type === 'cash') totalCash += loot.amount;
+      else if (loot.type === 'gems') totalGems += loot.amount;
+      else if (loot.type === 'itembag') totalItemBags += loot.amount;
+      else if (loot.type === 'solar_essence') totalSolarEssence += loot.amount;
+    }
+
+    const openedIds = new Set(matching.map((c) => c.id));
+    setState((prev) => {
+      let next = { ...prev };
+      next.cases = prev.cases.filter((c) => c.opened || !openedIds.has(c.id));
+      next.totalCasesOpened = prev.totalCasesOpened + matching.length;
+      const ns = { ...prev.stats };
+      ns.totalCasesOpened = prev.stats.totalCasesOpened + matching.length;
+      if (rarity === 'common') ns.casesCommonOpened += matching.length;
+      else if (rarity === 'rare') ns.casesRareOpened += matching.length;
+      else if (rarity === 'epic') ns.casesEpicOpened += matching.length;
+      else if (rarity === 'legendary') ns.casesLegendaryOpened += matching.length;
+      else if (rarity === 'energy') ns.casesEnergyOpened += matching.length;
+      if (totalCash > 0) {
+        next.balance = Math.round((prev.balance + totalCash) * 100) / 100;
+        next.totalEarned = Math.round((prev.totalEarned + totalCash) * 100) / 100;
+        ns.moneyEarned = Math.round((ns.moneyEarned + totalCash) * 100) / 100;
+      }
+      if (totalGems > 0) {
+        next.gems = prev.gems + totalGems;
+        next.totalGemsEarned = prev.totalGemsEarned + totalGems;
+        ns.gemsEarned = ns.gemsEarned + totalGems;
+      }
+      if (totalItemBags > 0) {
+        next.itemBags = (prev.itemBags || 0) + totalItemBags;
+      }
+      if (totalSolarEssence > 0) {
+        next.materials = { ...next.materials, solar_essence: (next.materials.solar_essence || 0) + totalSolarEssence };
+      }
+      next.stats = ns;
+      return next;
+    });
+
+    pushNotification({
+      message: `${tr('caseOpened')} ${matching.length}x`,
+      type: 'case',
+    });
+
+    return results;
+  }, [pushNotification, tr, lang]);
+
   const startExpedition = useCallback(
     (expeditionId: string) => {
       const current = stateRef.current;
@@ -1770,9 +1843,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
       if (now < expedition.completedAt) return;
 
       const newCases: Array<{ id: string; rarity: CaseRarity; opened: boolean }> = [];
+      let suitcasesAwarded = 0;
       for (const caseChance of expedition.caseChances) {
         if (Math.random() * 100 <= caseChance.chance) {
           const amount = caseChance.minAmount + Math.floor(Math.random() * (caseChance.maxAmount - caseChance.minAmount + 1));
+          if (caseChance.caseType === 'item_case_suitcase') {
+            suitcasesAwarded += amount;
+            continue;
+          }
           for (let i = 0; i < amount; i++) {
             newCases.push({
               id: `exp_${expedition.id}_${caseChance.caseType}_${i}_${Date.now()}`,
@@ -1781,6 +1859,20 @@ export function GameProvider({ children }: { children: ReactNode }) {
             });
           }
         }
+      }
+
+      // Road Map item: roll extra expeditions + Tier-6 drop.
+      const extraSlots =
+        Math.random() < (totalItemEffects.expeditionExtraChance || 0)
+          ? totalItemEffects.expeditionExtraCount || 0
+          : 0;
+      const tier6MapDropped = Math.random() < (totalItemEffects.expeditionTier6Chance || 0);
+      const bonusExpeditions: GeneratedExpedition[] = [];
+      for (let i = 0; i < extraSlots; i++) {
+        bonusExpeditions.push(generateExpedition(expedition.tier));
+      }
+      if (tier6MapDropped) {
+        bonusExpeditions.push(generateExpedition(6));
       }
 
       const newMaterials = { ...current.materials };
@@ -1809,17 +1901,33 @@ export function GameProvider({ children }: { children: ReactNode }) {
           totalGemsEarned: prev.totalGemsEarned + expedition.diamondReward + bonusGems,
           materials: newMaterials,
           activeExpeditions: prev.activeExpeditions.filter((e) => e.id !== expeditionId),
+          availableExpeditions: [...prev.availableExpeditions, ...bonusExpeditions],
           cases: [...prev.cases, ...newCases],
+          suitcases: (prev.suitcases || 0) + suitcasesAwarded,
           stats: {
             ...prev.stats,
             moneyEarned: Math.round((prev.stats.moneyEarned + expedition.cashReward + bonusCash) * 100) / 100,
             gemsEarned: prev.stats.gemsEarned + expedition.diamondReward + bonusGems,
-            expeditionCasesEarned: (prev.stats.expeditionCasesEarned ?? 0) + newCases.length,
+            expeditionCasesEarned: (prev.stats.expeditionCasesEarned ?? 0) + newCases.length + suitcasesAwarded,
           },
         };
         return next;
       });
 
+      if (suitcasesAwarded > 0) {
+        pushNotification({
+          message: lang === 'ru' ? `Чемодан с предметами x${suitcasesAwarded}!` : (lang === 'uk' ? `Чемодан з предметами x${suitcasesAwarded}!` : `Item Suitcase x${suitcasesAwarded}!`),
+          type: 'drop',
+          color: '#f59e0b',
+        });
+      }
+      if (tier6MapDropped) {
+        pushNotification({
+          message: lang === 'ru' ? 'Дорожная карта: найдена экспедиция Тира 6!' : (lang === 'uk' ? 'Дорожня мапа: знайдено експедицію Тіру 6!' : 'Road Map: Tier 6 expedition found!'),
+          type: 'drop',
+          color: '#f97316',
+        });
+      }
       if (basketTriggered) {
         const bonusMatStr = Object.entries(bonusMaterials)
           .map(([id, amt]) => `${id} +${amt}`)
@@ -1836,7 +1944,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       }
       pushNotification({ message: tr('expeditionsClaimed'), type: 'success' });
     },
-    [pushNotification, tr, totalItemEffects]
+    [pushNotification, tr, totalItemEffects, lang]
   );
 
   const refreshExpeditions = useCallback(() => {
@@ -1848,6 +1956,141 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }));
     pushNotification({ message: tr('expeditionsRefreshed'), type: 'info' });
   }, [pushNotification, tr, totalItemEffects]);
+
+  // v9.4.0 lazy lifecycle: expedition refresh + completed-check happen only
+  // when the player navigates to the Expeditions tab, not on app init.
+  const refreshExpeditionsOnTabFocus = useCallback(() => {
+    const now = Date.now();
+    setState((prev) => {
+      // If the refresh timer has elapsed, regenerate available slots.
+      if (prev.expeditionRefreshAt <= now) {
+        const refreshMs = Math.round(EXPEDITION_REFRESH_MS * (1 - totalItemEffects.expeditionRefreshReductionPct / 100));
+        return {
+          ...prev,
+          availableExpeditions: generateExpeditionSlots(prev.level),
+          expeditionRefreshAt: now + refreshMs,
+        };
+      }
+      return prev;
+    });
+  }, [totalItemEffects]);
+
+  // v9.4.0 Refresh expeditions instantly for 5 chrono capsules.
+  const refreshExpeditionsWithCapsules = useCallback(() => {
+    const current = stateRef.current;
+    if ((current.chronoCapsules || 0) < 5) {
+      pushNotification({
+        message: lang === 'ru' ? 'Нужно 5 хроно-капсул!' : (lang === 'uk' ? 'Потрібно 5 хроно-капсул!' : 'Need 5 chrono capsules!'),
+        type: 'error',
+      });
+      return;
+    }
+    const now = Date.now();
+    const refreshMs = Math.round(EXPEDITION_REFRESH_MS * (1 - totalItemEffects.expeditionRefreshReductionPct / 100));
+    const baseSlots = generateExpeditionSlots(current.level);
+
+    // Road Map item: chance to discover extra expeditions + Tier-6 on capsule refresh.
+    const extraSlots =
+      Math.random() < (totalItemEffects.expeditionExtraChance || 0)
+        ? totalItemEffects.expeditionExtraCount || 0
+        : 0;
+    const tier6MapDropped = Math.random() < (totalItemEffects.expeditionTier6Chance || 0);
+    const bonusExpeditions: GeneratedExpedition[] = [];
+    for (let i = 0; i < extraSlots; i++) {
+      const randomTier = baseSlots[Math.floor(Math.random() * baseSlots.length)];
+      bonusExpeditions.push(generateExpedition(randomTier.tier));
+    }
+    if (tier6MapDropped) {
+      bonusExpeditions.push(generateExpedition(6));
+    }
+
+    setState((prev) => ({
+      ...prev,
+      chronoCapsules: Math.max(0, (prev.chronoCapsules || 0) - 5),
+      availableExpeditions: [...baseSlots, ...bonusExpeditions],
+      expeditionRefreshAt: now + refreshMs,
+    }));
+    pushNotification({
+      message: lang === 'ru' ? 'Экспедиции обновлены за 5 капсул!' : (lang === 'uk' ? 'Експедиції оновлено за 5 капсул!' : 'Expeditions refreshed for 5 capsules!'),
+      type: 'success',
+    });
+    if (tier6MapDropped) {
+      pushNotification({
+        message: lang === 'ru' ? 'Дорожная карта: найдена экспедиция Тира 6!' : (lang === 'uk' ? 'Дорожня мапа: знайдено експедицію Тіру 6!' : 'Road Map: Tier 6 expedition found!'),
+        type: 'drop',
+        color: '#f97316',
+      });
+    }
+  }, [pushNotification, lang, totalItemEffects]);
+
+  const openSuitcase = useCallback((): SuitcaseOpenResult | null => {
+    const current = stateRef.current;
+    if ((current.suitcases || 0) <= 0) {
+      pushNotification({
+        message: lang === 'ru' ? 'Нет чемоданов!' : (lang === 'uk' ? 'Немає чемоданів!' : 'No suitcases!'),
+        type: 'error',
+      });
+      return null;
+    }
+    const result = rollSuitcase();
+    setState((prev) => ({
+      ...prev,
+      suitcases: Math.max(0, (prev.suitcases || 0) - 1),
+      ownedItems: [...prev.ownedItems, result.item],
+      stats: {
+        ...prev.stats,
+        itemsOwned: prev.stats.itemsOwned + 1,
+      },
+    }));
+    pushNotification({
+      message: `${getSuitcaseName(lang)}: ${lang === 'ru' ? result.labelRu : (lang === 'uk' ? result.label : result.labelEn)}`,
+      type: 'drop',
+      color: result.color,
+    });
+    return result;
+  }, [pushNotification, lang]);
+
+  // v9.4.0 ChronoCapsule: reduces an active expedition's remaining timer.
+  // 50% chance: -600s (10m), 50% chance: -900s (15m).
+  // If remaining <= reduced time, clamp to 0 (no carryover).
+  const applyChronoCapsule = useCallback(
+    (expeditionId: string) => {
+      const current = stateRef.current;
+      if ((current.chronoCapsules || 0) <= 0) {
+        pushNotification({
+          message: lang === 'ru' ? 'Нет хроно-капсул!' : (lang === 'uk' ? 'Немає хроно-капсул!' : 'No chrono capsules!'),
+          type: 'error',
+        });
+        return;
+      }
+      const expedition = current.activeExpeditions.find((e) => e.id === expeditionId);
+      if (!expedition || !expedition.completedAt) return;
+      const now = Date.now();
+      const remainingSec = Math.max(0, Math.ceil((expedition.completedAt - now) / 1000));
+      if (remainingSec <= 0) return;
+
+      const reduction = Math.random() < 0.5 ? 600 : 900;
+      const newRemainingSec = Math.max(0, remainingSec - reduction);
+      const newCompletedAt = now + newRemainingSec * 1000;
+
+      setState((prev) => ({
+        ...prev,
+        chronoCapsules: Math.max(0, (prev.chronoCapsules || 0) - 1),
+        activeExpeditions: prev.activeExpeditions.map((e) =>
+          e.id === expeditionId ? { ...e, completedAt: newCompletedAt } : e
+        ),
+      }));
+      pushNotification({
+        message: lang === 'ru'
+          ? `Хроно-капсула: -${reduction / 60} мин!`
+          : (lang === 'uk'
+            ? `Хроно-капсула: -${reduction / 60} хв!`
+            : `Chrono Capsule: -${reduction / 60} min!`),
+        type: 'success',
+      });
+    },
+    [pushNotification, lang]
+  );
 
   const openItemBag = useCallback((): OwnedItem | null => {
     const current = stateRef.current;
@@ -2642,6 +2885,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
               opened: false,
             }))),
         ],
+        suitcases: (prev.suitcases || 0) + bundle.rewards.filter((r) => r.type === 'item_case_suitcase').reduce((s, r) => s + r.amount, 0),
+        chronoCapsules: (prev.chronoCapsules || 0) + bundle.rewards.filter((r) => r.type === 'chrono_capsule').reduce((s, r) => s + r.amount, 0),
         specialOffers: { ...prev.specialOffers, offers: newOffers },
         stats: { ...prev.stats, purchasesCount: (prev.stats.purchasesCount ?? 0) + 1, gemsSpentSpecialOffers: prev.stats.gemsSpentSpecialOffers + price, specialOffersBought: prev.stats.specialOffersBought + 1 },
       };
@@ -3287,7 +3532,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           const newCharge = Math.max(0, b.currentCharge - drain);
           if (newCharge !== b.currentCharge) { changed = true; }
           return { ...b, currentCharge: newCharge };
-        });
+        }).filter((b) => b.currentCharge > 0 || b.type === 'battery_lithium');
 
         if (!changed) return prev;
 
@@ -3355,6 +3600,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     openCase,
     openAllCases,
     openCasesByRarity,
+    openCasesByAmount,
     backpackOpen,
     setBackpackOpen,
     currentAutoCooldownMs,
@@ -3376,6 +3622,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
     startExpedition,
     claimExpedition,
     refreshExpeditions,
+    refreshExpeditionsOnTabFocus,
+    refreshExpeditionsWithCapsules,
+    openSuitcase,
+    applyChronoCapsule,
     itemsOpen,
     setItemsOpen,
     openItemBag,

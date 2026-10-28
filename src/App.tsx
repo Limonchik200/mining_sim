@@ -126,7 +126,7 @@ function GameApp() {
       {/* Version badge */}
       <div className="fixed bottom-16 right-3 z-50 pointer-events-none select-none">
         <span className="text-[10px] font-mono font-semibold text-neutral-400 dark:text-neutral-600 bg-neutral-100/70 dark:bg-neutral-900/70 px-2 py-0.5 rounded-md backdrop-blur-sm">
-          V9.0.0
+          V9.6.0
         </span>
       </div>
     </div>

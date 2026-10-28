@@ -29,7 +29,7 @@ export interface MaterialRewardOption {
 }
 
 export interface CaseRewardOption {
-  caseType: 'common' | 'rare' | 'epic' | 'legendary';
+  caseType: 'common' | 'rare' | 'epic' | 'legendary' | 'item_case_suitcase';
   chance: number; // percentage
   minAmount: number;
   maxAmount: number;
@@ -53,6 +53,8 @@ export interface ExpeditionTierConfig {
   };
   materialSlots: MaterialRewardOption[][]; // array of slots, each slot has material options
   caseRewards: CaseRewardOption[];
+  /** v9.2.0: dark-theme card styling (Tier 6 only). */
+  cardColor?: string;
 }
 
 export interface GeneratedExpedition {
@@ -154,7 +156,7 @@ export const EXPEDITION_TIERS: Record<number, ExpeditionTierConfig> = {
     ],
     caseRewards: [
       { caseType: 'common', chance: 20, minAmount: 1, maxAmount: 1 }
-    ]
+    ],
   },
 
   // --- TIER 2 ---
@@ -174,7 +176,7 @@ export const EXPEDITION_TIERS: Record<number, ExpeditionTierConfig> = {
     caseRewards: [
       { caseType: 'common', chance: 20, minAmount: 1, maxAmount: 1 },
       { caseType: 'rare', chance: 5, minAmount: 1, maxAmount: 1 }
-    ]
+    ],
   },
 
   // --- TIER 3 ---
@@ -195,7 +197,7 @@ export const EXPEDITION_TIERS: Record<number, ExpeditionTierConfig> = {
     caseRewards: [
       { caseType: 'common', chance: 25, minAmount: 1, maxAmount: 1 },
       { caseType: 'rare', chance: 10, minAmount: 1, maxAmount: 1 }
-    ]
+    ],
   },
 
   // --- TIER 4 ---
@@ -223,7 +225,7 @@ export const EXPEDITION_TIERS: Record<number, ExpeditionTierConfig> = {
       { caseType: 'common', chance: 35, minAmount: 2, maxAmount: 4 },
       { caseType: 'rare', chance: 15, minAmount: 1, maxAmount: 2 },
       { caseType: 'epic', chance: 5, minAmount: 1, maxAmount: 1 }
-    ]
+    ],
   },
 
   // --- TIER 5 ---
@@ -256,7 +258,42 @@ export const EXPEDITION_TIERS: Record<number, ExpeditionTierConfig> = {
       { caseType: 'rare', chance: 45, minAmount: 2, maxAmount: 4 },
       { caseType: 'epic', chance: 20, minAmount: 1, maxAmount: 3 },
       { caseType: 'legendary', chance: 10, minAmount: 1, maxAmount: 2 }
-    ]
+    ],
+  },
+
+  // --- TIER 6 (v9.4.0 "Експедиційний прорив") ---
+  // Hidden tier: only reachable via the Road Map item's expeditionTier6Chance
+  // when claiming any completed expedition. Not part of the standard pool.
+  // Timer: 22h 40m (81600s) .. 1d 1h 10m (90600s).
+  6: {
+    tier: 6,
+    requiredPlayerLevel: 30,
+    minDurationMinutes: 81600 / 60, // 1360 min — 22h 40m
+    maxDurationMinutes: 90600 / 60, // 1510 min — 1d 1h 10m
+    minCash: 0,
+    maxCash: 0,
+    guaranteedDiamonds: {
+      minAmount: 6,
+      maxAmount: 10,
+    },
+    materialSlots: [
+      [
+        { materialId: 'scroll', chance: 70, minAmount: 17, maxAmount: 23 },
+        { materialId: 'rainbow_stone', chance: 30, minAmount: 4, maxAmount: 7 }
+      ],
+      [
+        { materialId: 'ruby_powder', chance: 40, minAmount: 11, maxAmount: 15 },
+        { materialId: 'essence', chance: 40, minAmount: 8, maxAmount: 12 },
+        { materialId: 'magma_stone', chance: 20, minAmount: 2, maxAmount: 4 }
+      ]
+    ],
+    caseRewards: [
+      { caseType: 'rare', chance: 80, minAmount: 3, maxAmount: 5 },
+      { caseType: 'epic', chance: 35, minAmount: 2, maxAmount: 3 },
+      { caseType: 'legendary', chance: 12, minAmount: 1, maxAmount: 1 },
+      { caseType: 'item_case_suitcase', chance: 8, minAmount: 1, maxAmount: 2 }
+    ],
+    cardColor: '#121212',
   }
 };
 

@@ -52,7 +52,7 @@ export const BATTERY_CONFIGS: Record<BatteryType, BatteryConfig> = {
   },
   battery_lithium: {
     type: 'battery_lithium',
-    price: 13000,
+    price: 20000,
     capacity: 100,
     space: 0.5,
     maxRecharges: 3,

@@ -137,6 +137,7 @@ function CaseCard({
   lootTable,
   onOpenOne,
   onOpenRarity,
+  onOpenAmount,
   onExpand,
   isExpanded,
   labelName,
@@ -146,6 +147,7 @@ function CaseCard({
   lootTable: typeof CASE_LOOT_TABLES[CaseRarity];
   onOpenOne: () => void;
   onOpenRarity: () => void;
+  onOpenAmount: (amount: number) => void;
   onExpand: () => void;
   isExpanded: boolean;
   labelName: string;
@@ -207,16 +209,38 @@ function CaseCard({
           ))}
         </div>
 
-        <div className="flex gap-1.5">
+        <div className="flex gap-1.5 flex-wrap">
           <button
+            type="button"
             onClick={onOpenOne}
-            className="flex-1 py-2 text-xs text-white rounded-lg font-bold transition-all duration-200 hover:shadow-md active:scale-95"
+            className="flex-1 min-w-[80px] py-2 text-xs text-white rounded-lg font-bold transition-all duration-200 hover:shadow-md active:scale-95"
             style={{ background: r.color }}
           >
             Відкрити
           </button>
+          {count >= 10 && (
+            <button
+              type="button"
+              onClick={() => onOpenAmount(10)}
+              className="py-2 px-2.5 text-xs text-white rounded-lg font-bold transition-all duration-200 hover:shadow-md active:scale-95"
+              style={{ background: r.color + 'cc' }}
+            >
+              ×10
+            </button>
+          )}
+          {count >= 50 && (
+            <button
+              type="button"
+              onClick={() => onOpenAmount(50)}
+              className="py-2 px-2.5 text-xs text-white rounded-lg font-bold transition-all duration-200 hover:shadow-md active:scale-95"
+              style={{ background: r.color + 'aa' }}
+            >
+              ×50
+            </button>
+          )}
           {count > 1 && (
             <button
+              type="button"
               onClick={onExpand}
               className="w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 hover:bg-opacity-80 active:scale-90"
               style={{ background: r.color + '20' }}
@@ -240,6 +264,7 @@ function CaseCard({
               ))}
             </div>
             <button
+              type="button"
               onClick={onOpenRarity}
               className="w-full py-2 text-xs text-white rounded-lg font-bold transition-all duration-200 hover:shadow-md active:scale-95"
               style={{ background: r.color }}
@@ -254,7 +279,7 @@ function CaseCard({
 }
 
 export default function EquipmentTab() {
-  const { state, openCase, openAllCases, openCasesByRarity, currentBackpackLimit, currentBackpackWeight, t, lang } = useGame();
+  const { state, openCase, openAllCases, openCasesByRarity, openCasesByAmount, currentBackpackLimit, currentBackpackWeight, t, lang } = useGame();
   const [results, setResults] = useState<CaseOpenResult[] | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [expandedRarity, setExpandedRarity] = useState<CaseRarity | null>(null);
@@ -298,6 +323,19 @@ export default function EquipmentTab() {
 
   const handleOpenRarity = (rarity: CaseRarity) => {
     const groupResults = openCasesByRarity(rarity);
+    if (groupResults.length > 0) {
+      setOpeningCase({ rarity, result: groupResults[0] });
+      const timer = window.setTimeout(() => {
+        setResults(groupResults);
+        setShowResults(true);
+        setOpeningCase(null);
+      }, 3000);
+      revealTimersRef.current.push(timer);
+    }
+  };
+
+  const handleOpenAmount = (rarity: CaseRarity, amount: number) => {
+    const groupResults = openCasesByAmount(rarity, amount);
     if (groupResults.length > 0) {
       setOpeningCase({ rarity, result: groupResults[0] });
       const timer = window.setTimeout(() => {
@@ -384,6 +422,7 @@ export default function EquipmentTab() {
             </h3>
             {unopenedCount > 0 && (
               <button
+                type="button"
                 onClick={handleOpenAll}
                 className="btn-primary px-3 py-1.5 text-xs flex items-center gap-1.5 transition-all duration-200 hover:shadow-md active:scale-95"
               >
@@ -415,6 +454,7 @@ export default function EquipmentTab() {
                     lootTable={lootTable}
                     onOpenOne={() => handleOpenOne(group[0].id, rarityKey)}
                     onOpenRarity={() => handleOpenRarity(rarityKey)}
+                    onOpenAmount={(amount) => handleOpenAmount(rarityKey, amount)}
                     onExpand={() => setExpandedRarity(isExpanded ? null : rarityKey)}
                     isExpanded={isExpanded}
                     labelName={name}
@@ -434,6 +474,7 @@ export default function EquipmentTab() {
 
           <div className="flex gap-1 mb-3 p-1 rounded-xl bg-neutral-100 dark:bg-neutral-850/50">
             <button
+              type="button"
               onClick={() => setInvSubTab('resources')}
               className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
                 invSubTab === 'resources'
@@ -445,6 +486,7 @@ export default function EquipmentTab() {
               {t('inventory')}
             </button>
             <button
+              type="button"
               onClick={() => setInvSubTab('materials')}
               className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
                 invSubTab === 'materials'
@@ -580,6 +622,7 @@ export default function EquipmentTab() {
                 {t('caseOpened')}
               </h2>
               <button
+                type="button"
                 onClick={closeResults}
                 className="w-8 h-8 rounded-lg bg-neutral-200 dark:bg-neutral-800 flex items-center justify-center hover:bg-neutral-300 dark:hover:bg-neutral-700 transition-colors"
               >
@@ -624,6 +667,7 @@ export default function EquipmentTab() {
               })}
             </div>
             <button
+              type="button"
               onClick={closeResults}
               className="btn-primary w-full py-2.5 text-sm mt-4 transition-all duration-200 hover:shadow-md active:scale-95"
             >

@@ -4,7 +4,6 @@ import { getPickaxeTier } from '@/config/pickaxesConfig';
 import { getRandomResourceForMine, getRandomMass, rollDiamondDrop } from '@/config/minesConfig';
 import { rollAutoCaseDrop, rollCaseRarity } from '@/config/casesConfig';
 import { computeItemEffectsForRegen, computeTotalItemEffects } from './itemEffects';
-import { generateExpeditionSlots, EXPEDITION_REFRESH_MS } from './storage';
 import type { Notification } from '@/types';
 
 type PushNotif = (notif: Omit<Notification, 'id'>) => void;
@@ -67,18 +66,9 @@ export function processTick(
     pushNotification({ message: tr('notifAutoLeaseExpired'), type: 'warning' });
   }
 
-  if (next.expeditionRefreshAt && now > next.expeditionRefreshAt) {
-    next.availableExpeditions = generateExpeditionSlots(next.level);
-    next.expeditionRefreshAt = now + EXPEDITION_REFRESH_MS;
-    changed = true;
-    pushNotification({ message: tr('expeditionsRefreshed'), type: 'info' });
-  }
-
-  if (next.level >= 3 && next.availableExpeditions.length === 0) {
-    next.availableExpeditions = generateExpeditionSlots(next.level);
-    next.expeditionRefreshAt = now + EXPEDITION_REFRESH_MS;
-    changed = true;
-  }
+  // v9.4.0 lazy lifecycle: expedition refresh no longer happens during the
+  // global tick or on app init. It is triggered exclusively when the player
+  // navigates to the Expeditions tab (refreshExpeditionsOnTabFocus).
 
   if (next.autoMiningEndsAt && now < next.autoMiningEndsAt) {
     next = processAutoDig(next, now, pushNotification, tr);
@@ -221,6 +211,10 @@ export function processOfflineProgress(
 
   const lastOnlineAt = now - offlineSec * 1000;
 
+  // Save the original auto-lease end before the expiry check below clears it,
+  // so the offline mining block can still process digs up to the expiry point.
+  const originalAutoMiningEndsAt = next.autoMiningEndsAt;
+
   if (next.activeLeaseEndsAt && now > next.activeLeaseEndsAt) {
     next.activeLeaseEndsAt = null;
     next.activeLeaseTotal = 0;
@@ -236,7 +230,7 @@ export function processOfflineProgress(
   // the auto-lease end, or the basket filling up. We compute the exact number
   // of digs that fit and execute them in order, degrading the pickaxe and
   // swapping in spares just like live play. No partial ore is lost.
-  const autoLeaseEndAt = next.autoMiningEndsAt;
+  const autoLeaseEndAt = originalAutoMiningEndsAt;
   if (autoLeaseEndAt && autoLeaseEndAt > lastOnlineAt) {
     const autoCooldownSec = getAutoCooldownMs(next.upgrades.autoCooldownLvl) / 1000;
     const basketCap = getBasketCapValue(next.upgrades.basketCapLvl);

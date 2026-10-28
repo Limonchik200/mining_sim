@@ -21,6 +21,8 @@ import {
   Lock,
   CheckCircle2,
   Diamond,
+  Briefcase,
+  Map,
 } from 'lucide-react';
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
@@ -31,6 +33,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string; style?:
   ShoppingBasket,
   Gem,
   Diamond,
+  Map,
 };
 
 function EffectDescription({ type, level, lang }: { type: ItemType; level: ItemLevel; lang: Lang }) {
@@ -60,6 +63,15 @@ function EffectDescription({ type, level, lang }: { type: ItemType; level: ItemL
   }
   if (eff.expeditionLootChance > 0) {
     parts.push(lang === 'ru' ? `${Math.round(eff.expeditionLootChance * 100)}% x${eff.expeditionLootMult} лут` : (lang === 'uk' ? `${Math.round(eff.expeditionLootChance * 100)}% x${eff.expeditionLootMult} лут` : `${Math.round(eff.expeditionLootChance * 100)}% x${eff.expeditionLootMult} loot`));
+  }
+  if (eff.expeditionExtraChance > 0) {
+    const pct = Math.round(eff.expeditionExtraChance * 100);
+    const extraStr = lang === 'ru' ? `${pct}% +${eff.expeditionExtraCount} эксп.` : (lang === 'uk' ? `${pct}% +${eff.expeditionExtraCount} експ.` : `${pct}% +${eff.expeditionExtraCount} exped.`);
+    parts.push(extraStr);
+  }
+  if (eff.expeditionTier6Chance > 0) {
+    const pct = Math.round(eff.expeditionTier6Chance * 100);
+    parts.push(lang === 'ru' ? `${pct}% Тир-6` : (lang === 'uk' ? `${pct}% Тір-6` : `${pct}% Tier-6`));
   }
   if (eff.oreYieldMultChance > 0) {
     parts.push(lang === 'ru' ? `${Math.round(eff.oreYieldMultChance * 100)}% x${eff.oreYieldMult} руда` : (lang === 'uk' ? `${Math.round(eff.oreYieldMultChance * 100)}% x${eff.oreYieldMult} руда` : `${Math.round(eff.oreYieldMultChance * 100)}% x${eff.oreYieldMult} ore`));
@@ -229,11 +241,12 @@ function ItemRevealModal({
 }
 
 export default function ItemsModal() {
-  const { state, itemsOpen, setItemsOpen, openItemBag, equipItem, unequipItem, upgradeItem, recycleItem, unlockSlot6, isSlotUnlocked, t, lang, totalItemEffects } = useGame();
+  const { state, itemsOpen, setItemsOpen, openItemBag, openSuitcase, equipItem, unequipItem, upgradeItem, recycleItem, unlockSlot6, isSlotUnlocked, t, lang, totalItemEffects } = useGame();
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
   const [selectedItem, setSelectedItem] = useState<OwnedItem | null>(null);
   const [revealedItem, setRevealedItem] = useState<OwnedItem | null>(null);
   const [bagOpening, setBagOpening] = useState(false);
+  const [suitcaseOpening, setSuitcaseOpening] = useState(false);
 
   if (!itemsOpen) return null;
 
@@ -256,11 +269,16 @@ export default function ItemsModal() {
     activeEffectsList.push({ label: lang === 'ru' ? 'Обновл.' : (lang === 'uk' ? 'Оновл.' : 'Refresh'), value: `-${totalItemEffects.expeditionRefreshReductionPct}%` });
   if (totalItemEffects.expeditionLootChance > 0)
     activeEffectsList.push({ label: lang === 'ru' ? 'Лут' : (lang === 'uk' ? 'Лут' : 'Loot'), value: `${Math.round(totalItemEffects.expeditionLootChance * 100)}% x${totalItemEffects.expeditionLootMult}` });
+  if (totalItemEffects.expeditionExtraChance > 0)
+    activeEffectsList.push({ label: lang === 'ru' ? 'Доп. эксп.' : (lang === 'uk' ? 'Дод. експ.' : 'Extra exped.'), value: `${Math.round(totalItemEffects.expeditionExtraChance * 100)}% +${totalItemEffects.expeditionExtraCount}` });
+  if (totalItemEffects.expeditionTier6Chance > 0)
+    activeEffectsList.push({ label: lang === 'ru' ? 'Тир-6' : (lang === 'uk' ? 'Тір-6' : 'Tier-6'), value: `${Math.round(totalItemEffects.expeditionTier6Chance * 100)}%` });
 
   const sortedItems = [...state.ownedItems].sort((a, b) => {
     const aEq = equippedUids.has(a.uid) ? 0 : 1;
     const bEq = equippedUids.has(b.uid) ? 0 : 1;
-    return aEq - bEq;
+    if (aEq !== bEq) return aEq - bEq;
+    return b.level - a.level;
   });
 
   const SLOT_UNLOCK_LEVELS = [0, 10, 20, 30, 40, 40];
@@ -279,6 +297,19 @@ export default function ItemsModal() {
       setBagOpening(false);
     }, 800);
   };
+
+  const handleOpenSuitcase = () => {
+    setSuitcaseOpening(true);
+    setTimeout(() => {
+      const result = openSuitcase();
+      if (result) {
+        setRevealedItem(result.item);
+      }
+      setSuitcaseOpening(false);
+    }, 800);
+  };
+
+  const handleOpenContainer = state.suitcases > 0 ? handleOpenSuitcase : handleOpenBag;
 
   return (
     <div
@@ -303,6 +334,15 @@ export default function ItemsModal() {
               >
                 <Package className="w-3.5 h-3.5" />
                 {t('itemsOpenBag')} ({state.itemBags})
+              </button>
+            )}
+            {state.suitcases > 0 && (
+              <button
+                onClick={handleOpenSuitcase}
+                className="px-3 py-1.5 text-xs font-bold rounded-lg bg-accent-500 text-white hover:bg-accent-600 transition-all flex items-center gap-1.5 animate-pulse-glow active:scale-95"
+              >
+                <Briefcase className="w-3.5 h-3.5" />
+                {t('itemsOpenSuitcase')} ({state.suitcases})
               </button>
             )}
             <button
@@ -488,11 +528,15 @@ export default function ItemsModal() {
         />
       )}
 
-      {/* Bag opening animation overlay */}
-      {bagOpening && (
+      {/* Bag/Suitcase opening animation overlay */}
+      {(bagOpening || suitcaseOpening) && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-none">
           <div className="relative">
-            <Package className="w-20 h-20 text-warning-500 animate-bag-shake" />
+            {suitcaseOpening ? (
+              <Briefcase className="w-20 h-20 text-accent-500 animate-bag-shake" />
+            ) : (
+              <Package className="w-20 h-20 text-warning-500 animate-bag-shake" />
+            )}
             <div className="absolute inset-0 rounded-full bg-warning-500/20 animate-ping" />
           </div>
         </div>
@@ -504,8 +548,8 @@ export default function ItemsModal() {
           item={revealedItem}
           lang={lang}
           onClose={() => setRevealedItem(null)}
-          onOpenAnother={handleOpenBag}
-          canOpenAnother={state.itemBags > 0}
+          onOpenAnother={handleOpenContainer}
+          canOpenAnother={state.suitcases > 0 || state.itemBags > 0}
           t={t}
         />
       )}

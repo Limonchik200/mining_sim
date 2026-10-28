@@ -12,6 +12,9 @@ const EMPTY_EFFECT: ItemEffect = {
   expeditionRefreshReductionPct: 0,
   expeditionLootChance: 0,
   expeditionLootMult: 1,
+  expeditionExtraChance: 0,
+  expeditionExtraCount: 0,
+  expeditionTier6Chance: 0,
   oreYieldMultChance: 0,
   oreYieldMult: 1,
   diamondDropBonus: 0,
@@ -40,6 +43,9 @@ export function computeTotalItemEffects(state: GameState): ItemEffect {
     agg.expeditionRefreshReductionPct += eff.expeditionRefreshReductionPct;
     agg.expeditionLootChance = Math.max(agg.expeditionLootChance, eff.expeditionLootChance);
     agg.expeditionLootMult = Math.max(agg.expeditionLootMult, eff.expeditionLootMult);
+    agg.expeditionExtraChance = Math.max(agg.expeditionExtraChance, eff.expeditionExtraChance);
+    agg.expeditionExtraCount = Math.max(agg.expeditionExtraCount, eff.expeditionExtraCount);
+    agg.expeditionTier6Chance = Math.max(agg.expeditionTier6Chance, eff.expeditionTier6Chance);
     agg.oreYieldMultChance = Math.max(agg.oreYieldMultChance, eff.oreYieldMultChance);
     agg.oreYieldMult = Math.max(agg.oreYieldMult, eff.oreYieldMult);
     agg.diamondDropBonus += eff.diamondDropBonus;

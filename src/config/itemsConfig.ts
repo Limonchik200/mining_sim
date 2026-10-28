@@ -92,6 +92,17 @@ export const ITEM_TYPES: Record<ItemType, ItemTypeInfo> = {
     descEn: 'Boosts diamond drop rate and multipliers',
     descRu: 'Повышает шанс и множитель выпадения алмазов',
   },
+  roadmap: {
+    type: 'roadmap',
+    nameUk: 'Дорожня мапа',
+    nameEn: 'Road Map',
+    nameRu: 'Дорожная карта',
+    icon: 'Map',
+    color: '#f97316',
+    descUk: 'Збільшує кількість експедицій та шанс на експедицію 6 рівня',
+    descEn: 'Increases expedition count and chance for Tier 6 expedition',
+    descRu: 'Увеличивает количество экспедиций и шанс на экспедицию 6 уровня',
+  },
 };
 
 export const ITEM_RARITIES: Record<ItemRarity, { nameUk: string; nameEn: string; nameRu: string; color: string; glow: string }> = {
@@ -130,7 +141,7 @@ export const UPGRADE_COSTS: Record<ItemLevel, MaterialCost> = {
   7: {},
 };
 
-export const ALL_ITEM_TYPES: ItemType[] = ['stopwatch', 'energizer', 'scales', 'boots', 'basket', 'obsidian_nozzle', 'diamond_ring'];
+export const ALL_ITEM_TYPES: ItemType[] = ['stopwatch', 'energizer', 'scales', 'boots', 'basket', 'obsidian_nozzle', 'diamond_ring', 'roadmap'];
 
 function rollBagRarity(): ItemRarity {
   const roll = Math.random();
@@ -158,6 +169,9 @@ const EMPTY_EFFECT: ItemEffect = {
   expeditionRefreshReductionPct: 0,
   expeditionLootChance: 0,
   expeditionLootMult: 1,
+  expeditionExtraChance: 0,
+  expeditionExtraCount: 0,
+  expeditionTier6Chance: 0,
   oreYieldMultChance: 0,
   oreYieldMult: 1,
   diamondDropBonus: 0,
@@ -237,6 +251,16 @@ const DIAMOND_RING_EFFECTS: LevelEffectMap = {
   7: { diamondDropBonus: 0.00030, diamondMultChance: 0.40, diamondMult: 4 },
 };
 
+const ROADMAP_EFFECTS: LevelEffectMap = {
+  1: { expeditionExtraChance: 0.05, expeditionExtraCount: 1 },
+  2: { expeditionExtraChance: 0.10, expeditionExtraCount: 1 },
+  3: { expeditionExtraChance: 0.15, expeditionExtraCount: 1 },
+  4: { expeditionExtraChance: 0.20, expeditionExtraCount: 1 },
+  5: { expeditionExtraChance: 0.20, expeditionExtraCount: 2 },
+  6: { expeditionExtraChance: 0.25, expeditionExtraCount: 2, expeditionTier6Chance: 0.05 },
+  7: { expeditionExtraChance: 0.35, expeditionExtraCount: 3, expeditionTier6Chance: 0.20 },
+};
+
 const EFFECT_MAPS: Record<ItemType, LevelEffectMap> = {
   stopwatch: STOPWATCH_EFFECTS,
   energizer: ENERGIZER_EFFECTS,
@@ -245,6 +269,7 @@ const EFFECT_MAPS: Record<ItemType, LevelEffectMap> = {
   basket: BASKET_EFFECTS,
   obsidian_nozzle: OBSIDIAN_NOZZLE_EFFECTS,
   diamond_ring: DIAMOND_RING_EFFECTS,
+  roadmap: ROADMAP_EFFECTS,
 };
 
 export function getItemEffect(type: ItemType, level: ItemLevel): ItemEffect {

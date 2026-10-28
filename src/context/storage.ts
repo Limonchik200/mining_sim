@@ -24,6 +24,7 @@ import {
   generateWeeklyQuests,
   DAILY_LEVEL_REQUIRED,
   WEEKLY_LEVEL_REQUIRED,
+  readStat,
 } from '@/features/quests/questData';
 import type { QuestsState } from '@/features/quests/types';
 
@@ -33,8 +34,10 @@ export const EXPEDITION_SLOTS = 4;
 export const MAX_ACTIVE_EXPEDITIONS = 1;
 
 export function generateExpeditionSlots(playerLevel: number): GeneratedExpedition[] {
+  // Tier 6 is hidden — only reachable via the Road Map item's
+  // expeditionTier6Chance when claiming a completed expedition.
   const availableTiers = Object.values(EXPEDITION_TIERS)
-    .filter((t) => playerLevel >= t.requiredPlayerLevel)
+    .filter((t) => t.tier !== 6 && playerLevel >= t.requiredPlayerLevel)
     .map((t) => t.tier);
   if (availableTiers.length === 0) availableTiers.push(1);
   const slots: GeneratedExpedition[] = [];
@@ -88,6 +91,8 @@ export function createInitialState(): GameState {
     cases: [],
     autoBasketCases: [],
     itemBags: 0,
+    suitcases: 0,
+    chronoCapsules: 0,
     upgrades: {
       activeLeaseMult: 0,
       autoLeaseMult: 0,
@@ -345,14 +350,18 @@ export function migrateState(saved: Partial<GameState>): GameState {
   ownedSet.add('shovel');
   merged.ownedPickaxes = Array.from(ownedSet);
   merged.itemBags = saved.itemBags ?? 0;
+  merged.suitcases = saved.suitcases ?? 0;
+  merged.chronoCapsules = saved.chronoCapsules ?? 0;
 
   merged.materials = saved.materials ?? {};
-  merged.activeExpeditions = saved.activeExpeditions ?? [];
+  merged.activeExpeditions = Array.isArray(saved.activeExpeditions)
+    ? saved.activeExpeditions.filter((e) => EXPEDITION_TIERS[e.tier] !== undefined)
+    : [];
   merged.expeditionRefreshAt = saved.expeditionRefreshAt ?? (Date.now() + EXPEDITION_REFRESH_MS);
   if (!saved.availableExpeditions || saved.availableExpeditions.length === 0) {
     merged.availableExpeditions = generateExpeditionSlots(merged.level);
   } else {
-    merged.availableExpeditions = saved.availableExpeditions;
+    merged.availableExpeditions = saved.availableExpeditions.filter((e) => EXPEDITION_TIERS[e.tier] !== undefined);
   }
 
   if (merged.activePickaxe) {
@@ -397,13 +406,28 @@ export function migrateState(saved: Partial<GameState>): GameState {
   if (typeof saved.totalEarned === 'number') merged.stats.moneyEarned = saved.totalEarned;
   if (typeof saved.totalCasesOpened === 'number') merged.stats.totalCasesOpened = saved.totalCasesOpened;
 
+  const fixQuestStartValues = (quests: any[], stats: GameStats) =>
+    quests.map((q) => {
+      const currentVal = readStat(stats, q.id);
+      // Fix stale placeholder quests that were generated with emptyStats
+      // (startValue=0) — re-snapshot so progress only counts from now on.
+      if (q.startValue === 0 && currentVal > 0) {
+        return { ...q, startValue: currentVal };
+      }
+      // Clamp startValue if it exceeds current stat (e.g. after a reset).
+      if (q.startValue > currentVal) {
+        return { ...q, startValue: currentVal };
+      }
+      return q;
+    });
+
   merged.quests = saved.quests
     ? {
         daily: {
           generatedAt: saved.quests.daily?.generatedAt ?? Date.now(),
           cycleKey: saved.quests.daily?.cycleKey ?? dailyCycleKey(),
           quests: Array.isArray(saved.quests.daily?.quests) && merged.level >= DAILY_LEVEL_REQUIRED
-            ? saved.quests.daily.quests
+            ? fixQuestStartValues(saved.quests.daily.quests, merged.stats)
             : generateDailyQuests(merged.stats),
           allClaimedRewardClaimed: saved.quests.daily?.allClaimedRewardClaimed ?? false,
         },
@@ -411,7 +435,7 @@ export function migrateState(saved: Partial<GameState>): GameState {
           generatedAt: saved.quests.weekly?.generatedAt ?? Date.now(),
           cycleKey: saved.quests.weekly?.cycleKey ?? weeklyCycleKey(),
           quests: Array.isArray(saved.quests.weekly?.quests) && merged.level >= WEEKLY_LEVEL_REQUIRED
-            ? saved.quests.weekly.quests
+            ? fixQuestStartValues(saved.quests.weekly.quests, merged.stats)
             : generateWeeklyQuests(merged.stats, merged.level),
           allClaimedRewardClaimed: saved.quests.weekly?.allClaimedRewardClaimed ?? false,
         },

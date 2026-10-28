@@ -22,7 +22,7 @@ import {
 } from 'lucide-react';
 
 export default function BackpackModal() {
-  const { state, backpackOpen, setBackpackOpen, openCase, openAllCases, openCasesByRarity, currentBackpackLimit, currentBackpackWeight, t, lang } = useGame();
+  const { state, backpackOpen, setBackpackOpen, openCase, openAllCases, openCasesByRarity, openCasesByAmount, currentBackpackLimit, currentBackpackWeight, t, lang } = useGame();
   const [results, setResults] = useState<CaseOpenResult[] | null>(null);
   const [showResults, setShowResults] = useState(false);
   const [expandedRarity, setExpandedRarity] = useState<CaseRarity | null>(null);
@@ -56,6 +56,14 @@ export default function BackpackModal() {
 
   const handleOpenRarity = (rarity: CaseRarity) => {
     const groupResults = openCasesByRarity(rarity);
+    if (groupResults.length > 0) {
+      setResults(groupResults);
+      setShowResults(true);
+    }
+  };
+
+  const handleOpenAmount = (rarity: CaseRarity, amount: number) => {
+    const groupResults = openCasesByAmount(rarity, amount);
     if (groupResults.length > 0) {
       setResults(groupResults);
       setShowResults(true);
@@ -135,7 +143,7 @@ export default function BackpackModal() {
                   {t('cases')}
                 </h3>
                 {unopenedCount > 0 && (
-                  <button onClick={handleOpenAll} className="btn-primary px-3 py-1 text-xs">
+                  <button type="button" onClick={handleOpenAll} className="btn-primary px-3 py-1 text-xs">
                     {t('openAllCases')} ({unopenedCount})
                   </button>
                 )}
@@ -179,16 +187,38 @@ export default function BackpackModal() {
                               </div>
                             </div>
 
-                            <div className="flex gap-1.5">
+                            <div className="flex gap-1.5 flex-wrap">
                               <button
+                                type="button"
                                 onClick={() => handleOpenOne(group[0].id)}
                                 className="btn py-1.5 px-2.5 text-xs text-white rounded-lg"
                                 style={{ backgroundColor: rarity.color }}
                               >
                                 {t('openCase')}
                               </button>
+                              {group.length >= 10 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenAmount(rarityKey, 10)}
+                                  className="btn py-1.5 px-2.5 text-xs text-white rounded-lg"
+                                  style={{ backgroundColor: rarity.color + 'cc' }}
+                                >
+                                  {lang === 'ru' ? 'Откр. 10' : (lang === 'uk' ? 'Відкр. 10' : 'Open 10')}
+                                </button>
+                              )}
+                              {group.length >= 50 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenAmount(rarityKey, 50)}
+                                  className="btn py-1.5 px-2.5 text-xs text-white rounded-lg"
+                                  style={{ backgroundColor: rarity.color + 'aa' }}
+                                >
+                                  {lang === 'ru' ? 'Откр. 50' : (lang === 'uk' ? 'Відкр. 50' : 'Open 50')}
+                                </button>
+                              )}
                               {group.length > 1 && (
                                 <button
+                                  type="button"
                                   onClick={() => setExpandedRarity(isExpanded ? null : rarityKey)}
                                   className="w-7 h-7 rounded-lg flex items-center justify-center transition-all"
                                   style={{ backgroundColor: rarity.color + '20' }}
@@ -217,6 +247,7 @@ export default function BackpackModal() {
                                 ))}
                               </div>
                               <button
+                                type="button"
                                 onClick={() => handleOpenRarity(rarityKey)}
                                 className="btn w-full py-1.5 text-xs text-white rounded-lg"
                                 style={{ backgroundColor: rarity.color }}
@@ -242,6 +273,7 @@ export default function BackpackModal() {
  {/* Sub-tabs: Resources / Materials */}
               <div className="flex gap-1 mb-3 p-1 rounded-xl bg-neutral-100 dark:bg-neutral-850/50">
                 <button
+                  type="button"
                   onClick={() => setInvSubTab('resources')}
                   className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
                     invSubTab === 'resources'
@@ -252,6 +284,7 @@ export default function BackpackModal() {
                   {t('inventory')}
                 </button>
                 <button
+                  type="button"
                   onClick={() => setInvSubTab('materials')}
                   className={`flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
                     invSubTab === 'materials'
@@ -440,7 +473,7 @@ export default function BackpackModal() {
               })}
             </div>
 
-            <button onClick={closeResults} className="btn-primary w-full py-2.5 text-sm mt-4">
+            <button type="button" onClick={closeResults} className="btn-primary w-full py-2.5 text-sm mt-4">
               {t('close')}
             </button>
           </div>
