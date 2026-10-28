@@ -113,6 +113,17 @@ export const PROMO_CODES: PromoCode[] = [
     messageRu: '+25 кристаллов и 1 Эпический кейс!',
   },
   {
+  code: 'v10_epic_drop',
+  type: 'mixed', // або 'items_and_gems' залежно від обробника в коді
+  gems: 1000,
+  cases: [
+    { rarity: 'legendary', count: 3 }
+  ],
+  messageUk: 'Отримано 1000 гемів та 3 легендарних кейси!',
+  messageEn: 'Received 1000 gems and 3 legendary cases!',
+  messageRu: 'Получено 1000 гемов и 3 легендарных кейса!',
+  },
+  {
     code: 'miner2026',
     type: 'balance',
     bonusBalance: 1000,
