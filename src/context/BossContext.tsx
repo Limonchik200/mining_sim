@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { BOSSES_CONFIG } from '../config/bosses/bossesConfig';
 import { BossCombatManager, PlayerStats } from '../managers/BossCombatManager';
 import { EquipmentManager } from '../managers/EquipmentManager';
@@ -70,6 +70,7 @@ export const BossProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Функція початку бою
   const startBattle = () => {
+    setIsFighting(true);
     setBattleLog([`Бій розпочато проти супротивника!`]);
   };
 
@@ -223,4 +224,44 @@ export const BossProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const upgradePlayerStat = (type: 'hp' | 'regen' | 'dodge') => {
     setPlayerStats(prev => {
-      if (type === 'hp') return { ...prev, upgrades: { ...prev.upgrades, hpLevel: prev.upgrades
+      if (type === 'hp') {
+        return { ...prev, upgrades: { ...prev.upgrades, hpLevel: prev.upgrades.hpLevel + 1 } };
+      }
+      if (type === 'regen') {
+        return { ...prev, upgrades: { ...prev.upgrades, regenLevel: prev.upgrades.regenLevel + 1 } };
+      }
+      return { ...prev, upgrades: { ...prev.upgrades, dodgeLevel: prev.upgrades.dodgeLevel + 1 } };
+    });
+  };
+
+  return (
+    <BossContext.Provider value={{
+      playerStats,
+      equipped: playerStats.equipped,
+      inventory,
+      activeBossId,
+      bossHpMap,
+      battleLog,
+      isFighting,
+      lootData,
+      setActiveBossId,
+      startBattle,
+      processAttack,
+      claimLoot,
+      equipItem,
+      repairItem,
+      repairAll,
+      buyExchangeItem,
+      upgradePlayerStat,
+      hasUsedChestDiscount,
+    }}>
+      {children}
+    </BossContext.Provider>
+  );
+};
+
+export const useBossContext = () => {
+  const context = useContext(BossContext);
+  if (!context) throw new Error('useBossContext must be used within a BossProvider');
+  return context;
+};
