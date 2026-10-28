@@ -185,8 +185,10 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({ onBackToMain }) => {
         {/* 3. ВКЛАДКА ПРОКАЧКИ */}
         {activeTab === 'upgrades' && (
           <UpgradesScreen
-            upgrades={playerStats.upgrades}
-            playerMedals={playerStats.medals}
+            hpLevel={playerStats.upgrades.hpLevel}
+            regenLevel={playerStats.upgrades.regenLevel}
+            dodgeLevel={playerStats.upgrades.dodgeLevel}
+            playerResources={{ tokens: playerStats.tokens, medals: playerStats.medals }}
             onUpgrade={upgradePlayerStat}
           />
         )}

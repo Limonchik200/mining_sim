@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState } from 'react';
 import { BOSSES_CONFIG } from '../config/bosses/bossesConfig';
 import { BossCombatManager, PlayerStats } from '../managers/BossCombatManager';
 import { EquipmentManager } from '../managers/EquipmentManager';
+import { PLAYER_CONFIG } from '../config/progression/playerConfig';
 
 interface BossContextType {
   playerStats: PlayerStats;
@@ -70,6 +71,8 @@ export const BossProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Функція початку бою
   const startBattle = () => {
+    const pStats = BossCombatManager.calculatePlayerTotalStats(playerStats);
+    setPlayerStats(prev => ({ ...prev, maxHp: pStats.maxHp, hp: pStats.maxHp }));
     setIsFighting(true);
     setBattleLog([`Бій розпочато проти супротивника!`]);
   };
@@ -130,6 +133,16 @@ export const BossProvider: React.FC<{ children: React.ReactNode }> = ({ children
         tokens: prev.tokens + earnedTokens,
         experience: prev.experience + earnedExp,
       }));
+    } else if (newPlayerHp <= 0) {
+      // Гравець загинув — штраф та завершення бою
+      setIsFighting(false);
+      const lostTokens = Math.floor(playerStats.tokens * (PLAYER_CONFIG.deathTokenLossPercent / 100));
+      setPlayerStats(prev => ({
+        ...prev,
+        tokens: Math.max(0, prev.tokens - lostTokens),
+        medals: Math.max(0, prev.medals - PLAYER_CONFIG.deathMedalsLoss),
+      }));
+      setBattleLog(prev => [`Ви загинули! Втрачено ${lostTokens} жетонів та ${PLAYER_CONFIG.deathMedalsLoss} медалей.`, ...prev].slice(0, 50));
     }
   };
 

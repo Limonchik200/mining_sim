@@ -97,7 +97,7 @@ export const BossBattleModal: React.FC<BossBattleModalProps> = ({
             {/* Кнопка удару / атаки */}
             <button
               onClick={onAttack}
-              disabled={isFighting || playerHp <= 0 || bossHp <= 0}
+              disabled={!isFighting || playerHp <= 0 || bossHp <= 0}
               className="w-full py-4 bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 disabled:opacity-50 rounded-xl font-extrabold text-white text-base shadow-xl transition-all uppercase tracking-wider"
             >
               {playerHp <= 0 ? 'Ви загинули...' : bossHp <= 0 ? 'Боса переможено!' : '⚡ Вдарити боса'}

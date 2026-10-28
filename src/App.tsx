@@ -113,11 +113,13 @@ function GameApp() {
       </main>
 
       {/* Bottom tab nav */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 dark:bg-neutral-900/90 backdrop-blur-md border-t border-neutral-200 dark:border-neutral-800" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
-        <div className="max-w-2xl mx-auto px-2 sm:px-3 py-1.5 sm:py-2">
-          <TabNav />
+      {currentScreen !== 'bosses' && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 dark:bg-neutral-900/90 backdrop-blur-md border-t border-neutral-200 dark:border-neutral-800" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+          <div className="max-w-2xl mx-auto px-2 sm:px-3 py-1.5 sm:py-2">
+            <TabNav />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Overlays */}
       <Notifications />
