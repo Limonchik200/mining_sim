@@ -1,31 +1,52 @@
 import React, { useState } from 'react';
-import { BOSSES_CONFIG, BossConfig } from '../../config/bosses/bossesConfig';
+import { BOSSES_CONFIG } from '../../config/bosses/bossesConfig';
+import { useBossContext } from '../../context/BossContext';
+import { EquipmentScreen } from './EquipmentScreen';
+import { UpgradesScreen } from './UpgradesScreen';
+import { ExchangeScreen } from './ExchangeScreen';
+import { BossSelectionModal } from './BossSelectionModal';
+import { BossBattleModal } from './BossBattleModal';
 
 interface BossesScreenProps {
-  playerLevel: number;
-  playerHp: number;
-  playerMaxHp: number;
-  playerTokens: number;
-  playerMedals: number;
   onBackToMain: () => void;
 }
 
-export const BossesScreen: React.FC<BossesScreenProps> = ({
-  playerLevel,
-  playerHp,
-  playerMaxHp,
-  playerTokens,
-  playerMedals,
-  onBackToMain,
-}) => {
+export const BossesScreen: React.FC<BossesScreenProps> = ({ onBackToMain }) => {
+  const {
+    playerStats,
+    equipped,
+    inventory,
+    activeBossId,
+    bossHpMap,
+    battleLog,
+    isFighting,
+    lootData,
+    setActiveBossId,
+    startBattle,
+    processAttack,
+    claimLoot,
+    equipItem,
+    repairItem,
+    repairAll,
+    buyExchangeItem,
+    upgradePlayerStat,
+    hasUsedChestDiscount,
+  } = useBossContext();
+
   // Активна вкладка (bosses | equipment | upgrades | exchange)
   const [activeTab, setActiveTab] = useState<'bosses' | 'equipment' | 'upgrades' | 'exchange'>('bosses');
   
-  // Вибраний бос (за замовчуванням перший доступний — Гнилий Мародер)
-  const [selectedBossId, setSelectedBossId] = useState<string>(BOSSES_CONFIG[0].id);
-  const [isBossModalOpen, setIsBossModalOpen] = useState<boolean>(false);
+  // Модалки
+  const [isBossSelectionOpen, setIsBossSelectionOpen] = useState<boolean>(false);
+  const [isBattleModalOpen, setIsBattleModalOpen] = useState<boolean>(false);
 
-  const currentBoss = BOSSES_CONFIG.find(b => b.id === selectedBossId) || BOSSES_CONFIG[0];
+  const currentBoss = BOSSES_CONFIG.find(b => b.id === activeBossId) || BOSSES_CONFIG[0];
+  const currentBossHp = bossHpMap[activeBossId] ?? currentBoss.hp;
+
+  const handleStartBattleClick = () => {
+    startBattle();
+    setIsBattleModalOpen(true);
+  };
 
   return (
     <div className="flex flex-col h-full w-full bg-slate-900 text-white p-4 select-none">
@@ -39,10 +60,10 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({
         </button>
         <div className="flex gap-4 text-sm font-bold">
           <div className="flex items-center gap-1 text-amber-400">
-            <span>🪙</span> <span>{playerTokens} жетонів</span>
+            <span>🪙</span> <span>{playerStats.tokens} жетонів</span>
           </div>
           <div className="flex items-center gap-1 text-cyan-400">
-            <span>🏅</span> <span>{playerMedals} медалей</span>
+            <span>🏅</span> <span>{playerStats.medals} медалей</span>
           </div>
         </div>
       </div>
@@ -91,12 +112,12 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({
           <div className="flex flex-col h-full gap-4">
             {/* Велика кнопка вибору боса зверху */}
             <button
-              onClick={() => setIsBossModalOpen(true)}
+              onClick={() => setIsBossSelectionOpen(true)}
               className="w-full py-3 px-4 bg-gradient-to-r from-red-900 to-slate-800 border border-red-500/50 rounded-xl flex justify-between items-center hover:border-red-400 transition-all shadow-lg"
             >
               <div className="text-left">
                 <span className="text-xs text-red-400 uppercase tracking-wider font-bold">Поточний супротивник</span>
-                <h2 className="text-lg font-extrabold text-white">{currentBoss.name}</h2>
+                <h2 className="text-lg font-extrabold text-white">{currentBoss.name} {currentBoss.isLord && '👑'}</h2>
               </div>
               <span className="text-xl">⚔️ Змінити боса ➡</span>
             </button>
@@ -105,9 +126,12 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({
             <div className="flex-1 bg-slate-900/80 rounded-xl border border-slate-700 flex flex-col items-center justify-center p-6 relative">
               {/* Шкала здоров'я боса */}
               <div className="absolute top-4 w-3/4 bg-slate-800 rounded-full h-4 border border-slate-600 overflow-hidden">
-                <div className="bg-red-600 h-full w-full transition-all duration-300"></div>
+                <div 
+                  className="bg-red-600 h-full transition-all duration-300"
+                  style={{ width: `${Math.max(0, (currentBossHp / currentBoss.hp) * 100)}%` }}
+                ></div>
               </div>
-              <span className="absolute top-9 text-xs text-slate-300 font-bold">HP Боса: {currentBoss.hp} / {currentBoss.hp}</span>
+              <span className="absolute top-9 text-xs text-slate-300 font-bold">HP Боса: {currentBossHp} / {currentBoss.hp}</span>
 
               {/* Моделька / Аватар боса */}
               <div className="text-6xl my-8 animate-pulse">
@@ -116,22 +140,30 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({
                  currentBoss.category === 'demons' ? '🔥👹' : '🪨🗿'}
               </div>
 
-              <div className="text-center">
+              <div className="text-center mb-4">
                 <p className="text-sm text-slate-400">Рівень виклику: <span className="text-amber-400 font-bold">{currentBoss.requiredPlayerLevel} ур.</span></p>
                 <p className="text-xs text-slate-500 mt-1">Регенерація: {currentBoss.regen} ХП/тік | Броня: {currentBoss.armor}%</p>
               </div>
+
+              {/* Кнопка вступу в бій */}
+              <button
+                onClick={handleStartBattleClick}
+                className="py-3 px-8 bg-red-600 hover:bg-red-500 text-white font-extrabold rounded-xl shadow-xl transition-all uppercase tracking-wider text-sm"
+              >
+                ⚔️ Розпочати бій
+              </button>
             </div>
 
             {/* Шкала здоров'я гравця знизу */}
             <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
               <div className="flex justify-between text-xs font-bold text-slate-300 mb-1">
                 <span>Ваше здоров'я</span>
-                <span>{playerHp} / {playerMaxHp} HP</span>
+                <span>{playerStats.hp} / {playerStats.maxHp} HP</span>
               </div>
               <div className="w-full bg-slate-900 rounded-full h-3 border border-slate-700 overflow-hidden">
                 <div 
                   className="bg-emerald-500 h-full transition-all duration-300"
-                  style={{ width: `${Math.min(100, (playerHp / playerMaxHp) * 100)}%` }}
+                  style={{ width: `${Math.min(100, (playerStats.hp / playerStats.maxHp) * 100)}%` }}
                 ></div>
               </div>
             </div>
@@ -140,78 +172,63 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({
 
         {/* 2. ВКЛАДКА ЕКІПІРОВКИ */}
         {activeTab === 'equipment' && (
-          <div className="flex flex-col items-center justify-center h-full text-slate-400">
-            <span className="text-4xl mb-2">🛡️</span>
-            <p className="font-bold text-white">Розділ екіпіровки та слотів</p>
-            <p className="text-xs text-slate-500 mt-1">Тут буде управління 6 слотами та інвентарем.</p>
-          </div>
+          <EquipmentScreen
+            equipped={equipped}
+            inventory={inventory}
+            playerTokens={playerStats.tokens}
+            onEquipItem={equipItem}
+            onRepairItem={repairItem}
+            onRepairAll={repairAll}
+          />
         )}
 
         {/* 3. ВКЛАДКА ПРОКАЧКИ */}
         {activeTab === 'upgrades' && (
-          <div className="flex flex-col items-center justify-center h-full text-slate-400">
-            <span className="text-4xl mb-2">📈</span>
-            <p className="font-bold text-white">Розділ прокачки статів</p>
-            <p className="text-xs text-slate-500 mt-1">Прокачка максимального ХП, регенерації та ухилу.</p>
-          </div>
+          <UpgradesScreen
+            upgrades={playerStats.upgrades}
+            playerMedals={playerStats.medals}
+            onUpgrade={upgradePlayerStat}
+          />
         )}
 
         {/* 4. ВКЛАДКА ОБМІННИКА */}
         {activeTab === 'exchange' && (
-          <div className="flex flex-col items-center justify-center h-full text-slate-400">
-            <span className="text-4xl mb-2">🏪</span>
-            <p className="font-bold text-white">Обмінник (Магазин жетонів)</p>
-            <p className="text-xs text-slate-500 mt-1">Покупка ящиків, осколків, пластин та алмазів.</p>
-          </div>
+          <ExchangeScreen
+            playerTokens={playerStats.tokens}
+            hasUsedChestDiscount={hasUsedChestDiscount}
+            onBuyItem={buyExchangeItem}
+          />
         )}
 
       </div>
 
       {/* Модальне вікно вибору боса */}
-      {isBossModalOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-800 border border-slate-700 rounded-2xl w-full max-w-md p-5 flex flex-col max-h-[80vh]">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-white">Виберіть боса</h3>
-              <button 
-                onClick={() => setIsBossModalOpen(false)}
-                className="text-slate-400 hover:text-white text-xl font-bold px-2"
-              >
-                ✕
-              </button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-              {BOSSES_CONFIG.map((boss) => {
-                const isUnlocked = playerLevel >= boss.requiredPlayerLevel;
-                return (
-                  <button
-                    key={boss.id}
-                    disabled={!isUnlocked}
-                    onClick={() => {
-                      setSelectedBossId(boss.id);
-                      setIsBossModalOpen(false);
-                    }}
-                    className={`w-full p-3 rounded-xl border flex justify-between items-center text-left transition-all ${
-                      selectedBossId === boss.id 
-                        ? 'bg-red-900/40 border-red-500 text-white' 
-                        : isUnlocked 
-                        ? 'bg-slate-900/50 border-slate-700 text-slate-300 hover:bg-slate-700/50' 
-                        : 'bg-slate-900/20 border-slate-800 text-slate-600 cursor-not-allowed'
-                    }`}
-                  >
-                    <div>
-                      <h4 className="font-bold text-sm">{boss.name}</h4>
-                      <p className="text-xs text-slate-400 mt-0.5">Рівень: {boss.requiredPlayerLevel} | HP: {boss.hp}</p>
-                    </div>
-                    {!isUnlocked && <span className="text-xs text-red-400 font-bold">🔒 Заблоковано</span>}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
+      <BossSelectionModal
+        isOpen={isBossSelectionOpen}
+        playerLevel={playerStats.level}
+        selectedBossId={activeBossId}
+        onSelectBoss={setActiveBossId}
+        onClose={() => setIsBossSelectionOpen(false)}
+      />
+
+      {/* Модальне вікно битви з босом */}
+      <BossBattleModal
+        isOpen={isBattleModalOpen}
+        bossName={currentBoss.name}
+        bossHp={currentBossHp}
+        bossMaxHp={currentBoss.hp}
+        playerHp={playerStats.hp}
+        playerMaxHp={playerStats.maxHp}
+        battleLog={battleLog}
+        isFighting={isFighting}
+        onAttack={processAttack}
+        onClose={() => setIsBattleModalOpen(false)}
+        lootData={lootData}
+        onClaimLoot={() => {
+          claimLoot();
+          setIsBattleModalOpen(false);
+        }}
+      />
 
     </div>
   );
