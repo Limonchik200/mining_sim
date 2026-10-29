@@ -102,6 +102,16 @@ export const bossI18n: Record<BossLang, Record<string, string>> = {
     resSolarEssence: 'Solar Essences',
     resBlackShards: 'Black Shards',
     resDiamond: 'Diamonds',
+    tabInventory: 'Inventory',
+    invMaterials: 'Materials',
+    invEquipment: 'Equipment items',
+    invChests: 'Chests',
+    openChestAnim: 'Opening...',
+    chestResult: 'You got:',
+    chestEmpty: 'Chest is empty',
+    noChests: 'No chests. Defeat bosses or buy them in the exchange!',
+    noItems: 'No equipment items. Open chests to get gear!',
+    invCount: 'Count',
   },
   ru: {
     backToMine: 'Назад в шахту',
@@ -204,6 +214,16 @@ export const bossI18n: Record<BossLang, Record<string, string>> = {
     resSolarEssence: 'Солнечные эссенции',
     resBlackShards: 'Чёрные осколки',
     resDiamond: 'Алмазы',
+    tabInventory: 'Инвентарь',
+    invMaterials: 'Материалы',
+    invEquipment: 'Предметы экипировки',
+    invChests: 'Ящики',
+    openChestAnim: 'Открываем...',
+    chestResult: 'Вы получили:',
+    chestEmpty: 'Ящик пуст',
+    noChests: 'Нет ящиков. Побеждайте боссов или покупайте в обменнике!',
+    noItems: 'Нет предметов экипировки. Открывайте ящики!',
+    invCount: 'Кол-во',
   },
   uk: {
     backToMine: 'Назад у шахту',
@@ -306,8 +326,45 @@ export const bossI18n: Record<BossLang, Record<string, string>> = {
     resSolarEssence: 'Сонячні есенції',
     resBlackShards: 'Чорні уламки',
     resDiamond: 'Алмази',
+    tabInventory: 'Інвентар',
+    invMaterials: 'Матеріали',
+    invEquipment: 'Предмети екіпіровки',
+    invChests: 'Ящики',
+    openChestAnim: 'Відкриваємо...',
+    chestResult: 'Ви отримали:',
+    chestEmpty: 'Ящик порожній',
+    noChests: 'Немає ящиків. Перемагайте босів або купуйте в обміннику!',
+    noItems: 'Немає предметів екіпіровки. Відкривайте ящики!',
+    invCount: 'К-ть',
   },
 };
+
+export const RESOURCE_DISPLAY: Record<string, { icon: string; nameKey: string }> = {
+  scroll: { icon: '📜', nameKey: 'resScroll' },
+  rainbow_stone: { icon: '🌈', nameKey: 'resRainbowStone' },
+  bones: { icon: '🦴', nameKey: 'resBone' },
+  bone: { icon: '🦴', nameKey: 'resBone' },
+  fire_rod: { icon: '🔥', nameKey: 'resFireRod' },
+  basalt_slab: { icon: '🪨', nameKey: 'resBasaltSlab' },
+  mutagen_capsule: { icon: '🧬', nameKey: 'resMutagenCapsule' },
+  tokens: { icon: '🪙', nameKey: 'resTokens' },
+  magma_stone: { icon: '🌋', nameKey: 'resMagmaStone' },
+  solar_essence: { icon: '☀️', nameKey: 'resSolarEssence' },
+  black_shards: { icon: '⚫', nameKey: 'resBlackShards' },
+  diamond: { icon: '💎', nameKey: 'resDiamond' },
+};
+
+export function formatResourceList(
+  cost: Record<string, number>,
+  t: (key: string, params?: Record<string, string | number>) => string
+): string {
+  return Object.entries(cost).map(([resKey, amt]) => {
+    const display = RESOURCE_DISPLAY[resKey];
+    const name = display ? t(display.nameKey) : resKey;
+    const icon = display?.icon || '';
+    return `${icon} ${amt} ${name}`;
+  }).join(', ');
+}
 
 export function getBossT(lang: BossLang): (key: string, params?: Record<string, string | number>) => string {
   const dict = bossI18n[lang] || bossI18n.en;

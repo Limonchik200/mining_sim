@@ -3,7 +3,7 @@ import { BOSS_EQUIPMENT_CONFIG, EquipmentItemConfig } from '../../config/bossEqu
 import { EquipmentManager } from '../../managers/EquipmentManager';
 import { EQUIPMENT_UPGRADE_COSTS } from '../../config/bossEquipment/equipmentConfig';
 import type { BossLang } from '../../config/bosses/bossI18n';
-import { getBossT } from '../../config/bosses/bossI18n';
+import { getBossT, RESOURCE_DISPLAY } from '../../config/bosses/bossI18n';
 
 interface ItemDetailsModalProps {
   instanceId: string;
@@ -40,34 +40,6 @@ const RARITY_COLORS: Record<string, string> = {
   exotic: 'text-pink-400 border-pink-500',
 };
 
-const RESOURCE_ICONS: Record<string, string> = {
-  scroll: '📜',
-  rainbow_stone: '🌈',
-  bone: '🦴',
-  fire_rod: '🔥',
-  basalt_slab: '🪨',
-  mutagen_capsule: '🧬',
-  tokens: '🪙',
-  magma_stone: '🌋',
-  solar_essence: '☀️',
-  black_shards: '⚫',
-  diamond: '💎',
-};
-
-const RESOURCE_KEYS: Record<string, string> = {
-  scroll: 'resScroll',
-  rainbow_stone: 'resRainbowStone',
-  bone: 'resBone',
-  fire_rod: 'resFireRod',
-  basalt_slab: 'resBasaltSlab',
-  mutagen_capsule: 'resMutagenCapsule',
-  tokens: 'resTokens',
-  magma_stone: 'resMagmaStone',
-  solar_essence: 'resSolarEssence',
-  black_shards: 'resBlackShards',
-  diamond: 'resDiamond',
-};
-
 export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
   instanceId, itemId, level, durability, lang, materials, onUpgrade, onEquip, onClose,
 }) => {
@@ -93,8 +65,9 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
     ? Object.entries(upgradeCost).map(([resKey, requiredAmount]) => {
         const haveAmount = materials[resKey] || 0;
         const enough = haveAmount >= requiredAmount;
-        const resName = t(RESOURCE_KEYS[resKey] || resKey);
-        const icon = RESOURCE_ICONS[resKey] || '📦';
+        const display = RESOURCE_DISPLAY[resKey];
+        const resName = display ? t(display.nameKey) : resKey;
+        const icon = display?.icon || '📦';
         return { resKey, requiredAmount, haveAmount, enough, resName, icon };
       })
     : [];

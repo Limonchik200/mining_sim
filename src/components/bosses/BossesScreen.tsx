@@ -7,6 +7,7 @@ import { UpgradesScreen } from './UpgradesScreen';
 import { ExchangeScreen } from './ExchangeScreen';
 import { BossSelectionModal } from './BossSelectionModal';
 import { BossBattleModal } from './BossBattleModal';
+import { InventoryScreen } from './InventoryScreen';
 import { getBossT } from '../../config/bosses/bossI18n';
 import type { BossLang } from '../../config/bosses/bossI18n';
 
@@ -49,7 +50,7 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({ onBackToMain }) => {
   const t = getBossT(lang);
 
   // Активна вкладка (bosses | equipment | upgrades | exchange)
-  const [activeTab, setActiveTab] = useState<'bosses' | 'equipment' | 'upgrades' | 'exchange'>('bosses');
+  const [activeTab, setActiveTab] = useState<'bosses' | 'inventory' | 'equipment' | 'upgrades' | 'exchange'>('bosses');
   
   // Модалки
   const [isBossSelectionOpen, setIsBossSelectionOpen] = useState<boolean>(false);
@@ -87,19 +88,27 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({ onBackToMain }) => {
         </div>
       </div>
 
-      {/* Перемикач 4-х вкладок режиму босів */}
-      <div className="grid grid-cols-4 gap-2 mb-4">
+      {/* Перемикач 5-ти вкладок режиму босів */}
+      <div className="grid grid-cols-5 gap-1.5 mb-4">
         <button
           onClick={() => setActiveTab('bosses')}
-          className={`py-2 px-3 rounded-lg font-bold text-sm transition-all ${
+          className={`py-2 px-2 rounded-lg font-bold text-xs sm:text-sm transition-all ${
             activeTab === 'bosses' ? 'bg-red-600 text-white shadow-md' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
           }`}
         >
           👹 {t('tabBosses')}
         </button>
         <button
+          onClick={() => setActiveTab('inventory')}
+          className={`py-2 px-2 rounded-lg font-bold text-xs sm:text-sm transition-all ${
+            activeTab === 'inventory' ? 'bg-purple-600 text-white shadow-md' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+          }`}
+        >
+          🎒 {t('tabInventory')}
+        </button>
+        <button
           onClick={() => setActiveTab('equipment')}
-          className={`py-2 px-3 rounded-lg font-bold text-sm transition-all ${
+          className={`py-2 px-2 rounded-lg font-bold text-xs sm:text-sm transition-all ${
             activeTab === 'equipment' ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
           }`}
         >
@@ -107,7 +116,7 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({ onBackToMain }) => {
         </button>
         <button
           onClick={() => setActiveTab('upgrades')}
-          className={`py-2 px-3 rounded-lg font-bold text-sm transition-all ${
+          className={`py-2 px-2 rounded-lg font-bold text-xs sm:text-sm transition-all ${
             activeTab === 'upgrades' ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
           }`}
         >
@@ -115,7 +124,7 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({ onBackToMain }) => {
         </button>
         <button
           onClick={() => setActiveTab('exchange')}
-          className={`py-2 px-3 rounded-lg font-bold text-sm transition-all ${
+          className={`py-2 px-2 rounded-lg font-bold text-xs sm:text-sm transition-all ${
             activeTab === 'exchange' ? 'bg-amber-600 text-white shadow-md' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
           }`}
         >
@@ -201,7 +210,20 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({ onBackToMain }) => {
           </div>
         )}
 
-        {/* 2. ВКЛАДКА ЕКІПІРОВКИ */}
+        {/* 2. ВКЛАДКА ІНВЕНТАРЯ */}
+        {activeTab === 'inventory' && (
+          <InventoryScreen
+            inventory={inventory}
+            materials={materials}
+            chestResult={chestResult}
+            onOpenChest={openChest}
+            onDismissChestResult={dismissChestResult}
+            onEquipItem={equipItem}
+            lang={lang}
+          />
+        )}
+
+        {/* 3. ВКЛАДКА ЕКІПІРОВКИ */}
         {activeTab === 'equipment' && (
           <EquipmentScreen
             equipped={equipped}

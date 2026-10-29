@@ -1,7 +1,7 @@
 import React from 'react';
 import { PLAYER_CONFIG, getHpUpgradeCost, getRegenUpgradeCost, getDodgeUpgradeCost } from '../../config/progression/playerConfig';
 import type { BossLang } from '../../config/bosses/bossI18n';
-import { getBossT } from '../../config/bosses/bossI18n';
+import { getBossT, RESOURCE_DISPLAY } from '../../config/bosses/bossI18n';
 
 interface UpgradesScreenProps {
   hpLevel: number;
@@ -22,9 +22,6 @@ export const UpgradesScreen: React.FC<UpgradesScreenProps> = ({
 
   const canAfford = (cost: Record<string, number>) =>
     Object.entries(cost).every(([res, amt]) => (playerResources[res] || 0) >= amt);
-
-  const formatCost = (cost: Record<string, number>) =>
-    Object.entries(cost).map(([res, amt]) => `${amt} ${res}`).join(', ');
 
   const renderUpgradeCard = (
     title: string,
@@ -55,11 +52,25 @@ export const UpgradesScreen: React.FC<UpgradesScreenProps> = ({
             {maxed ? t('maxLevelShort') : affordable ? t('upgradeButton') : t('cantAfford')}
           </button>
         </div>
-        <div className="text-xs text-slate-400 bg-slate-950/50 p-2 rounded-lg border border-slate-800 flex items-center justify-between">
-          <span className="font-bold text-slate-300">{t('costLabel')}</span>
-          <span className={affordable ? 'text-emerald-400' : 'text-red-400'}>
-            {formatCost(cost)}
-          </span>
+        <div className="text-xs text-slate-400 bg-slate-950/50 p-2 rounded-lg border border-slate-800">
+          <div className="flex items-center justify-between mb-1">
+            <span className="font-bold text-slate-300">{t('costLabel')}</span>
+          </div>
+          <div className="space-y-1">
+            {Object.entries(cost).map(([resKey, amt]) => {
+              const have = playerResources[resKey] || 0;
+              const enough = have >= amt;
+              const display = RESOURCE_DISPLAY[resKey];
+              const name = display ? t(display.nameKey) : resKey;
+              const icon = display?.icon || '';
+              return (
+                <div key={resKey} className={`flex items-center justify-between px-2 py-1 rounded-md border ${enough ? 'bg-emerald-900/30 border-emerald-700/40' : 'bg-red-900/30 border-red-700/40'}`}>
+                  <span className="text-slate-300 font-bold">{icon} {name}</span>
+                  <span className={`font-bold ${enough ? 'text-emerald-400' : 'text-red-400'}`}>{have}/{amt}</span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
     );

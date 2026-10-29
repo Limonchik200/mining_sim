@@ -191,12 +191,19 @@ export const BossProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, LOG_AUTO_CLEAR_MS);
   }, []);
 
+  // Combat regen: runs on a stable 3s interval during battle.
+  // Uses refs for current values so the interval is not reset by every attack.
+  const playerStatsRef = useRef(playerStats);
+  const bossHpMapRef = useRef(bossHpMap);
+  useEffect(() => { playerStatsRef.current = playerStats; }, [playerStats]);
+  useEffect(() => { bossHpMapRef.current = bossHpMap; }, [bossHpMap]);
+
   useEffect(() => {
     if (!isFighting) return;
     const interval = setInterval(() => {
       const currentBoss = BOSSES_CONFIG.find(b => b.id === activeBossId) || BOSSES_CONFIG[0];
-      const currentBossHp = bossHpMap[activeBossId] ?? currentBoss.hp;
-      if (currentBossHp <= 0 || playerStats.hp <= 0) return;
+      const currentBossHp = bossHpMapRef.current[activeBossId] ?? currentBoss.hp;
+      if (currentBossHp <= 0 || playerStatsRef.current.hp <= 0) return;
 
       if (currentBoss.regen > 0 && currentBossHp < currentBoss.hp) {
         setBossHpMap(prev => ({
@@ -205,8 +212,8 @@ export const BossProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }));
       }
 
-      const pStats = BossCombatManager.calculatePlayerTotalStats(playerStats);
-      if (pStats.regen > 0 && playerStats.hp < pStats.maxHp) {
+      const pStats = BossCombatManager.calculatePlayerTotalStats(playerStatsRef.current);
+      if (pStats.regen > 0 && playerStatsRef.current.hp < pStats.maxHp) {
         setPlayerStats(prev => ({
           ...prev,
           hp: Math.min(pStats.maxHp, prev.hp + pStats.regen),
@@ -214,7 +221,7 @@ export const BossProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }, REGEN_TICK_MS);
     return () => clearInterval(interval);
-  }, [isFighting, activeBossId, bossHpMap, playerStats]);
+  }, [isFighting, activeBossId]);
 
   // Returns false if on death cooldown; true if battle started
   const startBattle = (): boolean => {
@@ -254,7 +261,7 @@ export const BossProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const eq = updatedEquipped[slot];
         if (!eq) continue;
         const maxDur = EquipmentManager.getMaxDurability(eq.level);
-        const newDur = Math.max(0, Math.min(maxDur, eq.durability + durChange));
+        const newDur = Math.max(0, Math.min(maxDur, eq.durability - durChange));
         updatedEquipped[slot] = { ...eq, durability: newDur };
       }
       return { ...prev, hp: newPlayerHp, equipped: updatedEquipped };
