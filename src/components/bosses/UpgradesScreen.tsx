@@ -1,5 +1,7 @@
 import React from 'react';
 import { PLAYER_CONFIG, getHpUpgradeCost, getRegenUpgradeCost, getDodgeUpgradeCost } from '../../config/progression/playerConfig';
+import type { BossLang } from '../../config/bosses/bossI18n';
+import { getBossT } from '../../config/bosses/bossI18n';
 
 interface UpgradesScreenProps {
   hpLevel: number;
@@ -7,15 +9,13 @@ interface UpgradesScreenProps {
   dodgeLevel: number;
   playerResources: Record<string, number>;
   onUpgrade: (type: 'hp' | 'regen' | 'dodge') => void;
+  lang: BossLang;
 }
 
 export const UpgradesScreen: React.FC<UpgradesScreenProps> = ({
-  hpLevel,
-  regenLevel,
-  dodgeLevel,
-  playerResources,
-  onUpgrade,
+  hpLevel, regenLevel, dodgeLevel, playerResources, onUpgrade, lang,
 }) => {
+  const t = getBossT(lang);
   const hpCost = getHpUpgradeCost(hpLevel + 1);
   const regenCost = getRegenUpgradeCost(regenLevel + 1);
   const dodgeCost = getDodgeUpgradeCost(dodgeLevel + 1);
@@ -45,18 +45,18 @@ export const UpgradesScreen: React.FC<UpgradesScreenProps> = ({
           <div>
             <h4 className={`font-extrabold text-sm ${colorClass}`}>{title}</h4>
             <p className="text-xs text-slate-400">{description}</p>
-            <p className="text-xs text-slate-400 mt-0.5">Рівень: {level} / {maxLevel}</p>
+            <p className="text-xs text-slate-400 mt-0.5">{t('itemLevel')}: {level} / {maxLevel}</p>
           </div>
           <button
             onClick={() => onUpgrade(type)}
             disabled={maxed || !affordable}
             className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md disabled:opacity-40 ${buttonClass}`}
           >
-            {maxed ? 'Максимум' : affordable ? 'Прокачати' : 'Не вистачає'}
+            {maxed ? t('maxLevelShort') : affordable ? t('upgradeButton') : t('cantAfford')}
           </button>
         </div>
         <div className="text-xs text-slate-400 bg-slate-950/50 p-2 rounded-lg border border-slate-800 flex items-center justify-between">
-          <span className="font-bold text-slate-300">Ціна: </span>
+          <span className="font-bold text-slate-300">{t('costLabel')}</span>
           <span className={affordable ? 'text-emerald-400' : 'text-red-400'}>
             {formatCost(cost)}
           </span>
@@ -67,39 +67,24 @@ export const UpgradesScreen: React.FC<UpgradesScreenProps> = ({
 
   return (
     <div className="flex flex-col h-full gap-4 text-white overflow-y-auto pr-1">
-      <h3 className="font-bold text-sm text-slate-300">Прокачка характеристик гравця</h3>
+      <h3 className="font-bold text-sm text-slate-300">{t('upgradeTitle')}</h3>
 
       {renderUpgradeCard(
-        'Максимальне Здоров\'я (HP)',
-        'text-emerald-400',
-        'bg-emerald-600 hover:bg-emerald-500',
-        hpLevel,
-        PLAYER_CONFIG.maxHpLevel,
-        hpCost,
-        `+${PLAYER_CONFIG.hpPerLevel} HP за рівень`,
-        'hp'
+        t('upgradeHP'), 'text-emerald-400', 'bg-emerald-600 hover:bg-emerald-500',
+        hpLevel, PLAYER_CONFIG.maxHpLevel, hpCost,
+        `+${PLAYER_CONFIG.hpPerLevel} HP ${t('perLevel')}`, 'hp'
       )}
 
       {renderUpgradeCard(
-        'Регенерація ХП',
-        'text-amber-400',
-        'bg-amber-600 hover:bg-amber-500',
-        regenLevel,
-        PLAYER_CONFIG.maxRegenLevel,
-        regenCost,
-        `+${PLAYER_CONFIG.regenPerLevel} ХП/тік (тік = 3с)`,
-        'regen'
+        t('upgradeRegen'), 'text-amber-400', 'bg-amber-600 hover:bg-amber-500',
+        regenLevel, PLAYER_CONFIG.maxRegenLevel, regenCost,
+        `+${PLAYER_CONFIG.regenPerLevel} ${t('perTick')}`, 'regen'
       )}
 
       {renderUpgradeCard(
-        'Шанс ухилу від атаки',
-        'text-cyan-400',
-        'bg-cyan-600 hover:bg-cyan-500',
-        dodgeLevel,
-        PLAYER_CONFIG.maxDodgeLevel,
-        dodgeCost,
-        `+${PLAYER_CONFIG.dodgePerLevel}% за рівень`,
-        'dodge'
+        t('upgradeDodge'), 'text-cyan-400', 'bg-cyan-600 hover:bg-cyan-500',
+        dodgeLevel, PLAYER_CONFIG.maxDodgeLevel, dodgeCost,
+        `+${PLAYER_CONFIG.dodgePerLevel}% ${t('perLevel')}`, 'dodge'
       )}
     </div>
   );

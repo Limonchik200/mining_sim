@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { BOSSES_CONFIG } from '../../config/bosses/bossesConfig';
 import { useBossContext } from '../../context/BossContext';
+import { useGame } from '@/context/GameContext';
 import { EquipmentScreen } from './EquipmentScreen';
 import { UpgradesScreen } from './UpgradesScreen';
 import { ExchangeScreen } from './ExchangeScreen';
 import { BossSelectionModal } from './BossSelectionModal';
 import { BossBattleModal } from './BossBattleModal';
+import { getBossT } from '../../config/bosses/bossI18n';
+import type { BossLang } from '../../config/bosses/bossI18n';
 
 interface BossesScreenProps {
   onBackToMain: () => void;
@@ -33,7 +36,17 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({ onBackToMain }) => {
     hasUsedChestDiscount,
     materials,
     attackCooldown,
+    openChest,
+    upgradeEquipmentItem,
+    upgradeEquippedItem,
+    chestResult,
+    dismissChestResult,
+    deathCooldownEndsAt,
+    deathCooldownRemaining,
   } = useBossContext();
+  const { lang: gameLang } = useGame();
+  const lang = (gameLang === 'ru' ? 'ru' : gameLang === 'uk' ? 'uk' : 'en') as BossLang;
+  const t = getBossT(lang);
 
   // Активна вкладка (bosses | equipment | upgrades | exchange)
   const [activeTab, setActiveTab] = useState<'bosses' | 'equipment' | 'upgrades' | 'exchange'>('bosses');
@@ -46,9 +59,13 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({ onBackToMain }) => {
   const currentBossHp = bossHpMap[activeBossId] ?? currentBoss.hp;
 
   const handleStartBattleClick = () => {
-    startBattle();
-    setIsBattleModalOpen(true);
+    const started = startBattle();
+    if (started) {
+      setIsBattleModalOpen(true);
+    }
   };
+
+  const isOnDeathCooldown = deathCooldownEndsAt !== null && Date.now() < deathCooldownEndsAt;
 
   return (
     <div className="flex flex-col h-full w-full bg-slate-900 text-white p-4 select-none">
@@ -58,14 +75,14 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({ onBackToMain }) => {
           onClick={onBackToMain}
           className="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-semibold transition-colors"
         >
-          ⬅ Назад у шахту
+          ⬅ {t('backToMine')}
         </button>
         <div className="flex gap-4 text-sm font-bold">
           <div className="flex items-center gap-1 text-amber-400">
-            <span>🪙</span> <span>{playerStats.tokens} жетонів</span>
+            <span>🪙</span> <span>{playerStats.tokens} {t('tokens')}</span>
           </div>
           <div className="flex items-center gap-1 text-cyan-400">
-            <span>🏅</span> <span>{playerStats.medals} медалей</span>
+            <span>🏅</span> <span>{playerStats.medals} {t('medals')}</span>
           </div>
         </div>
       </div>
@@ -78,7 +95,7 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({ onBackToMain }) => {
             activeTab === 'bosses' ? 'bg-red-600 text-white shadow-md' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
           }`}
         >
-          👹 Боси
+          👹 {t('tabBosses')}
         </button>
         <button
           onClick={() => setActiveTab('equipment')}
@@ -86,7 +103,7 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({ onBackToMain }) => {
             activeTab === 'equipment' ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
           }`}
         >
-          🛡 Екіпіровка
+          🛡 {t('tabEquipment')}
         </button>
         <button
           onClick={() => setActiveTab('upgrades')}
@@ -94,7 +111,7 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({ onBackToMain }) => {
             activeTab === 'upgrades' ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
           }`}
         >
-          📈 Прокачка
+          📈 {t('tabUpgrades')}
         </button>
         <button
           onClick={() => setActiveTab('exchange')}
@@ -102,7 +119,7 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({ onBackToMain }) => {
             activeTab === 'exchange' ? 'bg-amber-600 text-white shadow-md' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
           }`}
         >
-          🏪 Обмінник
+          🏪 {t('tabExchange')}
         </button>
       </div>
 
@@ -118,10 +135,10 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({ onBackToMain }) => {
               className="w-full py-3 px-4 bg-gradient-to-r from-red-900 to-slate-800 border border-red-500/50 rounded-xl flex justify-between items-center hover:border-red-400 transition-all shadow-lg"
             >
               <div className="text-left">
-                <span className="text-xs text-red-400 uppercase tracking-wider font-bold">Поточний супротивник</span>
+                <span className="text-xs text-red-400 uppercase tracking-wider font-bold">{t('currentOpponent')}</span>
                 <h2 className="text-lg font-extrabold text-white">{currentBoss.name} {currentBoss.isLord && '👑'}</h2>
               </div>
-              <span className="text-xl">⚔️ Змінити боса ➡</span>
+              <span className="text-xl">⚔️ {t('changeBoss')} ➡</span>
             </button>
 
             {/* Візуальна арена боса */}
@@ -133,7 +150,7 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({ onBackToMain }) => {
                   style={{ width: `${Math.max(0, (currentBossHp / currentBoss.hp) * 100)}%` }}
                 ></div>
               </div>
-              <span className="absolute top-9 text-xs text-slate-300 font-bold">HP Боса: {currentBossHp} / {currentBoss.hp}</span>
+              <span className="absolute top-9 text-xs text-slate-300 font-bold">{t('bossHealth')}: {currentBossHp} / {currentBoss.hp}</span>
 
               {/* Моделька / Аватар боса */}
               <div className="text-6xl my-8 animate-pulse">
@@ -143,23 +160,37 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({ onBackToMain }) => {
               </div>
 
               <div className="text-center mb-4">
-                <p className="text-sm text-slate-400">Рівень виклику: <span className="text-amber-400 font-bold">{currentBoss.requiredPlayerLevel} ур.</span></p>
-                <p className="text-xs text-slate-500 mt-1">Регенерація: {currentBoss.regen} ХП/тік | Броня: {currentBoss.armor}%</p>
+                <p className="text-sm text-slate-400">{t('challengeLevel')}: <span className="text-amber-400 font-bold">{currentBoss.requiredPlayerLevel}</span></p>
+                <p className="text-xs text-slate-500 mt-1">{t('regen')}: {currentBoss.regen} | {t('armor')}: {currentBoss.armor}%</p>
               </div>
 
-              {/* Кнопка вступу в бій */}
-              <button
-                onClick={handleStartBattleClick}
-                className="py-3 px-8 bg-red-600 hover:bg-red-500 text-white font-extrabold rounded-xl shadow-xl transition-all uppercase tracking-wider text-sm"
-              >
-                ⚔️ Розпочати бій
-              </button>
+              {/* Кнопка вступу в бій або повідомлення про кулдаун*/}
+              {isOnDeathCooldown ? (
+                <div className="flex flex-col items-center gap-2">
+                  <p className="text-red-400 font-bold text-sm text-center">
+                    {t('deathCooldown', { time: Math.ceil(deathCooldownRemaining / 1000) + t('recoveringSec') })}
+                  </p>
+                  <button
+                    disabled
+                    className="py-3 px-8 bg-slate-700 text-slate-500 rounded-xl font-extrabold uppercase tracking-wider text-sm cursor-not-allowed"
+                  >
+                    {t('recovering')}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={handleStartBattleClick}
+                  className="py-3 px-8 bg-red-600 hover:bg-red-500 text-white font-extrabold rounded-xl shadow-xl transition-all uppercase tracking-wider text-sm"
+                >
+                  ⚔️ {t('startBattle')}
+                </button>
+              )}
             </div>
 
             {/* Шкала здоров'я гравця знизу */}
             <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
               <div className="flex justify-between text-xs font-bold text-slate-300 mb-1">
-                <span>Ваше здоров'я</span>
+                <span>{t('yourHealth')}</span>
                 <span>{playerStats.hp} / {playerStats.maxHp} HP</span>
               </div>
               <div className="w-full bg-slate-900 rounded-full h-3 border border-slate-700 overflow-hidden">
@@ -178,9 +209,16 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({ onBackToMain }) => {
             equipped={equipped}
             inventory={inventory}
             playerTokens={playerStats.tokens}
+            materials={materials}
+            lang={lang}
             onEquipItem={equipItem}
             onRepairItem={repairItem}
             onRepairAll={repairAll}
+            onOpenChest={openChest}
+            onUpgradeItem={upgradeEquipmentItem}
+            onUpgradeEquipped={upgradeEquippedItem}
+            chestResult={chestResult}
+            onDismissChestResult={dismissChestResult}
           />
         )}
 
@@ -192,6 +230,7 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({ onBackToMain }) => {
             dodgeLevel={playerStats.upgrades.dodgeLevel}
             playerResources={{ ...materials, tokens: playerStats.tokens, medals: playerStats.medals }}
             onUpgrade={upgradePlayerStat}
+            lang={lang}
           />
         )}
 
@@ -201,6 +240,7 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({ onBackToMain }) => {
             playerTokens={playerStats.tokens}
             hasUsedChestDiscount={hasUsedChestDiscount}
             onBuyItem={buyExchangeItem}
+            lang={lang}
           />
         )}
 
@@ -213,6 +253,7 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({ onBackToMain }) => {
         selectedBossId={activeBossId}
         onSelectBoss={setActiveBossId}
         onClose={() => setIsBossSelectionOpen(false)}
+        lang={lang}
       />
 
       {/* Модальне вікно битви з босом */}
@@ -233,6 +274,8 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({ onBackToMain }) => {
           claimLoot();
           setIsBattleModalOpen(false);
         }}
+        lang={lang}
+        playerDied={playerStats.hp <= 0}
       />
 
     </div>
