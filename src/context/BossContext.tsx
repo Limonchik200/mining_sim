@@ -5,7 +5,7 @@ import { EquipmentManager } from '../managers/EquipmentManager';
 import { PLAYER_CONFIG, getHpUpgradeCost, getRegenUpgradeCost, getDodgeUpgradeCost } from '../config/progression/playerConfig';
 import { BOSS_EQUIPMENT_CONFIG, EQUIPMENT_UPGRADE_COSTS } from '../config/bossEquipment/equipmentConfig';
 
-const BOSS_SAVE_KEY = 'mining-sim-boss-mode-v10';
+const BOSS_SAVE_KEY = 'mining-sim-boss-mode-v11';
 const REGEN_TICK_MS = 3000;
 const ATTACK_COOLDOWN_MS = 1000;
 const LOG_AUTO_CLEAR_MS = 1000;
@@ -115,7 +115,11 @@ export const BossProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [inventory, setInventory] = useState<InventoryItem[]>(() =>
     saved.current?.inventory ?? [
       { instanceId: 'init_weapon_1', itemId: 'vampiric_blade', level: 1, durability: 80 },
-      { instanceId: 'init_chest_1', itemId: 'equipment_chest', level: 1, durability: 0, isChest: true },
+      { instanceId: 'init_helmet_1', itemId: 'medical_helmet', level: 1, durability: 80 },
+      { instanceId: 'init_amulet_1', itemId: 'healing_necklace', level: 1, durability: 80 },
+      { instanceId: 'init_chest_1a', itemId: 'equipment_chest', level: 1, durability: 0, isChest: true },
+      { instanceId: 'init_chest_1b', itemId: 'equipment_chest', level: 1, durability: 0, isChest: true },
+      { instanceId: 'init_chest_1c', itemId: 'equipment_chest', level: 1, durability: 0, isChest: true },
     ]
   );
 
@@ -132,8 +136,8 @@ export const BossProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [lootData, setLootData] = useState<Record<string, number> | null>(null);
   const [hasUsedChestDiscount, setHasUsedChestDiscount] = useState<boolean>(() => saved.current?.hasUsedChestDiscount ?? false);
   const [materials, setMaterials] = useState<Record<string, number>>(() => saved.current?.materials ?? {
-    bones: 0, fire_rod: 0, basalt_slab: 0, black_shards: 0,
-    scroll: 0, magma_stone: 0, solar_essence: 0, rainbow_stone: 0, mutagen_capsule: 0,
+    bones: 30, fire_rod: 10, basalt_slab: 5, black_shards: 0,
+    scroll: 75, magma_stone: 0, solar_essence: 0, rainbow_stone: 3, mutagen_capsule: 0,
   });
   const [attackCooldown, setAttackCooldown] = useState<boolean>(false);
   const [chestResult, setChestResult] = useState<string | null>(null);
