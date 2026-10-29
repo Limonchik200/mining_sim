@@ -79,6 +79,7 @@ export const BossSelectionModal: React.FC<BossSelectionModalProps> = ({
               >
                 <div className="flex justify-between items-center">
                   <h4 className={`font-extrabold text-sm ${boss.isLord ? 'text-amber-400' : 'text-white'}`}>
+                    <span className="text-lg mr-1">{boss.emoji}</span>
                     {boss.name} {boss.isLord && '👑'}
                   </h4>
                   <span className={`text-xs font-bold px-2 py-0.5 rounded ${

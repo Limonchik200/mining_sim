@@ -154,9 +154,7 @@ export const BossesScreen: React.FC<BossesScreenProps> = ({ onBackToMain }) => {
 
               {/* Моделька / Аватар боса */}
               <div className="text-6xl my-8 animate-pulse">
-                {currentBoss.category === 'zombies' ? '🧟‍♂️' : 
-                 currentBoss.category === 'mages' ? '🧙‍♂️' : 
-                 currentBoss.category === 'demons' ? '🔥👹' : '🪨🗿'}
+                {currentBoss.emoji}
               </div>
 
               <div className="text-center mb-4">

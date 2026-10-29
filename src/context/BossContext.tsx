@@ -242,7 +242,19 @@ export const BossProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
 
     setBossHpMap(prev => ({ ...prev, [activeBossId]: newBossHp }));
-    setPlayerStats(prev => ({ ...prev, hp: newPlayerHp }));
+
+    // Apply durability changes from combat to equipped items
+    setPlayerStats(prev => {
+      const updatedEquipped = { ...prev.equipped };
+      for (const [slot, durChange] of Object.entries(result.durabilityLost)) {
+        const eq = updatedEquipped[slot];
+        if (!eq) continue;
+        const maxDur = EquipmentManager.getMaxDurability(eq.level);
+        const newDur = Math.max(0, Math.min(maxDur, eq.durability + durChange));
+        updatedEquipped[slot] = { ...eq, durability: newDur };
+      }
+      return { ...prev, hp: newPlayerHp, equipped: updatedEquipped };
+    });
 
     const logEntries: string[] = [];
     if (result.playerMissed) logEntries.push(`Ви промахнулися по босу!`);

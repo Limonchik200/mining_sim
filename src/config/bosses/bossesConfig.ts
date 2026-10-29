@@ -1,6 +1,7 @@
 export interface BossConfig {
   id: string;
   name: string;
+  emoji: string;
   category: 'zombies' | 'mages' | 'demons' | 'trolls';
   isLord: boolean;
   hp: number;
@@ -27,6 +28,7 @@ export const BOSSES_CONFIG: BossConfig[] = [
   {
     id: 'rotten_marauder',
     name: 'Гнилий Мародер',
+    emoji: '🧟',
     category: 'zombies',
     isLord: false,
     hp: 900,
@@ -50,6 +52,7 @@ export const BOSSES_CONFIG: BossConfig[] = [
   {
     id: 'necrotic_catacat',
     name: 'Некротичний Катакат',
+    emoji: '🐱‍👤',
     category: 'zombies',
     isLord: false,
     hp: 1200,
@@ -73,6 +76,7 @@ export const BOSSES_CONFIG: BossConfig[] = [
   {
     id: 'plague_general',
     name: 'Генерал Чуми',
+    emoji: '🤢',
     category: 'zombies',
     isLord: false,
     hp: 1650,
@@ -96,6 +100,7 @@ export const BOSSES_CONFIG: BossConfig[] = [
   {
     id: 'titan_gravedigger',
     name: 'Титан Могильник [ЛОРД]',
+    emoji: '💀⛏️',
     category: 'zombies',
     isLord: true,
     hp: 4500,
@@ -121,6 +126,7 @@ export const BOSSES_CONFIG: BossConfig[] = [
   {
     id: 'eclipse_occultist',
     name: 'Окультист Затемнення',
+    emoji: '🌑🔮',
     category: 'mages',
     isLord: false,
     hp: 3100,
@@ -147,6 +153,7 @@ export const BOSSES_CONFIG: BossConfig[] = [
   {
     id: 'dark_ritual_priest',
     name: 'Жрець Темних Ритуалів',
+    emoji: '🕯️🩸',
     category: 'mages',
     isLord: false,
     hp: 4350,
@@ -173,6 +180,7 @@ export const BOSSES_CONFIG: BossConfig[] = [
   {
     id: 'forbidden_runes_master',
     name: 'Майстер Заборонених Рун',
+    emoji: '🔺✨',
     category: 'mages',
     isLord: false,
     hp: 6000,
@@ -199,6 +207,7 @@ export const BOSSES_CONFIG: BossConfig[] = [
   {
     id: 'abyss_lord',
     name: 'Повелитель Безодні [ЛОРД]',
+    emoji: '🌀👁️',
     category: 'mages',
     isLord: true,
     hp: 10500,
@@ -224,6 +233,7 @@ export const BOSSES_CONFIG: BossConfig[] = [
   {
     id: 'ignis_imp',
     name: 'Ігніс-Імпець',
+    emoji: '👺🔥',
     category: 'demons',
     isLord: false,
     hp: 9900,
@@ -250,6 +260,7 @@ export const BOSSES_CONFIG: BossConfig[] = [
   {
     id: 'flame_prince',
     name: "Князь Полум'я",
+    emoji: '🔥👑',
     category: 'demons',
     isLord: false,
     hp: 13200,
@@ -276,6 +287,7 @@ export const BOSSES_CONFIG: BossConfig[] = [
   {
     id: 'hell_executioner',
     name: 'Пекельний Кат',
+    emoji: '⚔️💀',
     category: 'demons',
     isLord: false,
     hp: 20800,
@@ -302,6 +314,7 @@ export const BOSSES_CONFIG: BossConfig[] = [
   {
     id: 'archdemon_vulcan',
     name: 'Архідемон Вулкан [ЛОРД]',
+    emoji: '🌋😈',
     category: 'demons',
     isLord: true,
     hp: 32500,
@@ -330,6 +343,7 @@ export const BOSSES_CONFIG: BossConfig[] = [
   {
     id: 'granite_destroyer',
     name: 'Гранітний Руйнівник',
+    emoji: '🪨💥',
     category: 'trolls',
     isLord: false,
     hp: 28000,
@@ -356,6 +370,7 @@ export const BOSSES_CONFIG: BossConfig[] = [
   {
     id: 'orevein_breaker',
     name: 'Рудожильний Брейкер',
+    emoji: '⛏️🪨',
     category: 'trolls',
     isLord: false,
     hp: 37800,
@@ -382,6 +397,7 @@ export const BOSSES_CONFIG: BossConfig[] = [
   {
     id: 'obsidian_guard',
     name: 'Обсидіановий Страж',
+    emoji: '🛡️⚫',
     category: 'trolls',
     isLord: false,
     hp: 49300,
@@ -408,6 +424,7 @@ export const BOSSES_CONFIG: BossConfig[] = [
   {
     id: 'tectonic_colossus',
     name: 'Тектонічний Колос [ЛОРД]',
+    emoji: '🗿⛰️',
     category: 'trolls',
     isLord: true,
     hp: 72000,

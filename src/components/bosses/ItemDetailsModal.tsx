@@ -40,6 +40,34 @@ const RARITY_COLORS: Record<string, string> = {
   exotic: 'text-pink-400 border-pink-500',
 };
 
+const RESOURCE_ICONS: Record<string, string> = {
+  scroll: '📜',
+  rainbow_stone: '🌈',
+  bone: '🦴',
+  fire_rod: '🔥',
+  basalt_slab: '🪨',
+  mutagen_capsule: '🧬',
+  tokens: '🪙',
+  magma_stone: '🌋',
+  solar_essence: '☀️',
+  black_shards: '⚫',
+  diamond: '💎',
+};
+
+const RESOURCE_KEYS: Record<string, string> = {
+  scroll: 'resScroll',
+  rainbow_stone: 'resRainbowStone',
+  bone: 'resBone',
+  fire_rod: 'resFireRod',
+  basalt_slab: 'resBasaltSlab',
+  mutagen_capsule: 'resMutagenCapsule',
+  tokens: 'resTokens',
+  magma_stone: 'resMagmaStone',
+  solar_essence: 'resSolarEssence',
+  black_shards: 'resBlackShards',
+  diamond: 'resDiamond',
+};
+
 export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
   instanceId, itemId, level, durability, lang, materials, onUpgrade, onEquip, onClose,
 }) => {
@@ -61,8 +89,15 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
     ? Object.entries(upgradeCost).every(([resKey, amount]) => (materials[resKey] || 0) >= amount)
     : false;
 
-  const formatCost = (cost: Record<string, number>) =>
-    Object.entries(cost).map(([res, amt]) => `${amt} ${res}`).join(', ');
+  const costEntries = upgradeCost
+    ? Object.entries(upgradeCost).map(([resKey, requiredAmount]) => {
+        const haveAmount = materials[resKey] || 0;
+        const enough = haveAmount >= requiredAmount;
+        const resName = t(RESOURCE_KEYS[resKey] || resKey);
+        const icon = RESOURCE_ICONS[resKey] || '📦';
+        return { resKey, requiredAmount, haveAmount, enough, resName, icon };
+      })
+    : [];
 
   const stats: { label: string; value: string | undefined }[] = [
     { label: lang === 'ru' ? 'Урон' : lang === 'en' ? 'Damage' : 'Урон',
@@ -121,14 +156,24 @@ export const ItemDetailsModal: React.FC<ItemDetailsModalProps> = ({
 
         {canUpgrade && upgradeCost ? (
           <div className="mb-4">
-            <div className="text-xs text-slate-400 bg-slate-950/50 p-2 rounded-lg border border-slate-800 flex justify-between">
-              <span className="font-bold text-slate-300">{t('nextLevelCost')}</span>
-              <span className={affordable ? 'text-emerald-400' : 'text-red-400'}>{formatCost(upgradeCost)}</span>
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">{t('nextLevelCost')}</h4>
+            <div className="space-y-1.5">
+              {costEntries.map(({ resKey, requiredAmount, haveAmount, enough, resName, icon }) => (
+                <div key={resKey} className={`flex items-center justify-between text-xs px-3 py-1.5 rounded-lg border ${enough ? 'bg-emerald-900/30 border-emerald-700/40' : 'bg-red-900/30 border-red-700/40'}`}>
+                  <span className="text-slate-300 font-bold">
+                    <span className="mr-1">{icon}</span>
+                    {resName}
+                  </span>
+                  <span className={`font-bold ${enough ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {haveAmount}/{requiredAmount} {enough ? '✅' : '❌'}
+                  </span>
+                </div>
+              ))}
             </div>
             <button
               onClick={() => onUpgrade(instanceId)}
               disabled={!affordable}
-              className="w-full mt-2 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 rounded-xl font-bold text-white text-sm transition-all shadow-md"
+              className="w-full mt-3 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 rounded-xl font-bold text-white text-sm transition-all shadow-md"
             >
               {affordable ? t('upgradeItem') : t('cantAfford')}
             </button>
