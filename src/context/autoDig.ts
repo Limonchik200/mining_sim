@@ -211,10 +211,6 @@ export function processOfflineProgress(
 
   const lastOnlineAt = now - offlineSec * 1000;
 
-  // Save the original auto-lease end before the expiry check below clears it,
-  // so the offline mining block can still process digs up to the expiry point.
-  const originalAutoMiningEndsAt = next.autoMiningEndsAt;
-
   if (next.activeLeaseEndsAt && now > next.activeLeaseEndsAt) {
     next.activeLeaseEndsAt = null;
     next.activeLeaseTotal = 0;
@@ -230,7 +226,7 @@ export function processOfflineProgress(
   // the auto-lease end, or the basket filling up. We compute the exact number
   // of digs that fit and execute them in order, degrading the pickaxe and
   // swapping in spares just like live play. No partial ore is lost.
-  const autoLeaseEndAt = originalAutoMiningEndsAt;
+  const autoLeaseEndAt = next.autoMiningEndsAt;
   if (autoLeaseEndAt && autoLeaseEndAt > lastOnlineAt) {
     const autoCooldownSec = getAutoCooldownMs(next.upgrades.autoCooldownLvl) / 1000;
     const basketCap = getBasketCapValue(next.upgrades.basketCapLvl);

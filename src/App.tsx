@@ -1,7 +1,5 @@
 import { useState } from 'react';
 import { GameProvider, useGame } from '@/context/GameContext';
-import { BossProvider } from '@/context/BossContext';
-import { BossesScreen } from '@/components/bosses/BossesScreen';
 import TabNav from '@/components/TabNav';
 import MiningTab from '@/components/MiningTab';
 import ShopTab from '@/components/ShopTab';
@@ -81,7 +79,6 @@ function Balances() {
 
 function GameApp() {
   const { activeTab, t, state, levelUpData, setLevelUpData, lang } = useGame();
-  const [currentScreen, setCurrentScreen] = useState<'mine' | 'bosses'>('mine');
 
   return (
     <div className="min-h-screen bg-neutral-100 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100 transition-colors duration-300">
@@ -98,28 +95,20 @@ function GameApp() {
 
       {/* Main content */}
       <main className="max-w-2xl mx-auto px-3 sm:px-4 py-4 space-y-4" style={{ paddingBottom: 'calc(7rem + env(safe-area-inset-bottom, 0px))' }}>
-        {currentScreen === 'bosses' ? (
-          <BossesScreen onBackToMain={() => setCurrentScreen('mine')} />
-        ) : (
-          <>
-            {activeTab === 'mining' && <MiningTab onOpenBosses={() => setCurrentScreen('bosses')} />}
-            {activeTab === 'shop' && <ShopTab />}
-            {activeTab === 'upgrades' && <UpgradesTab />}
-            {activeTab === 'equipment' && <EquipmentTab />}
-            {activeTab === 'expeditions' && <ExpeditionsTab />}
-            {activeTab === 'settings' && <SettingsTab />}
-          </>
-        )}
+        {activeTab === 'mining' && <MiningTab />}
+        {activeTab === 'shop' && <ShopTab />}
+        {activeTab === 'upgrades' && <UpgradesTab />}
+        {activeTab === 'equipment' && <EquipmentTab />}
+        {activeTab === 'expeditions' && <ExpeditionsTab />}
+        {activeTab === 'settings' && <SettingsTab />}
       </main>
 
       {/* Bottom tab nav */}
-      {currentScreen !== 'bosses' && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 dark:bg-neutral-900/90 backdrop-blur-md border-t border-neutral-200 dark:border-neutral-800" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
-          <div className="max-w-2xl mx-auto px-2 sm:px-3 py-1.5 sm:py-2">
-            <TabNav />
-          </div>
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 dark:bg-neutral-900/90 backdrop-blur-md border-t border-neutral-200 dark:border-neutral-800" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+        <div className="max-w-2xl mx-auto px-2 sm:px-3 py-1.5 sm:py-2">
+          <TabNav />
         </div>
-      )}
+      </div>
 
       {/* Overlays */}
       <Notifications />
@@ -147,9 +136,7 @@ function GameApp() {
 function App() {
   return (
     <GameProvider>
-      <BossProvider>
-        <GameApp />
-      </BossProvider>
+      <GameApp />
     </GameProvider>
   );
 }
