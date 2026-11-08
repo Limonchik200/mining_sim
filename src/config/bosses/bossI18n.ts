@@ -354,18 +354,6 @@ export const RESOURCE_DISPLAY: Record<string, { icon: string; nameKey: string }>
   diamond: { icon: '💎', nameKey: 'resDiamond' },
 };
 
-export function formatResourceList(
-  cost: Record<string, number>,
-  t: (key: string, params?: Record<string, string | number>) => string
-): string {
-  return Object.entries(cost).map(([resKey, amt]) => {
-    const display = RESOURCE_DISPLAY[resKey];
-    const name = display ? t(display.nameKey) : resKey;
-    const icon = display?.icon || '';
-    return `${icon} ${amt} ${name}`;
-  }).join(', ');
-}
-
 export function getBossT(lang: BossLang): (key: string, params?: Record<string, string | number>) => string {
   const dict = bossI18n[lang] || bossI18n.en;
   return (key: string, params?: Record<string, string | number>) => {

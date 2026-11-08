@@ -54,6 +54,8 @@ const ROWS: StatRow[] = [
   { key: 'logsBought', label: { uk: 'Куплено колод', en: 'Logs bought', ru: 'Куплено бревен' } },
   { key: 'planksBought', label: { uk: 'Куплено планок', en: 'Planks bought', ru: 'Куплено планок' } },
   { key: 'specialOffersBought', label: { uk: 'Куплено спецпропозицій', en: 'Special offers bought', ru: 'Куплено спецпредложений' } },
+  { key: 'hyperBundlesBought', label: { uk: 'Куплено гіпербандлів', en: 'Hyperbundles bought', ru: 'Куплено гипербандлов' } },
+  { key: 'gemsSpentHyperBundles', label: { uk: 'Алмазів у гіпербандлах', en: 'Gems in hyperbundles', ru: 'Алмазов в гипербандлах' } },
 ];
 
 export default function AdvancedStatsModal({ stats, lang, ownedItemsCount, onClose }: AdvancedStatsModalProps) {

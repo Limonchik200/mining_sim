@@ -2867,7 +2867,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         magma_stone: (prev.materials.magma_stone ?? 0) + getRewardAmount(bundle, 'magma_stone'),
       },
       hyperBundle: { ...prev.hyperBundle, purchased: true },
-      stats: { ...prev.stats, purchasesCount: (prev.stats.purchasesCount ?? 0) + 1, gemsSpentSpecialOffers: prev.stats.gemsSpentSpecialOffers + price, specialOffersBought: prev.stats.specialOffersBought + 1 },
+      stats: { ...prev.stats, purchasesCount: (prev.stats.purchasesCount ?? 0) + 1, gemsSpentHyperBundles: prev.stats.gemsSpentHyperBundles + price, hyperBundlesBought: prev.stats.hyperBundlesBought + 1 },
     }));
     pushNotification({ message: lang === 'ru' ? 'Гипербандл куплен!' : (lang === 'uk' ? 'Гіпербандл куплено!' : 'Hyperbundle purchased!'), type: 'success' });
   }, [pushNotification, tr, lang]);

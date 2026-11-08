@@ -32,7 +32,7 @@ export default function HyperBundleSection() {
         </h2>
         <span className="text-xs text-neutral-400 flex items-center gap-1">
           <Clock className="w-3 h-3" />
-          {daysUntil}d {hoursUntil}h
+          {daysUntil}{tr('д', 'д', 'd')} {hoursUntil}{tr('ч', 'г', 'h')}
         </span>
       </div>
 

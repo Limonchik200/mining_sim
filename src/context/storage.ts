@@ -230,6 +230,8 @@ export function createInitialStats(): GameStats {
     planksBought: 0,
     logsBought: 0,
     specialOffersBought: 0,
+    hyperBundlesBought: 0,
+    gemsSpentHyperBundles: 0,
     totalClicks: 0,
     gemsEarned: 0,
     expeditionsTier1: 0,

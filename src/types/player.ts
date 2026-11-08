@@ -65,6 +65,8 @@ export interface GameStats {
   planksBought: number;
   logsBought: number;
   specialOffersBought: number;
+  hyperBundlesBought: number;
+  gemsSpentHyperBundles: number;
   totalClicks: number;
   gemsEarned: number;
   expeditionsTier1: number;

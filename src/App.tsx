@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { GameProvider, useGame } from '@/context/GameContext';
+import { AuthProvider } from '@/context/AuthContext';
 import TabNav from '@/components/TabNav';
 import MiningTab from '@/components/MiningTab';
 import ShopTab from '@/components/ShopTab';
@@ -135,9 +136,9 @@ function GameApp() {
 
 function App() {
   return (
-    <GameProvider>
+    <AuthProvider><GameProvider>
       <GameApp />
-    </GameProvider>
+    </GameProvider></AuthProvider>
   );
 }
 
