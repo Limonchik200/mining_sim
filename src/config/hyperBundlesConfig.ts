@@ -21,7 +21,7 @@ export const HYPER_BUNDLES: SpecialOfferBundle[] = [
     basePriceGems: 1400,
     rewards: [
       { type: 'scroll', amount: 150 },
-      { type: 'ruby_dust', amount: 75 },
+      { type: 'ruby_powder', amount: 75 },
       { type: 'essence', amount: 50 },
       { type: 'magma_stone', amount: 3 },
     ],

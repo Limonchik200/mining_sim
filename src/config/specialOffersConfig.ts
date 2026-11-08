@@ -6,7 +6,7 @@ export const SPECIAL_OFFERS_COUNT = 3;
 export type SpecialOfferRewardType =
   | 'item_bag'
   | 'scroll'
-  | 'ruby_dust'
+  | 'ruby_powder'
   | 'essence'
   | 'oxygen_tank_small'
   | 'oxygen_tank_medium'
@@ -56,7 +56,7 @@ export const SPECIAL_OFFER_BUNDLES: SpecialOfferBundle[] = [
     basePriceGems: 300,
     rewards: [
       { type: 'scroll', amount: 35 },
-      { type: 'ruby_dust', amount: 20 },
+      { type: 'ruby_powder', amount: 20 },
       { type: 'essence', amount: 15 },
     ],
     icon: 'Layers',
@@ -185,7 +185,7 @@ export function getRewardDisplayName(type: SpecialOfferRewardType, lang: Lang): 
   const names: Record<SpecialOfferRewardType, { ru: string; uk: string; en: string }> = {
     item_bag: { ru: 'Мешок предметов', uk: 'Мішок предметів', en: 'Item Bag' },
     scroll: { ru: 'Свиток', uk: 'Сувій', en: 'Scroll' },
-    ruby_dust: { ru: 'Рубиновая пыль', uk: 'Рубіновий пил', en: 'Ruby Dust' },
+    ruby_powder: { ru: 'Рубиновый порошок', uk: 'Рубіновий порох', en: 'Ruby Powder' },
     essence: { ru: 'Эссенция', uk: 'Есенція', en: 'Essence' },
     oxygen_tank_small: { ru: 'Малый балон', uk: 'Малий балон', en: 'Small Tank' },
     oxygen_tank_medium: { ru: 'Обычный балон', uk: 'Звичайний балон', en: 'Regular Tank' },

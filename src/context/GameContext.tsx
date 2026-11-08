@@ -2862,7 +2862,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       materials: {
         ...prev.materials,
         scroll: (prev.materials.scroll ?? 0) + getRewardAmount(bundle, 'scroll'),
-        ruby_dust: (prev.materials.ruby_dust ?? 0) + getRewardAmount(bundle, 'ruby_dust'),
+        ruby_powder: (prev.materials.ruby_powder ?? 0) + getRewardAmount(bundle, 'ruby_powder'),
         essence: (prev.materials.essence ?? 0) + getRewardAmount(bundle, 'essence'),
         magma_stone: (prev.materials.magma_stone ?? 0) + getRewardAmount(bundle, 'magma_stone'),
       },
@@ -2895,7 +2895,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         materials: {
           ...prev.materials,
           scroll: (prev.materials.scroll ?? 0) + bundle.rewards.filter((r) => r.type === 'scroll').reduce((s, r) => s + r.amount, 0),
-          ruby_dust: (prev.materials.ruby_dust ?? 0) + bundle.rewards.filter((r) => r.type === 'ruby_dust').reduce((s, r) => s + r.amount, 0),
+          ruby_powder: (prev.materials.ruby_powder ?? 0) + bundle.rewards.filter((r) => r.type === 'ruby_powder').reduce((s, r) => s + r.amount, 0),
           essence: (prev.materials.essence ?? 0) + bundle.rewards.filter((r) => r.type === 'essence').reduce((s, r) => s + r.amount, 0),
         },
         lifeSupport: {
