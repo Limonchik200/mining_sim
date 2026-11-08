@@ -102,7 +102,7 @@ import {
   DIESEL95_UPDATE_MS,
 } from '@/config/fuelConfig';
 import { OXYGEN_TANK_CONFIGS, createOxygenTank } from '@/config/oxygenConfig';
-import { BATTERY_CONFIGS, createBattery } from '@/config/batteryConfig';
+import { BATTERY_CONFIGS, LITHIUM_SELL_PRICE, createBattery } from '@/config/batteryConfig';
 import { COOLER_CONFIGS, createCooler, getCoolerDegradationPerSec } from '@/config/coolerConfig';
 import {
   GENERATOR_PRICE,
@@ -276,6 +276,7 @@ interface GameContextValue {
   refuelGenerator: () => void;
   insertLithiumBattery: (batteryId: string) => void;
   removeLithiumBattery: (batteryId: string) => void;
+  sellLithiumBattery: (batteryId: string) => void;
   buyShelf: () => void;
   toggleOxygenValve: () => void;
   sellCanister: (canisterId: string) => void;
@@ -3316,6 +3317,23 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  const sellLithiumBattery = useCallback((batteryId: string) => {
+    const current = stateRef.current;
+    const battery = current.lifeSupport.batteries.find((b) => b.id === batteryId);
+    if (!battery || battery.type !== 'battery_lithium') return;
+    if (current.lifeSupport.generator.lithiumBatteryIds.includes(batteryId)) return;
+    setState((prev) => ({
+      ...prev,
+      balance: Math.round((prev.balance + LITHIUM_SELL_PRICE) * 100) / 100,
+      lifeSupport: {
+        ...prev.lifeSupport,
+        batteries: prev.lifeSupport.batteries.filter((b) => b.id !== batteryId),
+      },
+      stats: { ...prev.stats, moneyEarned: Math.round((prev.stats.moneyEarned + LITHIUM_SELL_PRICE) * 100) / 100 },
+    }));
+    pushNotification({ message: lang === 'ru' ? `Литиевый аккумулятор продан за ${LITHIUM_SELL_PRICE}$` : (lang === 'uk' ? `Літієвий акумулятор продано за ${LITHIUM_SELL_PRICE}$` : `Lithium battery sold for ${LITHIUM_SELL_PRICE}$`), type: 'success' });
+  }, [pushNotification, lang]);
+
   const buyShelf = useCallback(() => {
     const current = stateRef.current;
     if (current.lifeSupport.shelfCount >= MAX_SHELVES) {
@@ -3581,6 +3599,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           if (newCharge !== b.currentCharge) { changed = true; }
           return { ...b, currentCharge: newCharge };
         }).filter((b) => b.currentCharge > 0 || b.type === 'battery_lithium');
+        if (newBatteries.length !== ls.batteries.length) changed = true;
 
         if (!changed) return prev;
 
@@ -3715,6 +3734,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     refuelGenerator,
     insertLithiumBattery,
     removeLithiumBattery,
+    sellLithiumBattery,
     buyShelf,
     toggleOxygenValve,
     sellCanister,

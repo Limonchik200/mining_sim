@@ -64,6 +64,8 @@ export const BATTERY_CONFIGS: Record<BatteryType, BatteryConfig> = {
   },
 };
 
+export const LITHIUM_SELL_PRICE = 1000;
+
 export function createBattery(type: BatteryType): import('@/types/craft').BatteryInstance {
   const cfg = BATTERY_CONFIGS[type];
   return {

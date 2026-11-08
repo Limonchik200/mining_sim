@@ -1,7 +1,7 @@
 import { useGame } from '@/context/GameContext';
 import { formatMoney } from '@/config';
 import { OXYGEN_TANK_CONFIGS } from '@/config/oxygenConfig';
-import { BATTERY_CONFIGS } from '@/config/batteryConfig';
+import { BATTERY_CONFIGS, LITHIUM_SELL_PRICE } from '@/config/batteryConfig';
 import { COOLER_CONFIGS, getCoolerDurabilityPct, getCoolerRemainingSec } from '@/config/coolerConfig';
 import { GENERATOR_PRICE, GENERATOR_LITHIUM_SLOTS, getGeneratorTotalPower } from '@/config/generatorConfig';
 import type { OxygenTankType, BatteryType, CoolerType, CoolerMode } from '@/types/craft';
@@ -16,7 +16,7 @@ function formatRemaining(sec: number): string {
 }
 
 export default function LifeSupportSection() {
-  const { state, lang, t, buyOxygenTank, buyBattery, buyCooler, toggleCooler, setCoolerMode, switchCooler, repairCooler, buyGenerator, toggleGenerator, refuelGenerator, insertLithiumBattery, removeLithiumBattery, buyShelf, usedWarehouseSpace, totalWarehouseSpace } = useGame();
+  const { state, lang, t, buyOxygenTank, buyBattery, buyCooler, toggleCooler, setCoolerMode, switchCooler, repairCooler, buyGenerator, toggleGenerator, refuelGenerator, insertLithiumBattery, removeLithiumBattery, sellLithiumBattery, buyShelf, usedWarehouseSpace, totalWarehouseSpace } = useGame();
   const ls = state.lifeSupport;
 
   const tr = (ru: string, uk: string, en: string) => lang === 'ru' ? ru : (lang === 'uk' ? uk : en);
@@ -104,6 +104,7 @@ export default function LifeSupportSection() {
         {(Object.keys(BATTERY_CONFIGS) as BatteryType[]).map((type) => {
           const cfg = BATTERY_CONFIGS[type];
           const owned = ls.batteries.filter((b) => b.type === type);
+          const sellable = owned.filter((b) => !ls.generator.lithiumBatteryIds.includes(b.id));
           const canAfford = state.balance >= cfg.price;
           const isLithium = type === 'battery_lithium';
           return (
@@ -119,6 +120,19 @@ export default function LifeSupportSection() {
                     {isLithium && <span className="ml-1 text-accent-500">· ×{cfg.maxRecharges} {tr('зарядки', 'зарядки', 'recharges')}</span>}
                     {owned.length > 0 && <span className="ml-1.5 text-success-500">×{owned.length}</span>}
                   </div>
+                  {isLithium && sellable.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {sellable.map((b) => (
+                        <button
+                          key={b.id}
+                          onClick={() => sellLithiumBattery(b.id)}
+                          className="btn-ghost px-1.5 py-0.5 text-[10px] rounded-md border border-neutral-300 dark:border-neutral-600"
+                        >
+                          {tr('Продать', 'Продати', 'Sell')} {formatMoney(LITHIUM_SELL_PRICE)} · {b.currentCharge.toFixed(0)}МВт
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
               <button
