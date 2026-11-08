@@ -1,9 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useGame } from '@/context/GameContext';
-import { useAuth } from '@/context/AuthContext';
 import { ADM_XP_CODE, findPromoCode } from '@/config/promocodesConfig';
-import { claimPromoCode } from '@/lib/promoRedemptions';
-import AccountSection from '@/components/AccountSection';
 import type { Lang, Theme } from '@/types';
 import { formatMoney } from '@/config';
 import { xpForLevel } from '@/config/upgradesConfig';
@@ -24,9 +21,7 @@ import {
 
 export default function SettingsTab() {
   const { state, setLang, setTheme, resetGame, redeemPromoCode, t } = useGame();
-  const { user } = useAuth();
   const [promoInput, setPromoInput] = useState('');
-  const [redeeming, setRedeeming] = useState(false);
   const [promoBanner, setPromoBanner] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const bannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [advancedStatsOpen, setAdvancedStatsOpen] = useState(false);
@@ -46,32 +41,16 @@ export default function SettingsTab() {
     }, 4000);
   };
 
-  const handleRedeem = async () => {
-    const code = promoInput.trim();
-    if (!code) return;
-    const cleanCode = code.toLowerCase();
+  const handleRedeem = () => {
+    const cleanCode = promoInput.trim().toLowerCase();
+    if (!cleanCode) return;
     setPromoInput('');
-    if (!user) {
-      showBanner(t('promoLoginRequired'), 'error');
-      return;
-    }
     if ((state.redeemedPromoCodes || []).includes(cleanCode)) {
       showBanner(t('promoUsed'), 'error');
       return;
     }
     if (cleanCode !== ADM_XP_CODE && !findPromoCode(cleanCode)) {
       showBanner(t('promoInvalid'), 'error');
-      return;
-    }
-    setRedeeming(true);
-    const claim = await claimPromoCode(cleanCode);
-    setRedeeming(false);
-    if (claim === 'already_used') {
-      showBanner(t('promoUsed'), 'error');
-      return;
-    }
-    if (claim === 'failed') {
-      showBanner(t('promoNetworkError'), 'error');
       return;
     }
     const result = redeemPromoCode(cleanCode);
@@ -140,8 +119,6 @@ export default function SettingsTab() {
         </div>
       </div>
 
-      <AccountSection />
-
       {/* Promo code */}
       <div className="card p-4">
         <h3 className="font-bold text-neutral-800 dark:text-neutral-100 mb-3 flex items-center gap-2">
@@ -157,7 +134,7 @@ export default function SettingsTab() {
             placeholder={t('promoCodePlaceholder')}
             className="flex-1 rounded-xl border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-850 px-3 py-2 text-sm text-neutral-800 dark:text-neutral-200 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none"
           />
-          <button onClick={handleRedeem} disabled={!promoInput.trim() || redeeming} className="btn-primary px-4 py-2 text-sm whitespace-nowrap disabled:opacity-50">
+          <button onClick={handleRedeem} disabled={!promoInput.trim()} className="btn-primary px-4 py-2 text-sm whitespace-nowrap disabled:opacity-50">
             {t('redeemCode')}
           </button>
         </div>
