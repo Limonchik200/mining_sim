@@ -46,6 +46,7 @@ export interface GameStats {
   casesLegendaryOpened: number;
   casesEnergyOpened: number;
   itemBagsOpened: number;
+  suitcasesOpened: number;
   itemsOwned: number;
   itemsRecycled: number;
   foodSnickersEaten: number;
@@ -163,6 +164,7 @@ export interface GameState {
   materialsShop: MaterialsShopState;
   lifeSupport: LifeSupportState;
   specialOffers: SpecialOffersState;
+  hyperBundle: import('../config/hyperBundlesConfig').HyperBundleState;
 
   stats: GameStats;
 

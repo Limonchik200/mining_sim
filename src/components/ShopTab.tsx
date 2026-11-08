@@ -7,6 +7,7 @@ import LifeSupportSection from '@/components/LifeSupportSection';
 import PickaxesSection from '@/components/shop/PickaxesSection';
 import LockedSection from '@/components/shop/LockedSection';
 import SpecialOffersSubTab from '@/components/shop/SpecialOffersSubTab';
+import HyperBundleSection from '@/components/shop/HyperBundleSection';
 import {
   STARTER_GIFT_SECONDS,
   FOOD_ITEMS,
@@ -191,6 +192,7 @@ export default function ShopTab() {
           </div>
         </div>
         {subTabSwitcher}
+        <HyperBundleSection />
         <SpecialOffersSubTab />
         <div ref={materialsRef} className="scroll-mt-4">
           <MaterialsShopSection />

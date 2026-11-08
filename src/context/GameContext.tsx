@@ -92,6 +92,7 @@ import type { CraftRecipe, OxygenTankType, BatteryType, CoolerType, CoolerMode }
 import { CRAFT_RECIPES, canCraft as canCraftRecipe, craftRecipe as executeCraftRecipe, getCraftItemName } from '@/config/craftConfig';
 import { generateMaterialsShopSlots, getSlotPrice, MATERIALS_SHOP_REFRESH_MS } from '@/config/materialsShopConfig';
 import { generateSpecialOffers, getOfferPriceGems, SPECIAL_OFFER_BUNDLES, type SpecialOfferBundle } from '@/config/specialOffersConfig';
+import { generateHyperBundle, findHyperBundle, getRewardAmount } from '@/config/hyperBundlesConfig';
 import {
   CANISTER_PRICE,
   createCanister,
@@ -260,6 +261,7 @@ interface GameContextValue {
   craftItem: (recipeIndex: number) => void;
   buyMaterialSlot: (slotId: string) => void;
   buySpecialOffer: (offerIndex: number) => void;
+  buyHyperBundle: () => void;
   buyCanister: () => void;
   buyFuel: (liters: number) => void;
   buyOxygenTank: (type: OxygenTankType) => void;
@@ -2040,6 +2042,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       stats: {
         ...prev.stats,
         itemsOwned: prev.stats.itemsOwned + 1,
+        suitcasesOpened: prev.stats.suitcasesOpened + 1,
       },
     }));
     pushNotification({
@@ -2823,6 +2826,51 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setState((prev) => {
+        const now = Date.now();
+        if (!prev.hyperBundle || now < prev.hyperBundle.nextRefreshAt) return prev;
+        return { ...prev, hyperBundle: generateHyperBundle(now) };
+      });
+    }, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const buyHyperBundle = useCallback(() => {
+    const current = stateRef.current;
+    const hyper = current.hyperBundle;
+    if (!hyper || hyper.purchased) return;
+    const bundle = findHyperBundle(hyper.bundleId);
+    if (!bundle) return;
+    const price = getOfferPriceGems(bundle, hyper.discountPct);
+    if (current.gems < price) {
+      pushNotification({ message: tr('notifNoGems'), type: 'error' });
+      return;
+    }
+    const energyCases = Array.from({ length: getRewardAmount(bundle, 'case_energy') }, () => ({
+      id: `case-${Date.now()}-${Math.random()}`,
+      rarity: 'energy' as const,
+      opened: false,
+    }));
+    setState((prev) => ({
+      ...prev,
+      gems: prev.gems - price,
+      suitcases: (prev.suitcases || 0) + getRewardAmount(bundle, 'item_case_suitcase'),
+      cases: [...prev.cases, ...energyCases],
+      materials: {
+        ...prev.materials,
+        scroll: (prev.materials.scroll ?? 0) + getRewardAmount(bundle, 'scroll'),
+        ruby_dust: (prev.materials.ruby_dust ?? 0) + getRewardAmount(bundle, 'ruby_dust'),
+        essence: (prev.materials.essence ?? 0) + getRewardAmount(bundle, 'essence'),
+        magma_stone: (prev.materials.magma_stone ?? 0) + getRewardAmount(bundle, 'magma_stone'),
+      },
+      hyperBundle: { ...prev.hyperBundle, purchased: true },
+      stats: { ...prev.stats, purchasesCount: (prev.stats.purchasesCount ?? 0) + 1, gemsSpentSpecialOffers: prev.stats.gemsSpentSpecialOffers + price, specialOffersBought: prev.stats.specialOffersBought + 1 },
+    }));
+    pushNotification({ message: lang === 'ru' ? 'Гипербандл куплен!' : (lang === 'uk' ? 'Гіпербандл куплено!' : 'Hyperbundle purchased!'), type: 'success' });
+  }, [pushNotification, tr, lang]);
 
   const buySpecialOffer = useCallback((offerIndex: number) => {
     const current = stateRef.current;
@@ -3652,6 +3700,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     craftItem,
     buyMaterialSlot,
     buySpecialOffer,
+    buyHyperBundle,
     buyCanister,
     buyFuel,
     buyOxygenTank,

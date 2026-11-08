@@ -22,6 +22,16 @@ export interface PromoCode {
 
 export const PROMO_CODES: PromoCode[] = [
   {
+    code: '8nov',
+    type: 'mixed',
+    gems: 25,
+    chronoCapsules: 10,
+    cases: [{ rarity: 'epic', count: 3 }],
+    messageUk: 'Отримано 10 хроно-капсул, 3 епічні кейси та 25 алмазів!',
+    messageEn: 'Received 10 chrono capsules, 3 epic cases and 25 gems!',
+    messageRu: 'Получено 10 хроно-капсул, 3 эпических кейса и 25 алмазов!',
+  },
+  {
     code: 'admin2011',
     type: 'balance',
     bonusBalance: 10000000,

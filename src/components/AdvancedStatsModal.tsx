@@ -11,7 +11,7 @@ interface AdvancedStatsModalProps {
 }
 
 interface StatRow {
-  key: keyof GameStats;
+  key: keyof GameStats | 'boxesOpened';
   label: { uk: string; en: string; ru: string };
   format?: (v: number) => string;
 }
@@ -29,6 +29,7 @@ const ROWS: StatRow[] = [
   { key: 'casesDugEpic', label: { uk: 'Викопано епічних кейсів', en: 'Epic cases dug', ru: 'Выкопано эпических кейсов' } },
   { key: 'casesDugLegendary', label: { uk: 'Викопано легендарних кейсів', en: 'Legendary cases dug', ru: 'Выкопано легендарных кейсов' } },
   { key: 'itemBagsOpened', label: { uk: 'Сумок з предметом відкрито', en: 'Item bags opened', ru: 'Сумок с предметом открыто' } },
+  { key: 'suitcasesOpened', label: { uk: 'Чемоданів відкрито', en: 'Suitcases opened', ru: 'Чемоданов открыто' } },
   { key: 'itemsOwned', label: { uk: 'Наявних предметів', en: 'Items owned', ru: 'Имеющихся предметов' } },
   { key: 'itemsRecycled', label: { uk: 'Утилізованих предметів', en: 'Items recycled', ru: 'Утилизированных предметов' } },
   { key: 'foodSnickersEaten', label: { uk: "З'їджених Snickers", en: 'Snickers eaten', ru: 'Съеденных Snickers' } },
@@ -36,7 +37,7 @@ const ROWS: StatRow[] = [
   { key: 'foodMilkaEaten', label: { uk: "З'їджених Milka", en: 'Milka eaten', ru: 'Съеденных Milka' } },
   { key: 'oreMinedKg', label: { uk: 'Викопано руди (кг)', en: 'Ore mined (kg)', ru: 'Выкопано руды (кг)' }, format: (v) => `${v.toFixed(2)} кг` },
   { key: 'moneyEarned', label: { uk: 'Зароблено грошей', en: 'Money earned', ru: 'Заработано денег' }, format: (v) => formatMoney(v) },
-  { key: 'totalCasesOpened', label: { uk: 'Усього кейсів відкрито', en: 'Total cases opened', ru: 'Всего кейсов открыто' } },
+  { key: 'boxesOpened', label: { uk: 'Усього кейсів і предметів відкрито', en: 'Total cases and items opened', ru: 'Всего кейсов и предметов открыто' } },
   { key: 'expeditionsTier1', label: { uk: 'Експедицій (Тір 1)', en: 'Expeditions (Tier 1)', ru: 'Экспедиций (Тир 1)' } },
   { key: 'expeditionsTier2', label: { uk: 'Експедицій (Тір 2)', en: 'Expeditions (Tier 2)', ru: 'Экспедиций (Тир 2)' } },
   { key: 'expeditionsTier3', label: { uk: 'Експедицій (Тір 3)', en: 'Expeditions (Tier 3)', ru: 'Экспедиций (Тир 3)' } },
@@ -102,7 +103,9 @@ export default function AdvancedStatsModal({ stats, lang, ownedItemsCount, onClo
 
         <div className="overflow-y-auto p-4 space-y-2 overscroll-contain">
           {ROWS.map((row) => {
-            let value = stats[row.key] ?? 0;
+            let value = row.key === 'boxesOpened'
+              ? stats.totalCasesOpened + stats.itemBagsOpened + stats.suitcasesOpened
+              : stats[row.key] ?? 0;
             if (row.key === 'itemsOwned') value = ownedItemsCount;
             const display = row.format ? row.format(value as number) : String(value);
             return (

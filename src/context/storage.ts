@@ -15,6 +15,7 @@ import {
 import { generateDiesel95Price } from '@/config/fuelConfig';
 import { generateMaterialsShopSlots } from '@/config/materialsShopConfig';
 import { generateSpecialOffers } from '@/config/specialOffersConfig';
+import { generateHyperBundle } from '@/config/hyperBundlesConfig';
 import { GENERATOR_TANK_CAPACITY } from '@/config/generatorConfig';
 import { gemsForLevel } from '@/config/levelUnlocks';
 import {
@@ -176,6 +177,7 @@ export function createInitialState(): GameState {
       const gen = generateSpecialOffers(Date.now());
       return gen;
     })(),
+    hyperBundle: generateHyperBundle(Date.now()),
     stats: createInitialStats(),
     quests: createInitialQuests(),
     lastSavedAt: Date.now(),
@@ -209,6 +211,7 @@ export function createInitialStats(): GameStats {
     casesLegendaryOpened: 0,
     casesEnergyOpened: 0,
     itemBagsOpened: 0,
+    suitcasesOpened: 0,
     itemsOwned: 0,
     itemsRecycled: 0,
     foodSnickersEaten: 0,
@@ -295,6 +298,12 @@ export function migrateState(saved: Partial<GameState>): GameState {
     merged.specialOffers = saved.specialOffers;
   } else {
     merged.specialOffers = generateSpecialOffers(Date.now());
+  }
+
+  if (saved.hyperBundle && typeof saved.hyperBundle.nextRefreshAt === 'number') {
+    merged.hyperBundle = saved.hyperBundle;
+  } else {
+    merged.hyperBundle = generateHyperBundle(Date.now());
   }
 
   merged.lifeSupport = saved.lifeSupport

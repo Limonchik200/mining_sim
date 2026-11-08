@@ -14,7 +14,9 @@ export type SpecialOfferRewardType =
   | 'case_rare'
   | 'case_epic'
   | 'item_case_suitcase'
-  | 'chrono_capsule';
+  | 'chrono_capsule'
+  | 'magma_stone'
+  | 'case_energy';
 
 export interface SpecialOfferReward {
   type: SpecialOfferRewardType;
@@ -192,6 +194,8 @@ export function getRewardDisplayName(type: SpecialOfferRewardType, lang: Lang): 
     case_epic: { ru: 'Эпический кейс', uk: 'Епічний кейс', en: 'Epic Case' },
     item_case_suitcase: { ru: 'Чемодан с предметами', uk: 'Чемодан з предметами', en: 'Item Suitcase' },
     chrono_capsule: { ru: 'Хроно-капсула', uk: 'Хроно-капсула', en: 'Chrono Capsule' },
+    magma_stone: { ru: 'Магматический камень', uk: 'Магмовий камінь', en: 'Magma Stone' },
+    case_energy: { ru: 'Энергетический кейс', uk: 'Енергетичний кейс', en: 'Energy Case' },
   };
   const n = names[type];
   return lang === 'ru' ? n.ru : lang === 'uk' ? n.uk : n.en;
