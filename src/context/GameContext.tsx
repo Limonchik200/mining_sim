@@ -437,7 +437,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
     const offlineSec = (now - lastSaved) / 1000;
 
-    setState((prev) => processOfflineProgress(prev, now, offlineSec));
+    setState((prev) => processOfflineProgress(prev, now, offlineSec, pushNotification, tr));
     lastTickRef.current = now;
   }, []);
 

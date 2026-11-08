@@ -59,20 +59,24 @@ export function processTick(
     changed = true;
     pushNotification({ message: tr('notifLeaseExpired'), type: 'warning' });
   }
-  if (next.autoMiningEndsAt && now > next.autoMiningEndsAt) {
-    next.autoMiningEndsAt = null;
-    next.autoMiningTotal = 0;
-    changed = true;
-    pushNotification({ message: tr('notifAutoLeaseExpired'), type: 'warning' });
-  }
 
   // v9.4.0 lazy lifecycle: expedition refresh no longer happens during the
   // global tick or on app init. It is triggered exclusively when the player
   // navigates to the Expeditions tab (refreshExpeditionsOnTabFocus).
 
-  if (next.autoMiningEndsAt && now < next.autoMiningEndsAt) {
-    next = processAutoDig(next, now, pushNotification, tr);
-    if (next !== prev) changed = true;
+  if (next.autoMiningEndsAt) {
+    const digged = processAutoDig(next, Math.min(now, next.autoMiningEndsAt), pushNotification, tr);
+    if (digged !== next) {
+      next = digged;
+      changed = true;
+    }
+  }
+
+  if (next.autoMiningEndsAt && now > next.autoMiningEndsAt) {
+    next.autoMiningEndsAt = null;
+    next.autoMiningTotal = 0;
+    changed = true;
+    pushNotification({ message: tr('notifAutoLeaseExpired'), type: 'warning' });
   }
 
   return changed ? next : prev;
@@ -184,6 +188,8 @@ export function processOfflineProgress(
   prev: GameState,
   now: number,
   offlineSec: number,
+  pushNotification: PushNotif,
+  tr: TrFn,
 ): GameState {
   let next = { ...prev };
   let changed = false;
@@ -209,7 +215,15 @@ export function processOfflineProgress(
   next.buffs = next.buffs.filter((b) => b.expiresAt > now);
   if (next.buffs.length !== prev.buffs.length) changed = true;
 
-  const lastOnlineAt = now - offlineSec * 1000;
+  // Auto-mining is credited from the last dig up to the lease end (or now),
+  // so ore mined before a lease expired is kept even if the game was closed.
+  if (next.autoMiningEndsAt) {
+    const digged = processAutoDig(next, Math.min(now, next.autoMiningEndsAt), pushNotification, tr);
+    if (digged !== next) {
+      next = digged;
+      changed = true;
+    }
+  }
 
   if (next.activeLeaseEndsAt && now > next.activeLeaseEndsAt) {
     next.activeLeaseEndsAt = null;
@@ -220,94 +234,6 @@ export function processOfflineProgress(
     next.autoMiningEndsAt = null;
     next.autoMiningTotal = 0;
     changed = true;
-  }
-
-  // Offline auto-mining: deterministic, bounded by whichever ends first —
-  // the auto-lease end, or the basket filling up. We compute the exact number
-  // of digs that fit and execute them in order, degrading the pickaxe and
-  // swapping in spares just like live play. No partial ore is lost.
-  const autoLeaseEndAt = next.autoMiningEndsAt;
-  if (autoLeaseEndAt && autoLeaseEndAt > lastOnlineAt) {
-    const autoCooldownSec = getAutoCooldownMs(next.upgrades.autoCooldownLvl) / 1000;
-    const basketCap = getBasketCapValue(next.upgrades.basketCapLvl);
-    const tier = getPickaxeTier(next.activePickaxeTierId);
-    const yieldCount = Math.max(1, tier.yieldMultiplier);
-    const itemEff = computeTotalItemEffects(next);
-
-    // Effective auto-mining window: from when the player went offline until
-    // either now (still active) or when the lease ended.
-    const effectiveAutoEnd = Math.min(autoLeaseEndAt, now);
-    const autoActiveSec = Math.max(0, (effectiveAutoEnd - lastOnlineAt) / 1000);
-    // Upper bound on digs by time. The loop below further caps by basket cap
-    // and pickaxe durability, so the player never gets more than they should.
-    const maxDigsByTime = Math.floor(autoActiveSec / autoCooldownSec);
-
-    let basket = [...next.autoBasket];
-    let basketCases = [...next.autoBasketCases];
-    let activePickaxe = next.activePickaxe ? { ...next.activePickaxe } : null;
-    let sparePickaxes = [...next.sparePickaxes];
-    let totalDigs = next.totalDigs;
-    let gems = next.gems;
-    let totalGemsEarned = next.totalGemsEarned;
-    let basketMass = basket.reduce((s, it) => s + it.mass, 0);
-    let digsDone = 0;
-
-    for (let i = 0; i < maxDigsByTime; i++) {
-      if (basketMass >= basketCap) break;
-      if (!activePickaxe || activePickaxe.durability < tier.durabilityCost) break;
-
-      let yieldMult = 1;
-      if (itemEff.oreYieldMultChance > 0 && Math.random() < itemEff.oreYieldMultChance) {
-        yieldMult = itemEff.oreYieldMult;
-      }
-      const rollsThisDig = Math.max(1, Math.round(yieldCount * yieldMult));
-      for (let j = 0; j < rollsThisDig && basketMass < basketCap; j++) {
-        const resource = getRandomResourceForMine(next.autoLeaseMineId || 1);
-        const mass = Math.round(getRandomMass(resource) * 100) / 100;
-        basket.push({ resource: resource.type, mass, xp: resource.xp, timestamp: now });
-        basketMass += mass;
-      }
-      digsDone++;
-      totalDigs++;
-
-      const newDur = Math.round(activePickaxe.durability - tier.durabilityCost * AUTO_DURABILITY_MULT);
-      if (newDur <= 0) {
-        if (sparePickaxes.length > 0) {
-          activePickaxe = { ...sparePickaxes[0] };
-          sparePickaxes = sparePickaxes.slice(1);
-        } else {
-          activePickaxe = { ...activePickaxe, durability: 0 };
-          break;
-        }
-      } else {
-        activePickaxe = { ...activePickaxe, durability: newDur };
-      }
-
-      if (rollAutoCaseDrop(next.upgrades.caseChanceLvl, next.autoLeaseMineId || 1)) {
-        const rarity = rollCaseRarity();
-        basketCases.push({ id: `case-offline-${now}-${i}-${Math.random()}`, rarity, opened: false });
-      }
-
-      const offlineDiamond = rollDiamondDrop(getDiamondChanceBonus(next.upgrades.diamondChanceLvl ?? 0), next.autoLeaseMineId || 1);
-      if (offlineDiamond.dropped) {
-        gems = gems + offlineDiamond.amount;
-        totalGemsEarned = (totalGemsEarned || 0) + offlineDiamond.amount;
-      }
-    }
-
-    if (digsDone > 0) {
-      next.autoBasket = basket;
-      next.autoBasketCases = basketCases;
-      next.activePickaxe = activePickaxe;
-      next.sparePickaxes = sparePickaxes;
-      next.totalDigs = totalDigs;
-      next.gems = gems;
-      next.totalGemsEarned = totalGemsEarned;
-      // Advance lastAutoDigAt by the time actually consumed so the live tick
-      // resumes from the right point and doesn't re-process offline time.
-      next.lastAutoDigAt = effectiveAutoEnd;
-      changed = true;
-    }
   }
 
   return changed ? next : prev;
